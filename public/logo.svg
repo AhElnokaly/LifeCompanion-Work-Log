@@ -1,0 +1,28 @@
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+<rect width="512" height="512" rx="128" fill="#0F172A"/>
+
+<!-- Background Glow -->
+<circle cx="256" cy="256" r="180" fill="url(#paint0_radial)" fill-opacity="0.2"/>
+
+<!-- Outer Ring -->
+<path d="M256 96C167.634 96 96 167.634 96 256C96 344.366 167.634 416 256 416C344.366 416 416 344.366 416 256C416 167.634 344.366 96 256 96ZM256 384C185.308 384 128 326.692 128 256C128 185.308 185.308 128 256 128C326.692 128 384 185.308 384 256C384 326.692 326.692 384 256 384Z" fill="url(#paint1_linear)"/>
+
+<!-- Infinity / Brain / Time Core Concept -->
+<path d="M304 304L208 208C190.327 190.327 161.673 190.327 144 208C126.327 225.673 126.327 254.327 144 272L230 358L262 326L180 244C172.93 236.93 172.93 225.07 180 218C187.07 210.93 198.93 210.93 206 218L304 316.001C321.673 333.674 350.327 333.674 368 316.001C385.673 298.328 385.673 269.674 368 252L282 166.001L250 198001L332 280.001C339.07 287.071 339.07 298.931 332 306.001C324.93 313.071 313.07 313.071 306 306.001L304 304.001V304Z" fill="#10B981"/>
+
+<!-- Dynamic Stars / AI Sparkles -->
+<path d="M344 144L352.5 174.5L383 183L352.5 191.5L344 222L335.5 191.5L305 183L335.5 174.5L344 144Z" fill="#38BDF8"/>
+<path d="M168 368L174.5 391.5L198 398L174.5 404.5L168 428L161.5 404.5L138 398L161.5 391.5L168 368Z" fill="#38BDF8"/>
+
+<!-- Definitions -->
+<defs>
+<radialGradient id="paint0_radial" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(256 256) rotate(90) scale(180)">
+<stop stop-color="#38BDF8"/>
+<stop offset="1" stop-color="#10B981" stop-opacity="0"/>
+</radialGradient>
+<linearGradient id="paint1_linear" x1="128" y1="128" x2="384" y2="384" gradientUnits="userSpaceOnUse">
+<stop stop-color="#38BDF8"/>
+<stop offset="1" stop-color="#10B981"/>
+</linearGradient>
+</defs>
+</svg>
