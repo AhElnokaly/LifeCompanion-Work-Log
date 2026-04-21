@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useWorkLog } from '../../contexts/WorkLogContext';
-import { Moon, Sun, Palette, Brain, Briefcase, Settings, Menu, Home, Calendar, BarChart2, LayoutGrid, MoreHorizontal, History, HelpCircle, MessageCircleQuestion, Wallet } from 'lucide-react';
+import { Moon, Sun, Palette, Brain, Briefcase, Settings, Menu, Home, Calendar, BarChart2, LayoutGrid, MoreHorizontal, History, HelpCircle, MessageCircleQuestion, Wallet, Target, Users, CalendarDays } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Sheet, SheetContent, SheetTrigger, SheetHeader, SheetTitle } from '../ui/sheet';
 import PageHelpOverlay from './PageHelpOverlay';
@@ -135,14 +135,20 @@ export default function Layout({ children, activeTab, setActiveTab }: LayoutProp
       </main>
 
       {/* Mobile Bottom Navigation */}
-      <div className="md:hidden fixed bottom-0 left-0 right-0 border-t bg-card/90 backdrop-blur pb-safe px-2 py-2 flex justify-between z-50">
-        <MobileNavItem icon={Home} label="الرئيسية" id="home" activeTab={activeTab} setActive={setActiveTab} />
-        <MobileNavItem icon={Calendar} label="التقويم" id="week" activeTab={activeTab} setActive={setActiveTab} />
-        {isFreelance || settings.usageComplexity === 'advanced' ? (
-          <MobileNavItem icon={LayoutGrid} label="المهام" id="projects" activeTab={activeTab} setActive={setActiveTab} />
-        ) : null}
-        <MobileNavItem icon={Briefcase} label="ورادي" id="workspace" activeTab={activeTab} setActive={setActiveTab} />
-        <MobileNavItem icon={MoreHorizontal} label="المزيد" id="more" activeTab={activeTab} setActive={setActiveTab} />
+      <div className="md:hidden fixed bottom-0 left-0 right-0 border-t bg-card/90 backdrop-blur pb-safe px-2 py-2 flex justify-between overflow-x-auto no-scrollbar z-50 min-w-0">
+        <div className="flex w-full justify-between min-w-max gap-2 px-1">
+          <MobileNavItem icon={Home} label="الرئيسية" id="home" activeTab={activeTab} setActive={setActiveTab} />
+          <MobileNavItem icon={Calendar} label="التقويم" id="week" activeTab={activeTab} setActive={setActiveTab} />
+          {settings.system === 'freelance' ? (
+            <MobileNavItem icon={Users} label="العملاء" id="smartpage" activeTab={activeTab} setActive={setActiveTab} />
+          ) : settings.system === 'shifts' ? (
+            <MobileNavItem icon={CalendarDays} label="الورادي" id="smartpage" activeTab={activeTab} setActive={setActiveTab} />
+          ) : (
+             <MobileNavItem icon={Target} label="أدائي" id="smartpage" activeTab={activeTab} setActive={setActiveTab} />
+          )}
+          <MobileNavItem icon={History} label="السجل" id="history" activeTab={activeTab} setActive={setActiveTab} />
+          <MobileNavItem icon={MoreHorizontal} label="المزيد" id="more" activeTab={activeTab} setActive={setActiveTab} />
+        </div>
       </div>
 
       <PageHelpOverlay open={helpOpen} onOpenChange={setHelpOpen} activeTab={activeTab} />
@@ -223,44 +229,73 @@ function DesktopNavLinks({ activeTab, setActiveTab }: { activeTab: string, setAc
   const isAdvanced = settings.usageComplexity === 'advanced';
   const showShiftsModule = settings.modules?.shifts;
 
-  const links = [
-    { id: 'home', label: 'الرئيسية', icon: Home },
-    { id: 'week', label: 'التقويم الشامل', icon: Calendar },
-    ...(isFreelance || isAdvanced ? [{ id: 'projects', label: 'المشاريع / المهام', icon: LayoutGrid }] : []),
-    ...(isAdvanced ? [{ id: 'reports', label: 'التقارير', icon: BarChart2 }] : []),
-    { id: 'wallet', label: 'محفظتي', icon: Wallet },
-    { id: 'history', label: 'السجل', icon: History },
-    { id: 'workspace', label: 'هندسة الورادي', icon: Briefcase },
-    ...(isAdvanced ? [{ id: 'aicore', label: 'المحرك الذكي', icon: Brain }] : []),
-    { id: 'settings', label: 'الإعدادات', icon: Settings }
+  let smartLabel = 'تقييم الأداء';
+  let smartIcon = Target;
+  if (settings.system === 'freelance') { smartLabel = 'إدارة العملاء'; smartIcon = Users; }
+  else if (settings.system === 'shifts') { smartLabel = 'عربة الورادي'; smartIcon = CalendarDays; }
+
+  const linkGroups = [
+    {
+      title: "مساحة العمل",
+      links: [
+        { id: 'home', label: 'الرئيسية', icon: Home },
+        { id: 'week', label: 'التقويم الشامل', icon: Calendar },
+        { id: 'smartpage', label: smartLabel, icon: smartIcon },
+        ...(isFreelance || isAdvanced ? [{ id: 'projects', label: 'المشاريع / المهام', icon: LayoutGrid }] : []),
+      ]
+    },
+    {
+      title: "الرصد والبيانات",
+      links: [
+        { id: 'history', label: 'السجل', icon: History },
+        { id: 'wallet', label: 'محفظتي', icon: Wallet },
+        ...(isAdvanced ? [{ id: 'reports', label: 'التقارير', icon: BarChart2 }] : []),
+      ]
+    },
+    {
+      title: "الإدارة",
+      links: [
+        ...(isAdvanced ? [{ id: 'aicore', label: 'المحرك الذكي', icon: Brain }] : []),
+        { id: 'settings', label: 'الإعدادات', icon: Settings }
+      ]
+    }
   ];
 
   return (
-    <>
-      {links.map((link) => {
-        const Icon = link.icon;
-        return (
-          <Button
-            key={link.id}
-            variant={activeTab === link.id ? 'secondary' : 'ghost'}
-            className={`justify-start ${activeTab === link.id ? 'font-bold bg-secondary/50' : ''}`}
-            onClick={() => setActiveTab(link.id)}
-          >
-            <Icon className="h-5 w-5 mr-3" />
-            {link.label}
-          </Button>
-        );
-      })}
+    <div className="flex flex-col gap-1 overflow-y-auto no-scrollbar">
+      {linkGroups.map((group, groupIdx) => (
+        <div key={groupIdx} className="mb-4">
+          <p className="text-[10px] font-extrabold text-muted-foreground/60 uppercase tracking-widest px-4 mb-2">{group.title}</p>
+          <div className="flex flex-col gap-1">
+            {group.links.map((link) => {
+              const Icon = link.icon;
+              return (
+                <Button
+                  key={link.id}
+                  variant={activeTab === link.id ? 'secondary' : 'ghost'}
+                  className={`justify-start h-10 ${activeTab === link.id ? 'font-bold bg-secondary/70 shadow-sm' : 'text-muted-foreground hover:bg-secondary/40'}`}
+                  onClick={() => setActiveTab(link.id)}
+                >
+                  <Icon className={`h-[18px] w-[18px] mr-3 ${activeTab === link.id ? 'text-primary' : ''}`} />
+                  {link.label}
+                </Button>
+              );
+            })}
+          </div>
+        </div>
+      ))}
       
-      <Button
-        variant="ghost"
-        className="justify-start text-emerald-500 hover:text-emerald-600 hover:bg-emerald-500/10"
-        onClick={() => window.open('https://wa.me/201009969653?text=لدي اقتراح أو شكوى بخصوص تطبيق LifeCompanion', '_blank')}
-      >
-        <HelpCircle className="h-5 w-5 mr-3" />
-        الشكاوى والمقترحات
-      </Button>
-    </>
+      <div className="mt-auto pt-4 border-t border-border/40">
+        <Button
+          variant="ghost"
+          className="justify-start w-full text-emerald-500 hover:text-emerald-600 hover:bg-emerald-500/10 h-10"
+          onClick={() => window.open('https://wa.me/201009969653?text=لدي اقتراح أو شكوى بخصوص تطبيق LifeCompanion', '_blank')}
+        >
+          <HelpCircle className="h-[18px] w-[18px] mr-3" />
+          الشكاوى والمقترحات
+        </Button>
+      </div>
+    </div>
   );
 }
 

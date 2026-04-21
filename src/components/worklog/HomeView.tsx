@@ -1,19 +1,28 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Button } from '../ui/button';
-import { Play, Square, Clock, Calendar, Coffee, FileText, Check, Bell, Zap, Timer, Shuffle } from 'lucide-react';
-import { useWorkLog } from '../../contexts/WorkLogContext';
+import { Play, Square, Clock, Calendar, Coffee, FileText, Check, Bell, Zap, Timer, Shuffle, Brain, Loader2, Send } from 'lucide-react';
+import { useWorkLog, isPublicHoliday } from '../../contexts/WorkLogContext';
+import { useAICore } from '../../contexts/AICoreContext';
 import { format, differenceInMinutes, addMinutes } from 'date-fns';
 import { ar } from 'date-fns/locale';
+import { Input } from '../ui/input';
 
 export default function HomeView() {
-  const { activeSession, sessions, jobs, shifts, startSession, endSession, settings, getBalances, logSpecialSession, updateSession, toggleBreak } = useWorkLog();
+  const { activeSession, sessions, jobs, shifts, startSession, addSession, endSession, settings, getBalances, logSpecialSession, updateSession, toggleBreak } = useWorkLog();
+  const { askAI } = useAICore();
   const [now, setNow] = useState(new Date());
+
+  const isTodayRestDay = (settings.restDays || []).includes(now.getDay()) || isPublicHoliday(now);
 
   // Modals state
   const [actionDialog, setActionDialog] = useState<'permission' | 'note' | 'pomodoro' | null>(null);
   const [dispatcherOpen, setDispatcherOpen] = useState(false);
   const [moodDialogState, setMoodDialogState] = useState<'start' | 'end' | null>(null);
   const [pendingStartData, setPendingStartData] = useState<{ type: any, jobId?: string } | null>(null);
+  
+  // AI Logging State
+  const [aiPrompt, setAiPrompt] = useState('');
+  const [isAILogging, setIsAILogging] = useState(false);
   
   // Mood form state
   const [moodScore, setMoodScore] = useState<number>(3); // 1-5
@@ -31,8 +40,23 @@ export default function HomeView() {
   const [absenceDialogOpen, setAbsenceDialogOpen] = useState(false);
   const [absenceType, setAbsenceType] = useState<'annual_leave' | 'sick_leave' | 'casual_leave' | 'half_day_leave' | 'compensation'>('annual_leave');
   const [absenceDate, setAbsenceDate] = useState<string>(format(now, 'yyyy-MM-dd'));
+  const [compensationLeaveSourceId, setCompensationLeaveSourceId] = useState<string>('');
   const [showHalfDayPrompt, setShowHalfDayPrompt] = useState<{show: boolean, type: any, entityId?: string, forceYesterday?: boolean}>({show: false, type: 'salary'});
   const [selectedPreEntryMode, setSelectedPreEntryMode] = useState<'regular' | 'annual_leave' | 'compensation' | 'half_day'>('regular');
+  const [compensationTypeDialogOpen, setCompensationTypeDialogOpen] = useState(false);
+  const [selectedCompType, setSelectedCompType] = useState<'1_day' | '1_day_plus_overtime' | '2_days'>('1_day');
+
+  const getAvailableCompensations = () => {
+    return sessions.filter(s => s.isRestDayWork && !s.isArchived).map(s => {
+      let accrued = 0;
+      if (s.restDayCompensation === '1_day' || s.restDayCompensation === '1_day_plus_overtime') accrued = 1;
+      else if (s.restDayCompensation === '2_days') accrued = 2;
+
+      // Count how many compensation leaves point to this session
+      const taken = sessions.filter(t => t.dayStatus === 'compensation' && t.linkedCompensationSessionId === s.id && !t.isArchived).length;
+      return { ...s, availableDays: accrued - taken };
+    }).filter(s => s.availableDays > 0);
+  };
 
   // Quotes
   const motivationalQuotes = [
@@ -98,6 +122,16 @@ export default function HomeView() {
      currentSessionMinutes = Math.max(0, currentSessionMinutes - breakMinutes);
   }
 
+  // Auto Check-out for sessions exceeding 16 hours
+  useEffect(() => {
+    if (activeSession && currentSessionMinutes > 16 * 60) {
+      const dummyTime = new Date(activeSession.startTime);
+      // Auto-cap it at the expected end time or daily hours + 1 to denote an honest mistake
+      dummyTime.setMinutes(dummyTime.getMinutes() + (settings.dailyHours * 60 + 60)); 
+      endSession('انصراف آلي (16 ساعة تجاوز)', { endTime: dummyTime.toISOString() });
+    }
+  }, [activeSession, currentSessionMinutes, endSession, settings.dailyHours]);
+
   const totalMinutesToday = completedMinutesToday + currentSessionMinutes;
   const targetMins = settings.dailyHours * 60;
   const remainingMins = Math.max(0, targetMins - totalMinutesToday);
@@ -126,6 +160,12 @@ export default function HomeView() {
   };
 
   const handleStartSession = () => {
+    if (isTodayRestDay && selectedPreEntryMode === 'regular') {
+       // It's a rest day. Let's ask for compensation type before starting via dialog.
+       setCompensationTypeDialogOpen(true);
+       return;
+    }
+
     // If user has shifts explicitly requested/setup, force show dispatcher or logic
     if (shifts.length > 0 || jobs.length > 0) {
       if (shifts.length > 0) {
@@ -166,6 +206,8 @@ export default function HomeView() {
   const [nightShiftModalOpen, setNightShiftModalOpen] = useState(false);
   const [pendingNightJob, setPendingNightJob] = useState<{type: any, entityId?: string} | null>(null);
 
+  const [compensationOverrides, setCompensationOverrides] = useState<any>(null);
+
   const startSpecificSession = (type: any, entityId?: string) => {
     setDispatcherOpen(false);
     
@@ -177,18 +219,20 @@ export default function HomeView() {
       return;
     }
     
-    processSessionStart(type, entityId);
+    processSessionStart(type, entityId, false, false, compensationOverrides);
+    setCompensationOverrides(null);
   };
 
-  const processSessionStart = (type: any, entityId?: string, forceYesterday?: boolean, skipHalfDayCheck?: boolean) => {
+  const processSessionStart = (type: any, entityId?: string, forceYesterday?: boolean, skipHalfDayCheck?: boolean, explicitOverrides?: any) => {
     setNightShiftModalOpen(false);
     setPendingNightJob(null);
-    let overrideData: any = {};
+    let overrideData: any = { ...explicitOverrides };
+
     if (forceYesterday) {
       const yesterday = new Date();
       yesterday.setDate(yesterday.getDate() - 1);
       yesterday.setHours(23, 59, 59, 999);
-      overrideData = { startTime: yesterday.toISOString() };
+      overrideData = { ...overrideData, startTime: yesterday.toISOString() };
     }
 
     // Half Day Check
@@ -201,27 +245,32 @@ export default function HomeView() {
        
        // If late by > 60 mins and less than half shift (e.g. 4 hours)
        if (diffMins > 60 && diffMins < (settings.dailyHours * 60 / 2)) {
-         setShowHalfDayPrompt({show: true, type, entityId, forceYesterday});
+         setShowHalfDayPrompt({show: true, type, entityId, forceYesterday, explicitOverrides});
          return;
        }
     }
 
     if (settings.modules?.healthMood) {
-      setPendingStartData({ type, jobId: entityId, overrideData });
+      setPendingStartData((prev) => ({ 
+        type, 
+        jobId: entityId, 
+        overrideData: { ...prev?.overrideData, ...overrideData } 
+      }));
       setMoodDialogState('start');
     } else {
-      startSession(type, entityId, overrideData);
+      startSession(type, entityId, { ...pendingStartData?.overrideData, ...overrideData });
+      setPendingStartData(null);
     }
   };
 
   const handleHalfDayAccept = (accept: boolean) => {
-     const { type, entityId, forceYesterday } = showHalfDayPrompt;
+     const { type, entityId, forceYesterday, explicitOverrides } = showHalfDayPrompt as any;
      setShowHalfDayPrompt({show: false, type});
      
      if (accept) {
        logSpecialSession('half_day', { note: 'تأخير تلقائي' });
      } else {
-       processSessionStart(type, entityId, forceYesterday, true);
+       processSessionStart(type, entityId, forceYesterday, true, explicitOverrides);
      }
   };
 
@@ -280,6 +329,72 @@ export default function HomeView() {
     setActionDialog('note');
   };
 
+  const processAILog = async () => {
+    if (!aiPrompt.trim()) return;
+    setIsAILogging(true);
+    try {
+      const response = await askAI(
+        `قم بتحليل هذا النص: "${aiPrompt}". واستخرج منه البيانات التالية بتنسيق JSON فقط:
+        - action: (إما "log_past_session" إذا كان يذكر عملاً انتهى، أو "start_new" إذا كان سيبدأ الآن)
+        - durationMinutes: (المدة بالدقائق إذا صرح بها، وإلا 0)
+        - breakMinutes: (مدة الاستراحة بالدقائق إن ذكرها، وإلا 0)
+        - projectKeywords: (كلمة دالة على المشروع إذا ذكر، وإلا فارغ)
+        - notes: (توليد ملاحظة احترافية بناءً على المدخل)`,
+        "أنت مساعد استخراج بيانات تقوم بإرجاع JSON صالح فقط ولا شيء غيره.",
+        {
+          type: "object",
+          properties: {
+             action: { type: "string" },
+             durationMinutes: { type: "number" },
+             breakMinutes: { type: "number" },
+             projectKeywords: { type: "string" },
+             notes: { type: "string" }
+          }
+        }
+      );
+      
+      const parsed = JSON.parse(response);
+      let targetJobStr = parsed.projectKeywords;
+      let matchedJobId = undefined;
+
+      if (targetJobStr) {
+         const match = jobs.find(j => j.name.toLowerCase().includes(targetJobStr.toLowerCase()));
+         if (match) matchedJobId = match.id;
+      }
+
+      if (parsed.action === 'log_past_session' && parsed.durationMinutes > 0) {
+         // Create a past session right now
+         const end = new Date();
+         const start = addMinutes(end, -parsed.durationMinutes);
+         
+         const dummySession: WorkSession = {
+           id: Date.now().toString(),
+           startTime: start.toISOString(),
+           endTime: end.toISOString(),
+           duration: parsed.durationMinutes - (parsed.breakMinutes || 0),
+           breaks: parsed.breakMinutes || 0,
+           type: matchedJobId ? 'project' : (settings.system === 'freelance' ? 'freelance' : 'salary'),
+           jobId: matchedJobId,
+           location: 'office',
+           dayStatus: 'work',
+           notes: parsed.notes || 'تسجيل ذكي'
+         };
+         
+         addSession(dummySession);
+
+      } else {
+         startSession(matchedJobId ? 'project' : 'salary', matchedJobId, { notes: parsed.notes });
+      }
+
+      setAiPrompt('');
+      alert('تم التسجيل بنجاح عبر المحرك الذكي!');
+    } catch (err: any) {
+      alert(err.message || 'حدث خطأ في فهم طلبك. تأكد من إدخال المفتاح في الإعدادات.');
+    } finally {
+      setIsAILogging(false);
+    }
+  };
+
   const handleSmartAction = (action: () => void) => action();
 
   let expectedCheckoutStr = "--:--";
@@ -335,7 +450,9 @@ export default function HomeView() {
             <div className="absolute top-[-50%] right-[-10%] w-48 h-48 bg-primary/10 blur-[60px] rounded-full pointer-events-none"></div>
             
             <div className="flex flex-col z-10" dir="rtl">
-              <span className="text-base font-bold text-foreground/80 mb-1">اليوم:</span>
+              <span className="text-base font-bold text-foreground/80 mb-1">
+                {isTodayRestDay && !activeSession ? 'اليوم عطلتك. هل هذا عمل إضافي؟' : 'اليوم:'}
+              </span>
               <div className="flex items-baseline gap-2">
                 <span className="text-6xl font-semibold tracking-tighter text-foreground drop-shadow-sm leading-none">{displayHours}</span>
                 <span className="text-xl text-foreground/60 font-medium">ساعات</span>
@@ -349,7 +466,7 @@ export default function HomeView() {
                    className="snap-start shrink-0 rounded-xl h-8 px-4 text-xs font-bold"
                    onClick={() => setSelectedPreEntryMode('regular')}
                  >
-                   عمل منتظم
+                   {isTodayRestDay ? 'طوارئ/إضافي' : 'عمل منتظم'}
                  </Button>
                  <Button 
                    variant={selectedPreEntryMode === 'half_day' ? 'default' : 'secondary'} 
@@ -393,7 +510,7 @@ export default function HomeView() {
               ) : (
                 <>
                    {selectedPreEntryMode === 'regular' ? (
-                     <><Play className="fill-current w-5 h-5 flex-shrink-0 mr-1" /> تسجيل الحضور</>
+                     <><Play className="fill-current w-5 h-5 flex-shrink-0 mr-1" /> {isTodayRestDay ? 'بدء عمل إضافي يوم العطلة' : 'تسجيل الحضور'}</>
                    ) : selectedPreEntryMode === 'half_day' ? (
                      <><Clock className="fill-current w-5 h-5 flex-shrink-0 mr-1" /> تسجيل إجازة نصف يوم</>
                    ) : (
@@ -402,6 +519,29 @@ export default function HomeView() {
                 </>
               )}
             </button>
+          </div>
+
+          {/* Card 1.5: Natural Language Input */}
+          <div className="bg-card/40 backdrop-blur-2xl border border-white/5 rounded-[1.5rem] p-4 flex flex-col gap-3 shadow-xl relative overflow-hidden shrink-0 mt-1" dir="rtl">
+             <div className="flex justify-between items-center">
+                <span className="text-xs font-bold flex items-center gap-1.5"><Brain className="w-4 h-4 text-primary" /> التسجيل الذكي السريع</span>
+             </div>
+             <div className="flex gap-2">
+                <Input 
+                   placeholder="مثال: اشتغلت من 9 لـ 5 وطلعت استراحة ساعة" 
+                   value={aiPrompt}
+                   onChange={e => setAiPrompt(e.target.value)}
+                   className="text-[12px] h-11 bg-background/50 border-white/10 rounded-xl"
+                   onKeyDown={e => e.key === 'Enter' && processAILog()}
+                />
+                <Button 
+                   onClick={processAILog} 
+                   disabled={!aiPrompt || isAILogging}
+                   className="h-11 w-11 rounded-xl bg-primary text-primary-foreground p-0 flex flex-shrink-0 items-center justify-center"
+                >
+                   {isAILogging ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-4 h-4 rtl:rotate-180"/>}
+                </Button>
+             </div>
           </div>
 
           {!activeSession && (
@@ -475,31 +615,6 @@ export default function HomeView() {
             </div>
           </div>
 
-            {isOvertime && (currentSessionMinutes > 16 * 60) && (
-              <div className="bg-destructive/10 border border-destructive/20 rounded-2xl p-4 flex flex-col gap-3 mt-1 shrink-0" dir="rtl">
-                <div className="flex gap-2">
-                   <Bell className="w-5 h-5 text-destructive font-bold" />
-                   <div>
-                     <p className="text-sm font-bold text-destructive">جلسة طويلة جداً (أكثر من 16 ساعة)</p>
-                     <p className="text-xs text-muted-foreground mt-0.5">هل نسيت تسجيل الانصراف أمس؟</p>
-                   </div>
-                </div>
-                <div className="flex gap-2">
-                  <Button 
-                    className="flex-1 rounded-xl h-10 bg-destructive hover:bg-destructive/90 text-white shadow-sm"
-                    onClick={() => {
-                        // Ghost checkout - cap at expected checkout time
-                        const dummyTime = new Date(activeSession.startTime);
-                        dummyTime.setMinutes(dummyTime.getMinutes() + targetMins);
-                        endSession('انصراف تخيلي (Ghost Check-out)', { endTime: dummyTime.toISOString() });
-                    }}
-                  >
-                    انسحاب وهمي
-                  </Button>
-                </div>
-              </div>
-            )}
-
           {/* Card 3: Overtime Module */}
           {(isOvertime || settings.modules?.finances) && (
             <div className="bg-card/40 backdrop-blur-2xl border border-white/5 rounded-[1.5rem] p-4 flex items-center justify-between shadow-xl shrink-0" dir="rtl">
@@ -568,6 +683,16 @@ export default function HomeView() {
                 >
                   <Clock className="w-4 h-4" />
                   تصريح (ساعة)
+                </Button>
+              )}
+              {!isFreelance && balances.remainingPermissionsHours >= 2 && (
+                <Button 
+                  variant="secondary" 
+                  className="snap-start shrink-0 bg-secondary/30 rounded-[1rem] h-12 px-6 shadow-sm border border-white/5 flex gap-2 text-indigo-400"
+                  onClick={() => openPermissionDialog(2)}
+                >
+                  <Clock className="w-4 h-4" />
+                  تصريح (ساعتين)
                 </Button>
               )}
             </div>
@@ -731,6 +856,28 @@ export default function HomeView() {
                  <option value="compensation">يوم بديل (تعويض عمل الإضافي)</option>
                </select>
 
+               {absenceType === 'compensation' && (
+                 <div className="animate-in fade-in slide-in-from-top-2">
+                   <label className="text-sm font-bold mt-2">اختر العمل الإضافي المراد استبداله</label>
+                   <select 
+                     className="w-full h-12 rounded-xl bg-secondary/30 px-3 border-none focus:ring-2 focus:ring-emerald-500 text-sm mt-1"
+                     value={compensationLeaveSourceId}
+                     onChange={(e) => setCompensationLeaveSourceId(e.target.value)}
+                   >
+                     <option value="">-- اختر يوم العمل --</option>
+                     {getAvailableCompensations().map(comp => (
+                       <option key={comp.id} value={comp.id}>
+                         {format(new Date(comp.startTime), 'EEEE، dd MMM yyyy', {locale: ar})} 
+                         (متاح {comp.availableDays} يوم)
+                       </option>
+                     ))}
+                   </select>
+                   {getAvailableCompensations().length === 0 && (
+                     <p className="text-xs text-destructive mt-1">عفواً، لا يوجد لديك رصيد أيام بديلة متاح.</p>
+                   )}
+                 </div>
+               )}
+
                <label className="text-sm font-bold mt-2">التاريخ</label>
                <input 
                  type="date" 
@@ -751,10 +898,31 @@ export default function HomeView() {
             <div className="flex gap-2 mt-4 pt-4 border-t border-border">
               <Button 
                 className="flex-1 rounded-xl h-12 font-bold bg-emerald-500 hover:bg-emerald-600 text-white" 
+                disabled={absenceType === 'compensation' && (!compensationLeaveSourceId || getAvailableCompensations().length === 0)}
                 onClick={() => {
-                  handleSmartAction(() => logSpecialSession(absenceType, { date: absenceDate, note: noteText }));
+                  if (absenceType === 'compensation' && compensationLeaveSourceId) {
+                    const sessionToLog: any = {
+                      id: Date.now().toString(),
+                      type: 'salary',
+                      startTime: new Date(absenceDate).toISOString(),
+                      endTime: new Date(absenceDate).toISOString(),
+                      duration: settings.dailyHours * 60,
+                      breaks: 0,
+                      location: 'office',
+                      dayStatus: 'compensation',
+                      notes: noteText || 'إجازة كبديل لعمل يوم راحة',
+                      linkedCompensationSessionId: compensationLeaveSourceId,
+                      isArchived: false
+                    };
+                    addSession(sessionToLog);
+                  } else {
+                    handleSmartAction(() => logSpecialSession(absenceType, { date: absenceDate, note: noteText }));
+                  }
+                  
                   setAbsenceDialogOpen(false);
                   setNoteText('');
+                  setCompensationLeaveSourceId('');
+                  
                   if (settings.notificationsEnabled) {
                      import('../../lib/notifications').then(({ sendAppNotification }) => {
                         sendAppNotification('تم تسجيل الموقف بنجاح', { body: 'تم تحديث سجل اليوم في التقويمات.' });
@@ -945,6 +1113,72 @@ export default function HomeView() {
                   onClick={() => handleHalfDayAccept(false)}
                 >
                   لا، عمل كامل
+                </Button>
+              </div>
+           </div>
+         </div>
+      )}
+
+      {/* Overlay: Compensation Type Prompt for Rest Days */}
+      {compensationTypeDialogOpen && (
+         <div className="absolute inset-0 z-[60] flex items-center justify-center backdrop-blur-sm bg-background/60 p-4" dir="rtl">
+           <div className="bg-card border border-border p-6 rounded-[2rem] w-full max-w-sm shadow-2xl flex flex-col gap-4 animate-in slide-in-from-bottom-8">
+              <div className="mx-auto w-12 h-12 rounded-full bg-emerald-500/10 flex items-center justify-center">
+                <Coffee className="w-6 h-6 text-emerald-500" />
+              </div>
+              <h3 className="text-xl font-bold mt-2 text-center">عمل في يوم راحة</h3>
+              <p className="text-sm text-muted-foreground leading-relaxed text-center">
+                كيف تود تعويض هذا اليوم في نظام البدائل؟
+              </p>
+              
+              <div className="flex flex-col gap-2 mt-2">
+                 <Button 
+                   variant={selectedCompType === '1_day' ? 'default' : 'outline'}
+                   className="justify-start h-12 rounded-xl text-right px-4"
+                   onClick={() => setSelectedCompType('1_day')}
+                 >
+                   بدل راحة (تعويض بيوم إجازة بديل)
+                 </Button>
+                 <Button 
+                   variant={selectedCompType === '1_day_plus_overtime' ? 'default' : 'outline'}
+                   className="justify-start h-12 rounded-xl text-right px-4"
+                   onClick={() => setSelectedCompType('1_day_plus_overtime')}
+                 >
+                   بديل يوم + إضافة ساعات كعمل إضافي
+                 </Button>
+                 <Button 
+                   variant={selectedCompType === '2_days' ? 'default' : 'outline'}
+                   className="justify-start h-12 rounded-xl text-right px-4"
+                   onClick={() => setSelectedCompType('2_days')}
+                 >
+                   تعويض بيومين إجازة
+                 </Button>
+              </div>
+
+              <div className="flex gap-2 mt-4">
+                <Button 
+                  className="flex-1 rounded-xl h-12 font-bold bg-emerald-500 hover:bg-emerald-600 text-white" 
+                  onClick={() => {
+                    setCompensationTypeDialogOpen(false);
+                    // Pass the compensation type into the dispatcher logic so it gets attached to the session
+                    // We need a subtle overrideData
+                    setCompensationOverrides({ restDayCompensation: selectedCompType });
+                    // It will proceed to normal dispatcher or start after this
+                    if (shifts.length > 0 || jobs.length > 0) {
+                      setDispatcherOpen(true);
+                    } else {
+                      startSpecificSession('salary');
+                    }
+                  }}
+                >
+                  تأكيد والمتابعة
+                </Button>
+                <Button 
+                  variant="ghost"
+                  className="rounded-xl h-12" 
+                  onClick={() => setCompensationTypeDialogOpen(false)}
+                >
+                  إلغاء
                 </Button>
               </div>
            </div>

@@ -1,18 +1,19 @@
 import React, { useState, useMemo } from 'react';
 import { Card } from '../ui/card';
 import { Button } from '../ui/button';
-import { ChevronRight, ChevronLeft, Calendar as CalendarIcon, List, LayoutGrid, Activity, Clock } from 'lucide-react';
+import { ChevronRight, ChevronLeft, Calendar as CalendarIcon, List, LayoutGrid, Activity, Clock, Briefcase } from 'lucide-react';
 import { useWorkLog } from '../../contexts/WorkLogContext';
 import { format, addMonths, subMonths, startOfMonth, endOfMonth, eachDayOfInterval, startOfWeek, endOfWeek, isSameMonth, isSameDay, addWeeks, subWeeks, subDays, addDays } from 'date-fns';
 import { ar } from 'date-fns/locale';
 import { ResponsiveContainer, BarChart, Bar, XAxis, Tooltip, Cell, ReferenceLine } from 'recharts';
 
 import { gregorianToHijri } from '../../lib/hijri';
+import JobsShiftsView from './JobsShiftsView';
 
 export default function CalendarView() {
   const { sessions, jobs, settings } = useWorkLog();
   const [currentDate, setCurrentDate] = useState(new Date());
-  const [viewType, setViewType] = useState<'monthly' | 'weekly' | 'daily'>('monthly');
+  const [viewType, setViewType] = useState<'monthly' | 'weekly' | 'daily' | 'shifts'>('monthly');
   const [showHijri, setShowHijri] = useState(false);
 
   // Month Navigation
@@ -35,15 +36,24 @@ export default function CalendarView() {
     const end = endOfWeek(endOfMonth(currentDate), { weekStartsOn: 6 });
     const days = eachDayOfInterval({ start, end });
 
-    const weekDays = ['السبت', 'الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة'];
+    const weekDays = [
+      { full: 'السبت', short: 'سبت' },
+      { full: 'الأحد', short: 'أحد' },
+      { full: 'الإثنين', short: 'إثنين' },
+      { full: 'الثلاثاء', short: 'ثلاثاء' },
+      { full: 'الأربعاء', short: 'أربعاء' },
+      { full: 'الخميس', short: 'خميس' },
+      { full: 'الجمعة', short: 'جمعة' }
+    ];
 
     return (
       <Card className="flex flex-col bg-card border-white/5 rounded-2xl overflow-hidden shadow-xl mt-4">
         {/* Week Days Header */}
         <div className="grid grid-cols-7 bg-secondary/30 border-b border-border/40">
           {weekDays.map(day => (
-            <div key={day} className="p-2 text-center text-xs font-bold text-muted-foreground border-l border-border/10 last:border-l-0">
-              {day}
+            <div key={day.full} className="p-2 text-center text-[10px] sm:text-xs font-bold text-muted-foreground border-l border-border/10 last:border-l-0">
+              <span className="hidden sm:inline">{day.full}</span>
+              <span className="sm:hidden">{day.short}</span>
             </div>
           ))}
         </div>
@@ -354,6 +364,8 @@ export default function CalendarView() {
         return renderWeeklyGrid();
       case 'daily':
         return renderDailyTimeline();
+      case 'shifts':
+        return <JobsShiftsView />;
       default:
         return null;
     }
@@ -366,30 +378,33 @@ export default function CalendarView() {
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mt-2 px-2 shrink-0">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-full bg-indigo-500/10 flex items-center justify-center text-indigo-500">
-            <CalendarIcon className="w-6 h-6" />
+            {viewType === 'shifts' ? <Briefcase className="w-6 h-6" /> : <CalendarIcon className="w-6 h-6" />}
           </div>
           <div>
-            <h2 className="text-2xl font-bold">التقويم المتقدم</h2>
+            <h2 className="text-2xl font-bold">{viewType === 'shifts' ? 'جدولة الورديات' : 'التقويم المتقدم'}</h2>
             <p className="text-muted-foreground text-sm flex items-center gap-2">
               {viewType === 'monthly' && format(currentDate, 'MMMM yyyy', { locale: ar })}
               {viewType === 'weekly' && `الأسبوع: ${format(startOfWeek(currentDate, {weekStartsOn:6}), 'd MMM')} - ${format(endOfWeek(currentDate, {weekStartsOn:6}), 'd MMM')}`}
               {viewType === 'daily' && format(currentDate, 'EEEE، d MMMM yyyy', { locale: ar })}
+              {viewType === 'shifts' && 'إعداد الورديات والوظائف'}
             </p>
           </div>
         </div>
 
         <div className="flex flex-col sm:flex-row w-full md:w-auto items-center gap-3">
           
-          <Button variant="outline" size="sm" onClick={() => setShowHijri(!showHijri)} className="w-full sm:w-auto h-9 text-xs rounded-xl font-bold bg-secondary/50">
-            {showHijri ? 'إخفاء الهجري' : 'إظهار الهجري'}
-          </Button>
+          {viewType !== 'shifts' && (
+            <Button variant="outline" size="sm" onClick={() => setShowHijri(!showHijri)} className="w-full sm:w-auto h-9 text-xs rounded-xl font-bold bg-secondary/50">
+              {showHijri ? 'إخفاء الهجري' : 'إظهار الهجري'}
+            </Button>
+          )}
 
           {/* View Toggles */}
-          <div className="flex bg-secondary/30 p-1 rounded-xl w-full sm:w-auto">
+          <div className="flex bg-secondary/30 p-1 rounded-xl w-full sm:w-auto flex-wrap sm:flex-nowrap gap-1">
             <Button 
               variant={viewType === 'monthly' ? 'secondary' : 'ghost'} 
               size="sm" 
-              className={`flex-1 h-8 text-xs rounded-lg ${viewType === 'monthly' ? 'font-bold bg-card shadow-sm' : ''}`}
+              className={`flex-1 min-w-[70px] h-8 text-xs rounded-lg ${viewType === 'monthly' ? 'font-bold bg-card shadow-sm' : ''}`}
               onClick={() => setViewType('monthly')}
             >
               <LayoutGrid className="w-3.5 h-3.5 mr-1.5" /> شهري
@@ -397,7 +412,7 @@ export default function CalendarView() {
             <Button 
               variant={viewType === 'weekly' ? 'secondary' : 'ghost'} 
               size="sm" 
-              className={`flex-1 h-8 text-xs rounded-lg ${viewType === 'weekly' ? 'font-bold bg-card shadow-sm' : ''}`}
+              className={`flex-1 min-w-[70px] h-8 text-xs rounded-lg ${viewType === 'weekly' ? 'font-bold bg-card shadow-sm' : ''}`}
               onClick={() => setViewType('weekly')}
             >
               <List className="w-3.5 h-3.5 mr-1.5" /> أسبوعي
@@ -405,25 +420,35 @@ export default function CalendarView() {
             <Button 
               variant={viewType === 'daily' ? 'secondary' : 'ghost'} 
               size="sm" 
-              className={`flex-1 h-8 text-xs rounded-lg ${viewType === 'daily' ? 'font-bold bg-card shadow-sm' : ''}`}
+              className={`flex-1 min-w-[70px] h-8 text-xs rounded-lg ${viewType === 'daily' ? 'font-bold bg-card shadow-sm' : ''}`}
               onClick={() => setViewType('daily')}
             >
               <CalendarIcon className="w-3.5 h-3.5 mr-1.5" /> يومي
             </Button>
+            <Button 
+              variant={viewType === 'shifts' ? 'secondary' : 'ghost'} 
+              size="sm" 
+              className={`flex-1 min-w-[70px] h-8 text-xs rounded-lg ${viewType === 'shifts' ? 'font-bold bg-card shadow-sm' : ''}`}
+              onClick={() => setViewType('shifts')}
+            >
+              <Briefcase className="w-3.5 h-3.5 mr-1.5" /> الورديات
+            </Button>
           </div>
 
           {/* Navigation */}
-          <div className="flex items-center gap-1 w-full sm:w-auto justify-center">
-            <Button variant="ghost" size="icon" onClick={nextPeriod} className="h-9 w-9 rounded-xl hover:bg-secondary/50">
-              <ChevronRight className="w-5 h-5" />
-            </Button>
-            <Button variant="ghost" onClick={goToToday} className="h-9 text-xs font-bold rounded-xl hover:bg-secondary/50">
-              اليوم
-            </Button>
-            <Button variant="ghost" size="icon" onClick={prevPeriod} className="h-9 w-9 rounded-xl hover:bg-secondary/50">
-              <ChevronLeft className="w-5 h-5" />
-            </Button>
-          </div>
+          {viewType !== 'shifts' && (
+            <div className="flex items-center gap-1 w-full sm:w-auto justify-center">
+              <Button variant="ghost" size="icon" onClick={nextPeriod} className="h-9 w-9 rounded-xl hover:bg-secondary/50">
+                <ChevronRight className="w-5 h-5" />
+              </Button>
+              <Button variant="ghost" onClick={goToToday} className="h-9 text-xs font-bold rounded-xl hover:bg-secondary/50">
+                اليوم
+              </Button>
+              <Button variant="ghost" size="icon" onClick={prevPeriod} className="h-9 w-9 rounded-xl hover:bg-secondary/50">
+                <ChevronLeft className="w-5 h-5" />
+              </Button>
+            </div>
+          )}
 
         </div>
       </div>

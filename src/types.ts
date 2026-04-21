@@ -12,6 +12,8 @@ export interface WorkSettings {
   expectedStartTime?: string;
   expectedEndTime?: string;
   notificationsEnabled?: boolean;
+  monthlyFinancialTarget?: number;
+  customAIApiKey?: string;
   notificationPreferences?: {
     endOfDay: boolean;
     pomodoro: boolean;

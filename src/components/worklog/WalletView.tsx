@@ -1,13 +1,19 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Card } from '../ui/card';
-import { Wallet, TrendingUp, DollarSign, Briefcase, ChevronLeft } from 'lucide-react';
+import { Wallet, TrendingUp, DollarSign, Briefcase, ChevronLeft, Target, FileText, X } from 'lucide-react';
 import { useWorkLog } from '../../contexts/WorkLogContext';
 import { format, isSameMonth } from 'date-fns';
 import { ar } from 'date-fns/locale';
+import { Button } from '../ui/button';
+import { Input } from '../ui/input';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '../ui/dialog';
 
 export default function WalletView() {
-  const { sessions, projects, settings } = useWorkLog();
+  const { sessions, projects, settings, updateSettings } = useWorkLog();
   const now = new Date();
+  
+  const [goalModalOpen, setGoalModalOpen] = useState(false);
+  const [tempGoal, setTempGoal] = useState((settings.monthlyFinancialTarget || 15000).toString());
 
   // Basic Filtering for Current Month
   const currentMonthSessions = sessions.filter(s => isSameMonth(new Date(s.startTime), now) && !s.isArchived);
@@ -40,6 +46,72 @@ export default function WalletView() {
     };
   }, [currentMonthSessions, projects]);
 
+  const handleSaveGoal = () => {
+     updateSettings({ ...settings, monthlyFinancialTarget: Number(tempGoal) || 0 });
+     setGoalModalOpen(false);
+  };
+
+  const handleExportInvoice = () => {
+    // Generate a simple print layout for invoice
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) return;
+    
+    const htmlContent = `
+      <html dir="rtl">
+        <head>
+          <title>فاتورة مبدئية - ${format(now, 'MMMM yyyy', {locale: ar})}</title>
+          <style>
+             body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 40px; color: #333; }
+             h1 { color: #10b981; }
+             table { width: 100%; border-collapse: collapse; margin-top: 30px; }
+             th, td { border: 1px solid #e5e7eb; padding: 12px; text-align: right; }
+             th { background-color: #f9fafb; font-weight: bold; }
+             .total { font-size: 1.5rem; font-weight: bold; margin-top: 20px; text-align: left; }
+             @media print { button { display: none; } }
+          </style>
+        </head>
+        <body>
+          <h1>فاتورة خدمات (مستقل)</h1>
+          <p>التاريخ: ${format(now, 'yyyy/MM/dd')}</p>
+          <p>بيان أعمال شهر: ${format(now, 'MMMM yyyy', {locale: ar})}</p>
+          
+          <table>
+            <thead>
+              <tr>
+                <th>المشروع / العمل</th>
+                <th>إجمالي الساعات</th>
+                <th>المبلغ المستحق (ج.م)</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${projectsRevenue.map(p => `
+                <tr>
+                  <td>${p.name}</td>
+                  <td>${p.duration.toFixed(1)}</td>
+                  <td>${p.revenue.toLocaleString()}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+          
+          <div class="total">
+            الإجمالي النهائي: ${totalEstimatedRevenue.toLocaleString()} ج.م
+          </div>
+          
+          <p style="margin-top: 50px; font-size: 0.9rem; color: #666;">تم إنشاء هذه الفاتورة تلقائياً عبر نظام LifeCompanion.</p>
+          <button onclick="window.print()" style="margin-top:20px; padding: 10px 20px; background: #10b981; color: white; border: none; border-radius: 5px; cursor: pointer;">طباعة / حفظ كـ PDF</button>
+        </body>
+      </html>
+    `;
+    printWindow.document.write(htmlContent);
+    printWindow.document.close();
+  };
+
+  const targetGoal = settings.monthlyFinancialTarget || 15000;
+  const progressPercent = Math.min((totalEstimatedRevenue / targetGoal) * 100, 100);
+  const strokeDasharray = 283; // 2 * pi * 45
+  const strokeDashoffset = strokeDasharray - (strokeDasharray * progressPercent) / 100;
+
   return (
     <div className="flex flex-col gap-6 animate-in fade-in slide-in-from-bottom-4 duration-500 min-h-screen pb-20 px-2 pt-4" dir="rtl">
       
@@ -58,10 +130,34 @@ export default function WalletView() {
 
       <div className="bg-gradient-to-tr from-emerald-600 to-emerald-400 rounded-[2rem] p-6 text-white shadow-xl relative overflow-hidden shrink-0">
          <div className="absolute top-0 left-0 w-full h-full bg-black/10 backdrop-blur-sm pointer-events-none" />
+         
+         {/* Circular Progress Background Effect */}
+         <div className="absolute top-[-20%] left-[-10%] opacity-20 pointer-events-none w-64 h-64">
+           <svg viewBox="0 0 100 100" className="w-full h-full transform -rotate-90">
+             <circle cx="50" cy="50" r="45" fill="none" stroke="currentColor" strokeWidth="8" opacity="0.3" />
+             <circle 
+               cx="50" cy="50" r="45" 
+               fill="none" 
+               stroke="currentColor" 
+               strokeWidth="8" 
+               strokeDasharray={strokeDasharray} 
+               strokeDashoffset={strokeDashoffset} 
+               className="transition-all duration-1000 ease-out" 
+               strokeLinecap="round" 
+             />
+           </svg>
+         </div>
+
          <div className="relative z-10 flex flex-col gap-6">
             <div className="flex justify-between items-center">
-               <span className="opacity-80 text-sm font-medium">أرباح الشهر المتوقعة (مستقل)</span>
-               <span className="text-xs bg-white/20 px-2 py-1 rounded-full">{format(now, 'MMMM yyyy', {locale: ar})}</span>
+               <span className="opacity-80 text-sm font-medium">أرباح الشهر المتوقعة</span>
+               <div className="flex gap-2">
+                 <button onClick={() => setGoalModalOpen(true)} className="text-xs bg-black/20 hover:bg-black/30 transition px-3 py-1 rounded-full flex items-center gap-1 backdrop-blur-md">
+                    <Target className="w-3 h-3" />
+                    الهدف: {targetGoal.toLocaleString()}
+                 </button>
+                 <span className="text-xs bg-white/20 px-2 py-1 rounded-full">{format(now, 'MMMM yyyy', {locale: ar})}</span>
+               </div>
             </div>
             
             <div className="flex items-end gap-2">
@@ -69,9 +165,11 @@ export default function WalletView() {
                <span className="text-lg font-bold opacity-80 mb-1">ج.م</span>
             </div>
             
-            <div className="flex items-center justify-between mt-2 opacity-80 text-xs">
-               <span>حصيلة ساعات العمل في المشاريع الحرّة</span>
-               <TrendingUp className="w-4 h-4" />
+            <div className="flex items-center justify-between mt-2 text-xs">
+               <span className="opacity-80">حصيلة ساعات العمل في المشاريع الحرّة</span>
+               <div className="bg-white/20 px-2 py-1 rounded-md font-bold text-white flex items-center gap-1 backdrop-blur-sm">
+                  {progressPercent.toFixed(0)}% من الهدف
+               </div>
             </div>
          </div>
       </div>
@@ -91,10 +189,16 @@ export default function WalletView() {
       )}
 
       <div className="space-y-4">
-        <h3 className="font-bold text-lg px-1 flex items-center gap-2">
-            <Briefcase className="w-5 h-5 text-emerald-500" /> 
-            تفصيل الإيرادات حسب المشروع
-        </h3>
+        <div className="flex items-center justify-between px-1">
+          <h3 className="font-bold text-lg flex items-center gap-2">
+              <Briefcase className="w-5 h-5 text-emerald-500" /> 
+              تفصيل الإيرادات
+          </h3>
+          <Button variant="outline" size="sm" className="h-8 rounded-xl font-bold bg-card" onClick={handleExportInvoice}>
+            <FileText className="w-4 h-4 ml-1.5 text-emerald-500" />
+            تصدير فاتورة (PDF)
+          </Button>
+        </div>
         
         <div className="flex flex-col gap-3">
            {projectsRevenue.length > 0 ? (
@@ -119,6 +223,32 @@ export default function WalletView() {
            )}
         </div>
       </div>
+
+      <Dialog open={goalModalOpen} onOpenChange={setGoalModalOpen}>
+        <DialogContent className="sm:max-w-md w-[90vw] rounded-[2rem]" dir="rtl">
+          <DialogHeader>
+            <DialogTitle>تحديد الهدف المالي</DialogTitle>
+          </DialogHeader>
+          <div className="py-4 flex flex-col gap-4">
+            <p className="text-sm text-muted-foreground">
+              ضع لنفسك هدفاً مالياً (بالجنيه) تسعى للوصول إليه بنهاية هذا الشهر من أعمالك المستقلة، لنقوم بإظهار مستوى تقدمك نحوه!
+            </p>
+            <div className="flex items-center gap-2">
+               <Input 
+                 type="number" 
+                 className="h-12 bg-secondary/50 border-white/10 rounded-xl font-bold text-lg"
+                 value={tempGoal} 
+                 onChange={(e) => setTempGoal(e.target.value)} 
+               />
+               <span className="font-bold text-muted-foreground">ج.م</span>
+            </div>
+          </div>
+          <DialogFooter className="flex-row gap-2">
+            <Button variant="ghost" onClick={() => setGoalModalOpen(false)} className="flex-1 rounded-xl">إلغاء</Button>
+            <Button onClick={handleSaveGoal} className="flex-1 rounded-xl font-bold bg-emerald-600 hover:bg-emerald-700 text-white">حفظ الهدف</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
     </div>
   );

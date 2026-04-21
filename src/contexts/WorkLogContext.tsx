@@ -2,6 +2,22 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import { WorkSession, Project, WorkSettings, Job, ScheduledShift } from '../types';
 import { db } from '../lib/db';
 import { sendAppNotification } from '../lib/notifications';
+import { format } from 'date-fns';
+import { gregorianToHijri } from '../lib/hijri';
+
+export const isPublicHoliday = (day: Date): boolean => {
+  const EGYPTIAN_HOLIDAYS = ["01-07","01-25","04-25","05-01","06-30","07-23","10-06"];
+  const dayKey = format(day, 'MM-dd');
+  if (EGYPTIAN_HOLIDAYS.includes(dayKey)) return true;
+  
+  const hijriDate = gregorianToHijri(day);
+  if (hijriDate) {
+    if (hijriDate.month === 9 && hijriDate.day === 1) return true; // أول رمضان is occasionally treated as a half day/holiday 
+    if (hijriDate.month === 10 && hijriDate.day <= 3) return true; // عيد الفطر
+    if (hijriDate.month === 12 && hijriDate.day >= 9 && hijriDate.day <= 13) return true; // عيد الأضحى
+  }
+  return false;
+};
 
 interface WorkLogContextType {
   sessions: WorkSession[];
@@ -286,10 +302,19 @@ export const WorkLogProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const remainingPermissionsHours = settings.monthlyPermissions - usedPermissionsHours;
 
     // Compensations (Find rest day work sessions that don't have a linked compensation leave)
-    const availableCompensations = sessions.filter(s => 
-      s.isRestDayWork && 
-      !sessions.some(other => other.isCompensationLeave && other.linkedCompensationSessionId === s.id)
-    );
+    let compensationDaysAccrued = 0;
+    let compensationDaysTaken = sessions.filter(s => s.dayStatus === 'compensation').length;
+
+    sessions.forEach(s => {
+      if (s.isRestDayWork) {
+        if (s.restDayCompensation === '1_day' || s.restDayCompensation === '1_day_plus_overtime') compensationDaysAccrued += 1;
+        else if (s.restDayCompensation === '2_days') compensationDaysAccrued += 2;
+      }
+    });
+    
+    // We can also calculate actual available compensation instances based on linked ID logic in HomeView,
+    // but here we just return the accrued vs taken to avoid double counting if any exist
+    const availableCompensations = sessions.filter(s => s.isRestDayWork && !s.isArchived); // Expose the raw list, HomeView handles mapping
 
     return {
       remainingAnnualLeaves,

@@ -10,6 +10,7 @@ import JobsShiftsView from './worklog/JobsShiftsView';
 import SupportQAView from './worklog/SupportQAView';
 import ArchiveView from './worklog/ArchiveView';
 import WalletView from './worklog/WalletView';
+import SmartPageView from './worklog/SmartPageView';
 import AICore from './aicore/AICore';
 import ThemesModes from './themes/ThemesModes';
 
@@ -29,16 +30,17 @@ export default function Dashboard({ activeTab, setActiveTab }: { activeTab: stri
       {activeTab === 'workspace' && <JobsShiftsView />}
       {activeTab === 'support' && <SupportQAView />}
       {activeTab === 'archive' && <ArchiveView />}
+      {activeTab === 'smartpage' && <SmartPageView />}
       {activeTab === 'aicore' && <AICore />}
       {activeTab === 'themes' && <ThemesModes />}
       {activeTab === 'more' && (
         <div className="flex flex-col gap-4 animate-in fade-in duration-300 pb-20 pt-4 px-2">
           <h2 className="text-2xl font-bold mb-4">خيارات إضافية</h2>
+          <OptionsCard title="صفحتي الحصرية" desc="أدوات مخصصة حسب وظيفتي ونظامي" id="smartpage" onClick={() => setActiveTab('smartpage')} />
           <OptionsCard title="السجل الشهري" desc="تاريخ الدوام والملخص" id="history" onClick={() => setActiveTab('history')} />
           <OptionsCard title="المحفظة (Mahfazty)" desc="الأرباح، التقييم المالي للساعات" id="wallet" onClick={() => setActiveTab('wallet')} />
           <OptionsCard title="أرشيف المهملات" desc="استعادة العمليات المحذوفة" id="archive" onClick={() => setActiveTab('archive')} />
           <OptionsCard title="إعدادات العمل" desc="أنظمة العمل والإجازات" id="settings" onClick={() => setActiveTab('settings')} />
-          <OptionsCard title="هندسة الورادي" desc="إدارة الورديات والوظائف المتعددة" id="workspace" onClick={() => setActiveTab('workspace')} />
           <div className="border-t border-border/40 my-2"></div>
           <OptionsCard title="المحرك الذكي" desc="تحليلات ومساعد بالذكاء الاصطناعي" id="aicore" onClick={() => setActiveTab('aicore')} />
           <OptionsCard title="الثيمات والأوضاع" desc="تخصيص الواجهة" id="themes" onClick={() => setActiveTab('themes')} />

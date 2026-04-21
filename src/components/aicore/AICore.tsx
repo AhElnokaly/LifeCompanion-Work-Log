@@ -16,17 +16,32 @@ export default function AICore() {
     { role: 'ai', text: 'مرحباً! أنا المحرك الذكي الخاص بك. يمكنني قراءة سجلات عملك وتحليل بياناتك لتوقع الإرهاق قبل حدوثه وللحفاظ على توازنك. كيف يمكنني مساعدتك؟' }
   ]);
 
-  // Calculates AI Core metrics
+  // ==========================================
+  // AI Core Metrics & Burnout Analysis Engine
+  // ==========================================
+  // This engine analyzes the raw session data to provide context to the AI model
+  // about the user's workload, stress levels, and financial performance.
   const analytics = useMemo(() => {
+    // 1. Lifetime Overtime Metrics: Tracks the total accumulated overtime minutes.
+    // Purpose: High total overtime over long periods indicates chronic overworking patterns.
     let totalOvertimeMins = 0;
+    
+    // 2. Continuous Streak: Tracks the number of consecutive calendar days the user has logged work.
+    // Purpose: Working without rest days is a primary driver of burnout.
     let daysWorkedInRow = 0;
+    
+    // 3. Rest Day Violations: Counts how many times the user worked on a designated weekend/rest day.
+    // Purpose: Helps the AI advise the user to respect their boundaries and detach from work.
     let workedRestDays = 0;
     
-    // Sort ascending by time
+    // Sort sessions in chronological ascending order for streak calculations
     const sorted = [...sessions].sort((a,b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
     
     const weekStart = startOfWeek(new Date());
     const weekEnd = endOfWeek(new Date());
+    
+    // 4. Current Week Hours: Accumulates duration (in hours) of all sessions in the current week.
+    // Purpose: Assesses short-term acute workload (e.g., pulling a 60-hour week).
     let currentWeekHours = 0;
 
     if (sorted.length > 0) {
@@ -58,12 +73,26 @@ export default function AICore() {
       }
     });
 
-    // Simple burnout heuristic
+    // ==========================================
+    // Burnout Heuristic Algorithm
+    // ==========================================
+    // Determines a simple qualitative risk based on acute and chronic fatigue indicators.
     let burnoutRisk = 'منخفض';
-    if (daysWorkedInRow >= 10 || currentWeekHours >= 55) burnoutRisk = 'حرج جداً';
-    else if (daysWorkedInRow >= 6 || currentWeekHours >= 45) burnoutRisk = 'مرتفع';
+    
+    // Critical Risk (حرج جداً): 
+    // Triggered if the user has worked 10+ consecutive days (chronic) OR > 55 hours this week (acute).
+    if (daysWorkedInRow >= 10 || currentWeekHours >= 55) {
+      burnoutRisk = 'حرج جداً';
+    } 
+    // High Risk (مرتفع): 
+    // Triggered if the user has worked 6+ consecutive days (missed a weekend) OR > 45 hours this week.
+    else if (daysWorkedInRow >= 6 || currentWeekHours >= 45) {
+      burnoutRisk = 'مرتفع';
+    }
 
-    // Calculate revenue
+    // 5. Total Revenue (Financial Metric):
+    // Purpose: Evaluates freelance/project-based earnings by multiplying duration by the project's hourly rate.
+    // This gives the AI context to balance "financial success" vs "human burnout".
     let totalRevenue = 0;
     sorted.forEach(s => {
       if (s.projectId) {

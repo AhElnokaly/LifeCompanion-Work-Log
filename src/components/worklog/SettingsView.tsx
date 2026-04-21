@@ -122,9 +122,9 @@ export default function SettingsView() {
             <SelectTrigger className="h-12 rounded-2xl bg-secondary/30 border-none">
               <SelectValue placeholder="اختر أسلوب الاستخدام" />
             </SelectTrigger>
-            <SelectContent position="popper" sideOffset={5} dir="rtl">
-              <SelectItem value="basic">بسيط ومختصر (للتسجيل السريع)</SelectItem>
-              <SelectItem value="advanced">متقدم وشامل (ذكاء اصطناعي وتقارير مفصلة)</SelectItem>
+            <SelectContent position="popper" sideOffset={5} dir="rtl" className="w-[--radix-select-trigger-width] max-w-full min-w-0">
+              <SelectItem value="basic" className="py-3 items-start"><span className="text-right block w-full">بسيط (تسجيل سريع)</span></SelectItem>
+              <SelectItem value="advanced" className="py-3 items-start"><span className="text-right block w-full whitespace-normal leading-tight">متقدم (ذكاء وتقارير)</span></SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -420,6 +420,22 @@ export default function SettingsView() {
                     onChange={(e) => setLocalSettings({...localSettings, monthlyHoursTarget: Number(e.target.value) || undefined})}
                   />
                 </div>
+              </div>
+           </div>
+           <div className="bg-secondary/20 p-4 rounded-xl border border-white/5 space-y-4">
+              <p className="font-bold flex items-center gap-2"><SettingsIcon className="w-4 h-4 text-primary"/> إعدادات المحرك الذكي (AI)</p>
+              <div className="space-y-3">
+                <Label>مفتاح API الخاص بك (Gemini)</Label>
+                <Input 
+                  type="password" 
+                  placeholder="اتركه فارغاً لاستخدام المفتاح الافتراضي، أو أدخل مفتاحك"
+                  className="h-12 rounded-xl"
+                  value={localSettings.customAIApiKey || ''}
+                  onChange={(e) => setLocalSettings({...localSettings, customAIApiKey: e.target.value})}
+                />
+                <p className="text-[10px] text-muted-foreground leading-relaxed">
+                  نحن نضمن الحفاظ على خصوصيتك. مفتاحك يُخزن محلياً فقط في متصفحك.
+                </p>
               </div>
            </div>
         </div>

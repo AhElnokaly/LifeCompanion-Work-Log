@@ -19,6 +19,7 @@ export default function JobsShiftsView() {
   const [shiftName, setShiftName] = useState('');
   const [shiftStart, setShiftStart] = useState('');
   const [shiftEnd, setShiftEnd] = useState('');
+  const [shiftFrequency, setShiftFrequency] = useState('daily');
 
   const submitJob = () => {
     if (!jobName) return;
@@ -35,27 +36,17 @@ export default function JobsShiftsView() {
     addShift({
       name: shiftName,
       startTime: shiftStart,
-      endTime: shiftEnd
+      endTime: shiftEnd,
+      frequency: shiftFrequency as any
     });
     setShiftName('');
     setShiftStart('');
     setShiftEnd('');
+    setShiftFrequency('daily');
   };
 
   return (
-    <div className="flex flex-col gap-6 h-full overflow-y-auto pb-20 px-2 animate-in fade-in slide-in-from-bottom-4 duration-500" dir="rtl">
-      <header className="flex items-center justify-between mb-2 mt-4 shrink-0">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full bg-indigo-500/10 flex items-center justify-center text-indigo-500">
-            <Briefcase className="w-6 h-6" />
-          </div>
-          <div>
-            <h2 className="text-2xl font-bold">هندسة الورادي</h2>
-            <p className="text-muted-foreground text-sm">الورديات المعقدة والوظائف المتعددة</p>
-          </div>
-        </div>
-      </header>
-
+    <div className="flex flex-col gap-6 h-full overflow-y-auto px-2 animate-in fade-in slide-in-from-bottom-4 duration-500 mt-4" dir="rtl">
       {/* Shifts Section */}
       <Card className="p-5 rounded-3xl bg-card border-white/5 space-y-4">
         <div className="flex items-center gap-2 mb-2 border-b border-border/40 pb-3">
@@ -93,6 +84,19 @@ export default function JobsShiftsView() {
               <Label>وقت الانتهاء</Label>
               <Input type="time" value={shiftEnd} onChange={(e) => setShiftEnd(e.target.value)} />
             </div>
+          </div>
+          <div className="space-y-2">
+             <Label>التكرار</Label>
+             <Select value={shiftFrequency} onValueChange={setShiftFrequency}>
+               <SelectTrigger>
+                 <SelectValue />
+               </SelectTrigger>
+               <SelectContent dir="rtl">
+                 <SelectItem value="daily">يومياً</SelectItem>
+                 <SelectItem value="weekly">أسبوعياً (أيام العمل)</SelectItem>
+                 <SelectItem value="custom">حسب الطلب</SelectItem>
+               </SelectContent>
+             </Select>
           </div>
           <Button className="w-full mt-2" onClick={submitShift}><Plus className="w-4 h-4 mr-2" /> إضافة الوردية</Button>
         </div>
