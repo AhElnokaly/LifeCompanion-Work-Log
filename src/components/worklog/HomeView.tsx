@@ -8,11 +8,11 @@ import { ar } from 'date-fns/locale';
 import { Input } from '../ui/input';
 
 export default function HomeView() {
-  const { activeSession, sessions, jobs, shifts, startSession, addSession, endSession, settings, getBalances, logSpecialSession, updateSession, toggleBreak } = useWorkLog();
+  const { activeSession, sessions, jobs, shifts, startSession, addSession, endSession, settings, getBalances, logSpecialSession, updateSession, updateActiveSession, toggleBreak } = useWorkLog();
   const { askAI } = useAICore();
   const [now, setNow] = useState(new Date());
 
-  const isTodayRestDay = (settings.restDays || []).includes(now.getDay()) || isPublicHoliday(now);
+  const isTodayRestDay = (settings.restDays || []).includes(now.getDay()) || isPublicHoliday(now, settings.customHolidays);
 
   // Modals state
   const [actionDialog, setActionDialog] = useState<'permission' | 'note' | 'pomodoro' | null>(null);
@@ -45,6 +45,8 @@ export default function HomeView() {
   const [selectedPreEntryMode, setSelectedPreEntryMode] = useState<'regular' | 'annual_leave' | 'compensation' | 'half_day'>('regular');
   const [compensationTypeDialogOpen, setCompensationTypeDialogOpen] = useState(false);
   const [selectedCompType, setSelectedCompType] = useState<'1_day' | '1_day_plus_overtime' | '2_days'>('1_day');
+  const [showManualEntry, setShowManualEntry] = useState(false);
+  const [manualEntryTime, setManualEntryTime] = useState(format(now, 'HH:mm'));
 
   const getAvailableCompensations = () => {
     return sessions.filter(s => s.isRestDayWork && !s.isArchived).map(s => {
@@ -205,8 +207,8 @@ export default function HomeView() {
 
   const [nightShiftModalOpen, setNightShiftModalOpen] = useState(false);
   const [pendingNightJob, setPendingNightJob] = useState<{type: any, entityId?: string} | null>(null);
-
   const [compensationOverrides, setCompensationOverrides] = useState<any>(null);
+  const [overtimeAskDialog, setOvertimeAskDialog] = useState<{show: boolean, baseMins: number} | null>(null);
 
   const startSpecificSession = (type: any, entityId?: string) => {
     setDispatcherOpen(false);
@@ -235,8 +237,23 @@ export default function HomeView() {
       overrideData = { ...overrideData, startTime: yesterday.toISOString() };
     }
 
-    // Half Day Check
-    if (!skipHalfDayCheck && settings.system !== 'freelance' && settings.expectedStartTime) {
+    // Grace Period Lateness logic
+    let lateMins = 0;
+    if (!skipHalfDayCheck && settings.system !== 'freelance' && settings.expectedStartTime && settings.usageComplexity === 'advanced' && settings.advancedRules?.gracePeriodMinutes) {
+       const expectedStart = new Date();
+       const [h, m] = settings.expectedStartTime.split(':').map(Number);
+       expectedStart.setHours(h, m, 0, 0);
+       const diffMins = (now.getTime() - expectedStart.getTime()) / 60000;
+       
+       if (diffMins > settings.advancedRules.gracePeriodMinutes) {
+         // Ask user what to do since they hit grace period limit
+         setShowHalfDayPrompt({show: true, type, entityId, forceYesterday, explicitOverrides, isGracePeriodHit: true, lateMins: Math.floor(diffMins)});
+         return;
+       }
+    }
+
+    // Half Day Check fallback
+    if (!skipHalfDayCheck && settings.system !== 'freelance' && settings.expectedStartTime && (!settings.usageComplexity || settings.usageComplexity !== 'advanced')) {
        const expectedStart = new Date();
        const [h, m] = settings.expectedStartTime.split(':').map(Number);
        expectedStart.setHours(h, m, 0, 0);
@@ -245,7 +262,7 @@ export default function HomeView() {
        
        // If late by > 60 mins and less than half shift (e.g. 4 hours)
        if (diffMins > 60 && diffMins < (settings.dailyHours * 60 / 2)) {
-         setShowHalfDayPrompt({show: true, type, entityId, forceYesterday, explicitOverrides});
+         setShowHalfDayPrompt({show: true, type, entityId, forceYesterday, explicitOverrides, isGracePeriodHit: false});
          return;
        }
     }
@@ -263,14 +280,32 @@ export default function HomeView() {
     }
   };
 
-  const handleHalfDayAccept = (accept: boolean) => {
-     const { type, entityId, forceYesterday, explicitOverrides } = showHalfDayPrompt as any;
+  const handleHalfDayAccept = (accept: boolean | string) => {
+     const { type, entityId, forceYesterday, explicitOverrides, isGracePeriodHit, lateMins } = showHalfDayPrompt as any;
      setShowHalfDayPrompt({show: false, type});
      
-     if (accept) {
-       logSpecialSession('half_day', { note: 'تأخير تلقائي' });
+     if (isGracePeriodHit) {
+        // Calculate the backdated expected start time
+        const expectedStart = new Date();
+        const [h, m] = settings.expectedStartTime!.split(':').map(Number);
+        expectedStart.setHours(h, m, 0, 0);
+
+        if (accept === 'ignore_and_overtime') {
+           // Will deduct from overtime tracking later, start as normal
+           processSessionStart(type, entityId, forceYesterday, true, { ...explicitOverrides, startTime: expectedStart.toISOString() });
+        } else if (accept === 'use_permission') {
+           // Starts normal work, but deducts a permission
+           processSessionStart(type, entityId, forceYesterday, true, { ...explicitOverrides, startTime: expectedStart.toISOString(), notes: `تأخير (${lateMins} دقيقة) - تم استخدام تصريح` });
+        } else if (accept === 'count_full') {
+           // Normal late log
+           processSessionStart(type, entityId, forceYesterday, true, { ...explicitOverrides, startTime: expectedStart.toISOString(), dayStatus: 'late', notes: `خصم تأخير (${lateMins} دقيقة)` });
+        }
      } else {
-       processSessionStart(type, entityId, forceYesterday, true, explicitOverrides);
+        if (accept === true) {
+          logSpecialSession('half_day', { note: 'تأخير تلقائي' });
+        } else {
+          processSessionStart(type, entityId, forceYesterday, true, explicitOverrides);
+        }
      }
   };
 
@@ -290,17 +325,57 @@ export default function HomeView() {
   };
 
   const handleEndSession = () => {
+    // Check if we need to ask for dynamic overtime rounding
+    if (activeSession && settings.usageComplexity === 'advanced' && settings.advancedRules?.overtimeRoundingStrategy === 'dynamic_ask') {
+      const endTime = new Date();
+      let duration = Math.round((endTime.getTime() - new Date(activeSession.startTime).getTime()) / 60000);
+      let finalBreaks = activeSession.breaks || 0;
+      if (activeSession.activeBreakStartTime) {
+         finalBreaks += Math.round((endTime.getTime() - new Date(activeSession.activeBreakStartTime).getTime()) / 60000);
+      }
+      duration = Math.max(0, duration - finalBreaks);
+      const isRestDay = activeSession.isRestDayWork || false;
+      const compType = activeSession.restDayCompensation;
+      
+      let baseOvertime = 0;
+      if (isRestDay) {
+        if (compType === '1_day_plus_overtime') baseOvertime = duration;
+        else if (compType === '2_days') baseOvertime = 0;
+        else baseOvertime = compType === '1_day' ? 0 : duration; 
+      } else {
+        const expectedMins = settings.dailyHours * 60;
+        baseOvertime = duration > expectedMins ? duration - expectedMins : 0;
+      }
+
+      if (baseOvertime > 0) {
+        setOvertimeAskDialog({ show: true, baseMins: baseOvertime });
+        return;
+      }
+    }
+    
+    proceedEndSession();
+  };
+
+  const proceedEndSession = (overtimeOverride?: number) => {
+    const finalNotes = noteText || 'انتهى العمل';
+    const manualData = overtimeOverride !== undefined ? { overtimeMinutes: overtimeOverride } : undefined;
+    
     if (settings.modules?.healthMood) {
       setMoodDialogState('end');
+      if (manualData) {
+        setPendingStartData({ overrideData: manualData } as any);
+      }
     } else {
-      endSession(noteText || 'انتهى العمل');
+      endSession(finalNotes, manualData);
     }
   };
 
   const submitMoodEnd = () => {
     const combinedNotes = `${noteText ? noteText + '\n' : ''}[المزاج النهائي: ${moodScore}/5 | الإنجاز: ${selfScore}/10]`;
-    endSession(combinedNotes);
+    const manualData = pendingStartData?.overrideData || undefined;
+    endSession(combinedNotes, manualData as any);
     setMoodDialogState(null);
+    setPendingStartData(null);
   };
 
   const submitPermission = () => {
@@ -410,12 +485,15 @@ export default function HomeView() {
     <div className="flex flex-col h-full animate-in fade-in zoom-in-95 duration-700 max-w-sm w-full mx-auto pb-4" dir="ltr">
       
       {/* Date / Title Row */}
-      <div className="flex justify-between items-center px-1 mb-2 shrink-0 pt-2" dir="rtl">
-        <div>
+      <div className="flex justify-between items-start px-1 mb-2 shrink-0 pt-2" dir="rtl">
+        <div className="flex flex-col">
           <h2 className="text-xl font-bold bg-gradient-to-r from-foreground to-foreground/80 bg-clip-text text-transparent">سجل يومك</h2>
-          <p className="text-[10px] font-medium text-muted-foreground mt-0.5">{format(now, 'EEEE، d MMMM', { locale: ar })}</p>
+          <p className="text-[10px] font-bold text-muted-foreground mt-1 tracking-wide">{format(now, 'EEEE، d MMMM', { locale: ar })}</p>
+          <p className="text-[9px] font-medium text-muted-foreground/80 mt-0.5">
+             {new Intl.DateTimeFormat('ar-SA-u-ca-islamic', { day: 'numeric', month: 'long', year: 'numeric' }).format(now)}
+          </p>
         </div>
-        <div className="flex gap-2 items-center">
+        <div className="flex gap-2 items-center mt-1">
            {!isFreelance && (
              <div className="text-[10px] text-muted-foreground bg-card shadow-sm px-2.5 py-1 rounded-full border border-border flex items-center gap-1 font-medium">
                <Calendar className="w-3 h-3 text-emerald-500" />
@@ -442,107 +520,144 @@ export default function HomeView() {
             </Button>
          </div>
       ) : (
-        <div className="flex flex-col gap-3 mx-1 flex-1 justify-center min-h-0">
+        <div className="flex flex-col gap-3 mx-1 flex-1 justify-center min-h-0 relative z-10 pb-16">
           
           {/* Card 1: Main Metric & Check-out */}
-          <div className="relative bg-card/40 backdrop-blur-2xl border border-white/5 rounded-[2rem] p-5 shadow-2xl flex flex-col gap-4 overflow-hidden shrink-0">
-            {/* Ambient Background Glow */}
-            <div className="absolute top-[-50%] right-[-10%] w-48 h-48 bg-primary/10 blur-[60px] rounded-full pointer-events-none"></div>
+          <div className="relative bg-card rounded-[2rem] p-6 shadow-sm border border-border/50 flex flex-col items-center gap-6 shrink-0 mt-4">
             
-            <div className="flex flex-col z-10" dir="rtl">
-              <span className="text-base font-bold text-foreground/80 mb-1">
-                {isTodayRestDay && !activeSession ? 'اليوم عطلتك. هل هذا عمل إضافي؟' : 'اليوم:'}
+            <div className="flex flex-col items-center w-full" dir="rtl">
+              <span className="text-sm font-bold text-foreground mb-4">
+                {isTodayRestDay && !activeSession ? 'هل لديك عمل إضافي اليوم؟' : 'سجل اليوم:'}
               </span>
-              <div className="flex items-baseline gap-2">
-                <span className="text-6xl font-semibold tracking-tighter text-foreground drop-shadow-sm leading-none">{displayHours}</span>
-                <span className="text-xl text-foreground/60 font-medium">ساعات</span>
+              
+              <div className="flex items-center justify-center w-48 h-48 rounded-full border-8 border-secondary relative mb-2">
+                 <svg className="absolute inset-0 w-full h-full -rotate-90" viewBox="0 0 100 100">
+                    <circle cx="50" cy="50" r="46" fill="transparent" stroke="currentColor" strokeWidth="8" className="text-emerald-500 opacity-20" />
+                    <circle cx="50" cy="50" r="46" fill="transparent" stroke="currentColor" strokeWidth="8" className="text-emerald-500 transition-all duration-1000 ease-out" 
+                       strokeDasharray={`${Math.min(289, (totalMinutesToday / (settings.dailyHours * 60)) * 289)} 289`}
+                    />
+                 </svg>
+                 <div className="flex flex-col items-center justify-center relative z-10">
+                    <span className="text-5xl font-black tracking-tighter text-foreground drop-shadow-sm leading-none">{displayHours}</span>
+                    <span className="text-sm text-foreground/60 font-medium mt-1">ساعات</span>
+                 </div>
               </div>
             </div>
 
-            {!activeSession && (
-               <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-none snap-x" dir="rtl">
-                 <Button 
-                   variant={selectedPreEntryMode === 'regular' ? 'default' : 'secondary'} 
-                   className="snap-start shrink-0 rounded-xl h-8 px-4 text-xs font-bold"
-                   onClick={() => setSelectedPreEntryMode('regular')}
-                 >
-                   {isTodayRestDay ? 'طوارئ/إضافي' : 'عمل منتظم'}
-                 </Button>
-                 <Button 
-                   variant={selectedPreEntryMode === 'half_day' ? 'default' : 'secondary'} 
-                   className={`snap-start shrink-0 rounded-xl h-8 px-4 text-xs font-bold ${selectedPreEntryMode === 'half_day' ? 'bg-orange-500 hover:bg-orange-600 text-white' : ''}`}
-                   onClick={() => setSelectedPreEntryMode('half_day')}
-                 >
-                   إجازة نصف يوم
-                 </Button>
-                 <Button 
-                   variant={selectedPreEntryMode === 'annual_leave' ? 'default' : 'secondary'} 
-                   className={`snap-start shrink-0 rounded-xl h-8 px-4 text-xs font-bold ${selectedPreEntryMode === 'annual_leave' ? 'bg-emerald-500 hover:bg-emerald-600 text-white' : ''}`}
-                   onClick={() => setSelectedPreEntryMode('annual_leave')}
-                 >
-                   إجازة سنوية
-                 </Button>
-                 <Button 
-                   variant={selectedPreEntryMode === 'compensation' ? 'default' : 'secondary'} 
-                   className={`snap-start shrink-0 rounded-xl h-8 px-4 text-xs font-bold ${selectedPreEntryMode === 'compensation' ? 'bg-indigo-500 hover:bg-indigo-600 text-white' : ''}`}
-                   onClick={() => setSelectedPreEntryMode('compensation')}
-                 >
-                   يوم بديل
-                 </Button>
-               </div>
-            )}
-
             <button 
               onClick={() => activeSession ? handleEndSession() : handlePreEntrySubmit()}
-              className={`w-full z-10 rounded-[1.2rem] h-14 font-bold text-base shadow-xl outline-none transition-all duration-300 transform active:scale-95 flex items-center justify-center gap-2 ${
+              className={`w-full rounded-[1.2rem] h-14 font-extrabold text-lg transition-transform active:scale-95 flex items-center justify-center gap-2 ${
                 activeSession 
-                  ? 'bg-emerald-600/90 hover:bg-emerald-600 text-white shadow-emerald-500/20' 
-                  : selectedPreEntryMode === 'regular' ? 'bg-primary/90 hover:bg-primary text-primary-foreground shadow-primary/20'
-                  : selectedPreEntryMode === 'half_day' ? 'bg-orange-500 hover:bg-orange-600 text-white shadow-orange-500/20'
-                  : 'bg-emerald-500 hover:bg-emerald-600 text-white shadow-emerald-500/20'
+                  ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-500/20 shadow-lg' 
+                  : selectedPreEntryMode === 'regular' ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-500/20 shadow-lg'
+                  : selectedPreEntryMode === 'half_day' ? 'bg-orange-500 hover:bg-orange-600 text-white shadow-orange-500/20 shadow-lg'
+                  : 'bg-indigo-500 hover:bg-indigo-600 text-white shadow-indigo-500/20 shadow-lg'
               }`}
             >
               {activeSession ? (
                 <>
-                   <Square className="fill-current w-4 h-4 flex-shrink-0" />
+                   <Square className="fill-current w-5 h-5 flex-shrink-0" />
                    تسجيل الانصراف
                 </>
               ) : (
                 <>
                    {selectedPreEntryMode === 'regular' ? (
-                     <><Play className="fill-current w-5 h-5 flex-shrink-0 mr-1" /> {isTodayRestDay ? 'بدء عمل إضافي يوم العطلة' : 'تسجيل الحضور'}</>
+                     <>تسجيل الحضور</>
                    ) : selectedPreEntryMode === 'half_day' ? (
-                     <><Clock className="fill-current w-5 h-5 flex-shrink-0 mr-1" /> تسجيل إجازة نصف يوم</>
+                     <>تسجيل نصف يوم</>
                    ) : (
-                     <><Calendar className="fill-current w-5 h-5 flex-shrink-0 mr-1" /> تسجيل إجازة</>
+                     <>تسجيل إجازة</>
                    )}
                 </>
               )}
             </button>
+            {!activeSession && selectedPreEntryMode === 'regular' && (
+              <div className="flex justify-center -mt-2 w-full">
+                 <Button variant="link" className="text-[11px] font-medium text-muted-foreground h-auto p-0 hover:text-foreground" onClick={() => setShowManualEntry(true)}>
+                   تسجيل وقت مختلف؟
+                 </Button>
+              </div>
+            )}
+
+            {!activeSession && (
+               <div className="flex w-full gap-2 overflow-x-auto pb-1 scrollbar-none snap-x mt-1" dir="rtl">
+                 <Button 
+                   variant={selectedPreEntryMode === 'regular' ? 'default' : 'secondary'} 
+                   className={`snap-start shrink-0 rounded-xl h-9 px-4 text-xs font-bold flex-1 ${selectedPreEntryMode === 'regular' ? 'bg-emerald-600 text-white' : 'bg-secondary/50 text-foreground hover:bg-secondary'}`}
+                   onClick={() => setSelectedPreEntryMode('regular')}
+                 >
+                   {isTodayRestDay ? 'إضافي' : 'عمل منتظم'}
+                 </Button>
+                 <Button 
+                   variant={selectedPreEntryMode === 'half_day' ? 'default' : 'secondary'} 
+                   className={`snap-start shrink-0 rounded-xl h-9 px-4 text-xs font-bold flex-1 ${selectedPreEntryMode === 'half_day' ? 'bg-orange-500 text-white' : 'bg-secondary/50 text-foreground hover:bg-secondary'}`}
+                   onClick={() => setSelectedPreEntryMode('half_day')}
+                 >
+                   نصف يوم
+                 </Button>
+                 <Button 
+                   variant={selectedPreEntryMode === 'annual_leave' ? 'default' : 'secondary'} 
+                   className={`snap-start shrink-0 rounded-xl h-9 px-4 text-xs font-bold flex-1 ${selectedPreEntryMode === 'annual_leave' ? 'bg-indigo-500 text-white' : 'bg-secondary/50 text-foreground hover:bg-secondary'}`}
+                   onClick={() => setSelectedPreEntryMode('annual_leave')}
+                 >
+                   إجازة كاملة
+                 </Button>
+               </div>
+            )}
+            
+            {/* Action Bar (Only shows during active session) */}
+            {activeSession && (
+              <div className="flex gap-2 w-full mt-2 z-10">
+                <Button 
+                  variant="secondary" 
+                  className={`flex-1 rounded-xl h-10 font-bold shadow-sm border border-border/50 text-xs ${activeSession.activeBreakStartTime ? 'bg-amber-500/20 text-amber-500 hover:bg-amber-500/30' : ''}`}
+                  onClick={toggleBreak}
+                >
+                  <Coffee className="w-3.5 h-3.5 mr-1" />
+                  {activeSession.activeBreakStartTime ? 'إنهاء الاستراحة' : 'استراحة'}
+                </Button>
+                <Button variant="secondary" className="flex-1 rounded-xl h-10 font-bold shadow-sm border border-border/50 bg-secondary/40 text-xs" onClick={() => setDispatcherOpen(true)}>
+                  <Shuffle className="w-3.5 h-3.5 mr-1" /> تبديل
+                </Button>
+                <Button variant="secondary" className="flex-1 rounded-xl h-10 font-bold shadow-sm border border-border/50 bg-secondary/40 text-xs" onClick={openNoteDialog}>
+                  <FileText className="w-3.5 h-3.5 mr-1" /> مذكرات
+                </Button>
+              </div>
+            )}
           </div>
 
-          {/* Card 1.5: Natural Language Input */}
-          <div className="bg-card/40 backdrop-blur-2xl border border-white/5 rounded-[1.5rem] p-4 flex flex-col gap-3 shadow-xl relative overflow-hidden shrink-0 mt-1" dir="rtl">
-             <div className="flex justify-between items-center">
-                <span className="text-xs font-bold flex items-center gap-1.5"><Brain className="w-4 h-4 text-primary" /> التسجيل الذكي السريع</span>
+          {/* Floating AI Record Button */}
+          {settings.customAIApiKey && (
+             <div className="fixed bottom-24 left-4 z-50">
+               <Sheet>
+                 <SheetTrigger asChild>
+                   <Button className="w-14 h-14 rounded-full shadow-2xl shadow-indigo-500/30 bg-indigo-500 hover:bg-indigo-600 text-white p-0 flex items-center justify-center border-[3px] border-background animate-in slide-in-from-bottom-4">
+                      <Brain className="w-6 h-6" />
+                   </Button>
+                 </SheetTrigger>
+                 <SheetContent side="bottom" className="rounded-t-[2rem] z-[110] p-6 text-center shadow-2xl">
+                   <SheetHeader className="pb-4">
+                     <SheetTitle className="text-xl font-bold flex items-center justify-center gap-2">
+                       <Brain className="w-5 h-5 text-indigo-500" /> التسجيل الذكي
+                     </SheetTitle>
+                     <p className="text-xs text-muted-foreground font-medium mt-1">تحدث أو اكتب ما قمت به وسيتولى الذكاء تنظيم السجل.</p>
+                   </SheetHeader>
+                   <div className="flex flex-col gap-4 mt-2" dir="rtl">
+                      <Input 
+                        placeholder="مثال: اشتغلت ساعتين وطلعت نص ساعة بريك"
+                        value={aiPrompt}
+                        onChange={e => setAiPrompt(e.target.value)}
+                        className="text-sm h-14 rounded-xl border-border/50 bg-background/50 font-medium"
+                        onKeyDown={e => e.key === 'Enter' && processAILog()}
+                      />
+                      <Button onClick={processAILog} disabled={!aiPrompt || isAILogging} className="w-full h-14 rounded-xl text-lg font-bold bg-indigo-500 hover:bg-indigo-600 text-white shadow-lg">
+                         {isAILogging ? <Loader2 className="w-6 h-6 animate-spin" /> : 'تسجيل الآن'}
+                      </Button>
+                   </div>
+                 </SheetContent>
+               </Sheet>
              </div>
-             <div className="flex gap-2">
-                <Input 
-                   placeholder="مثال: اشتغلت من 9 لـ 5 وطلعت استراحة ساعة" 
-                   value={aiPrompt}
-                   onChange={e => setAiPrompt(e.target.value)}
-                   className="text-[12px] h-11 bg-background/50 border-white/10 rounded-xl"
-                   onKeyDown={e => e.key === 'Enter' && processAILog()}
-                />
-                <Button 
-                   onClick={processAILog} 
-                   disabled={!aiPrompt || isAILogging}
-                   className="h-11 w-11 rounded-xl bg-primary text-primary-foreground p-0 flex flex-shrink-0 items-center justify-center"
-                >
-                   {isAILogging ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-4 h-4 rtl:rotate-180"/>}
-                </Button>
-             </div>
-          </div>
+          )}
 
           {!activeSession && (
             <div className="bg-primary/5 border border-primary/10 rounded-[1.5rem] p-4 text-center shrink-0">
@@ -555,8 +670,13 @@ export default function HomeView() {
             <div className="flex flex-col gap-1.5 text-[12px] text-foreground/80 z-10" dir="rtl">
               <div className="flex gap-2">
                 <span className="text-foreground/60 font-medium whitespace-nowrap">تسجيل الدخول:</span>
-                <span className="font-bold text-foreground">
+                <span className="font-bold text-foreground flex items-center gap-2">
                   {activeSession ? format(new Date(activeSession.startTime), "hh:mm a", {locale: ar}) : '--:--'}
+                  {activeSession && (
+                     <Button variant="ghost" size="icon" className="w-6 h-6 p-0 opacity-50 hover:opacity-100" onClick={() => setShowManualEntry(true)}>
+                       <Clock className="w-3.5 h-3.5" />
+                     </Button>
+                  )}
                 </span>
               </div>
               <div className="flex gap-2">
@@ -580,12 +700,18 @@ export default function HomeView() {
                    todaySessions.forEach(s => {
                      if (s.dayStatus === 'permission') permissionMins += (s.permissionHours || 0) * 60;
                      else if (s.dayStatus === 'half_day') halfDayMins += (s.duration || 0);
-                     else if (s.id === activeSession?.id) {
-                       workMins += currentSessionMinutes;
-                     } else {
+                     else {
                        workMins += (s.duration || 0);
                      }
                    });
+
+                   if (activeSession) {
+                     const sDate = new Date(activeSession.startTime);
+                     if (sDate.getDate() === now.getDate() && sDate.getMonth() === now.getMonth() && sDate.getFullYear() === now.getFullYear()) {
+                       // @ts-ignore - Assuming currentSessionMinutes is available in this scope
+                       workMins += currentSessionMinutes;
+                     }
+                   }
 
                    const permPct = Math.min((permissionMins / targetMins) * 100, 100);
                    const halfPct = Math.min((halfDayMins / targetMins) * 100, 100);
@@ -1089,32 +1215,67 @@ export default function HomeView() {
          </div>
       )}
 
-      {/* Overlay: Half Day Prompt */}
+      {/* Overlay: Half Day Prompt / Lateness */}
       {showHalfDayPrompt.show && (
          <div className="absolute inset-0 z-[60] flex items-center justify-center backdrop-blur-sm bg-background/60 p-4">
            <div className="bg-card border border-border p-6 rounded-[2rem] w-full max-w-sm shadow-2xl flex flex-col gap-4 animate-in slide-in-from-bottom-8 text-center" dir="rtl">
               <div className="mx-auto w-12 h-12 rounded-full bg-orange-500/10 flex items-center justify-center">
                 <Clock className="w-6 h-6 text-orange-500" />
               </div>
-              <h3 className="text-xl font-bold mt-2">تسجيل إجازة نصف يوم؟</h3>
-              <p className="text-sm text-muted-foreground leading-relaxed">
-               لقد تأخرت عن موعد بدء العمل المعتاد بأكثر من ساعة. هل تود وتسجيل هذا اليوم كأنه <strong>نصف يوم عمل</strong>؟
-              </p>
-              <div className="flex flex-col gap-2 mt-4">
-                <Button 
-                  className="w-full rounded-xl h-12 font-bold bg-orange-500 hover:bg-orange-600 text-white" 
-                  onClick={() => handleHalfDayAccept(true)}
-                >
-                  نعم، سجل نصف يوم
-                </Button>
-                <Button 
-                  variant="outline"
-                  className="w-full rounded-xl h-12" 
-                  onClick={() => handleHalfDayAccept(false)}
-                >
-                  لا، عمل كامل
-                </Button>
-              </div>
+              
+              {showHalfDayPrompt.isGracePeriodHit ? (
+                <>
+                  <h3 className="text-xl font-bold mt-2 text-center text-orange-500">تجاوز وقت السماح</h3>
+                  <p className="text-sm text-muted-foreground leading-relaxed text-center">
+                    لقد تأخرت بنسبة <strong>{(showHalfDayPrompt as any).lateMins} دقيقة</strong>، ووقت السماح هو {settings.advancedRules?.gracePeriodMinutes} دقيقة.
+                    كيف تود التعامل مع هذا التأخير؟
+                  </p>
+                  <div className="flex flex-col gap-2 mt-4 text-sm gap-y-3">
+                    <Button 
+                      onClick={() => handleHalfDayAccept('ignore_and_overtime')} 
+                      className="bg-indigo-500 hover:bg-indigo-600 rounded-xl whitespace-normal h-auto py-2"
+                    >
+                      لا تحسب التأخير (سأعوضه لاحقاً أو كإضافي)
+                    </Button>
+                    <Button 
+                      onClick={() => handleHalfDayAccept('use_permission')} 
+                      variant="outline" 
+                      className="rounded-xl border-orange-500/30 text-orange-600 hover:bg-orange-500/10"
+                    >
+                      استخدام تصريح تأخير
+                    </Button>
+                    <Button 
+                      onClick={() => handleHalfDayAccept('count_full')} 
+                      variant="ghost" 
+                      className="rounded-xl text-muted-foreground"
+                    >
+                      احتساب كخصم تأخير
+                    </Button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <h3 className="text-xl font-bold mt-2">تسجيل إجازة نصف يوم؟</h3>
+                  <p className="text-sm text-muted-foreground leading-relaxed">
+                   لقد تأخرت عن موعد بدء العمل المعتاد بأكثر من ساعة. هل تود وتسجيل هذا اليوم كأنه <strong>نصف يوم عمل</strong>؟
+                  </p>
+                  <div className="flex flex-col gap-2 mt-4">
+                    <Button 
+                      className="w-full rounded-xl h-12 font-bold bg-orange-500 hover:bg-orange-600 text-white" 
+                      onClick={() => handleHalfDayAccept(true)}
+                    >
+                      نعم، سجل نصف يوم
+                    </Button>
+                    <Button 
+                      variant="outline"
+                      className="w-full rounded-xl h-12" 
+                      onClick={() => handleHalfDayAccept(false)}
+                    >
+                      لا، عمل كامل
+                    </Button>
+                  </div>
+                </>
+              )}
            </div>
          </div>
       )}
@@ -1180,6 +1341,103 @@ export default function HomeView() {
                 >
                   إلغاء
                 </Button>
+              </div>
+           </div>
+         </div>
+      )}
+
+      {/* Overlay: Manual Past Session Entry */}
+      {showManualEntry && (
+         <div className="absolute inset-0 z-[60] flex items-center justify-center backdrop-blur-sm bg-background/60 p-4" dir="rtl">
+           <div className="bg-card border border-border p-6 rounded-[2rem] w-full max-w-sm shadow-2xl flex flex-col gap-4 animate-in slide-in-from-bottom-8">
+              <h3 className="text-xl font-bold mt-2 text-center">تسجيل دخول فائت</h3>
+              <p className="text-sm text-muted-foreground leading-relaxed text-center">
+                لم تقم بتسجيل الدخول في وقتها؟ أدخل الوقت الفعلي أدناه.
+              </p>
+              
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">وقت البدء الفعلي</label>
+                  <Input 
+                    type="time" 
+                    value={manualEntryTime}
+                    onChange={(e) => setManualEntryTime(e.target.value)}
+                    className="h-12 bg-secondary/50 rounded-xl"
+                  />
+                </div>
+                
+                <div className="flex gap-2">
+                  <Button 
+                     className="flex-1 rounded-xl h-12"
+                     onClick={() => {
+                        setShowManualEntry(false);
+                        const [th, tm] = manualEntryTime.split(':').map(Number);
+                        const modifiedStart = new Date(now);
+                        modifiedStart.setHours(th, tm, 0, 0);
+                        
+                        // if user entered a time in the future, maybe it meant yesterday?
+                        if (modifiedStart > now) {
+                           modifiedStart.setDate(modifiedStart.getDate() - 1);
+                        }
+                        if (activeSession) {
+                           updateActiveSession({ startTime: modifiedStart.toISOString() });
+                        } else {
+                           processSessionStart('salary', undefined, false, true, { startTime: modifiedStart.toISOString() });
+                        }
+                     }}
+                  >
+                     {activeSession ? 'تحديث وقت البدء' : 'تأكيد وبدء'}
+                  </Button>
+                  <Button variant="outline" className="flex-1 rounded-xl h-12" onClick={() => setShowManualEntry(false)}>
+                     إلغاء
+                  </Button>
+                </div>
+              </div>
+           </div>
+         </div>
+      )}
+
+      {/* Overlay: Dynamic Overtime Ask */}
+      {overtimeAskDialog?.show && (
+         <div className="absolute inset-0 z-[60] flex items-center justify-center backdrop-blur-sm bg-background/60 p-4" dir="rtl">
+           <div className="bg-card border border-border p-6 rounded-[2rem] w-full max-w-sm shadow-2xl flex flex-col gap-4 animate-in slide-in-from-bottom-8 text-center">
+              <h3 className="text-xl font-bold mt-2 text-primary">تسجيل الإضافي</h3>
+              <p className="text-sm text-muted-foreground leading-relaxed">
+                لقد عملت وقت إضافي مقداره <span className="font-bold text-foreground">{Math.floor(overtimeAskDialog.baseMins / 60)} ساعة و {overtimeAskDialog.baseMins % 60} دقيقة</span>. كيف تود احتسابه؟
+              </p>
+              
+              <div className="flex flex-col gap-2 mt-2">
+                  <Button 
+                     className="w-full rounded-xl h-12 bg-primary hover:bg-primary/90"
+                     onClick={() => {
+                        proceedEndSession(overtimeAskDialog.baseMins);
+                        setOvertimeAskDialog(null);
+                     }}
+                  >
+                     احتسابه كما هو بالدقيقة
+                  </Button>
+                  <Button 
+                     variant="outline"
+                     className="w-full rounded-xl h-12"
+                     onClick={() => {
+                        // Round up to nearest hour
+                        proceedEndSession(Math.ceil(overtimeAskDialog.baseMins / 60) * 60);
+                        setOvertimeAskDialog(null);
+                     }}
+                  >
+                     جبره للأعلى ({Math.ceil(overtimeAskDialog.baseMins / 60)} ساعة)
+                  </Button>
+                  <Button 
+                     variant="outline"
+                     className="w-full rounded-xl h-12"
+                     onClick={() => {
+                        // Round down to nearest hour
+                        proceedEndSession(Math.floor(overtimeAskDialog.baseMins / 60) * 60);
+                        setOvertimeAskDialog(null);
+                     }}
+                  >
+                     اختار التقريب وتجاهل الكسر ({Math.floor(overtimeAskDialog.baseMins / 60)} ساعة)
+                  </Button>
               </div>
            </div>
          </div>

@@ -152,10 +152,10 @@ export default function WorkLog() {
                 <Label>المشروع (اختياري)</Label>
                 <div className="flex gap-2">
                   <Select value={selectedProject} onValueChange={setSelectedProject}>
-                    <SelectTrigger className="w-full">
+                    <SelectTrigger className="w-full min-w-0" dir="rtl">
                       <SelectValue placeholder="اختر مشروعاً" />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent dir="rtl" className="min-w-[150px]">
                       <SelectItem value="none">بدون مشروع (راتب ثابت)</SelectItem>
                       {projects.map(p => (
                         <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>

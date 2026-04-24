@@ -14,6 +14,7 @@ export interface WorkSettings {
   notificationsEnabled?: boolean;
   monthlyFinancialTarget?: number;
   customAIApiKey?: string;
+  customHolidays?: { date: string; name: string }[]; // YYYY-MM-DD
   notificationPreferences?: {
     endOfDay: boolean;
     pomodoro: boolean;
@@ -32,6 +33,17 @@ export interface WorkSettings {
     healthMood: boolean;
     finances: boolean;
   };
+  
+  // Advanced Overtime & Lateness Settings
+  advancedRules?: {
+    gracePeriodMinutes: number;         // e.g. 15 minutes
+    latenessAction: 'ask' | 'count_full' | 'use_permission' | 'ignore_and_overtime'; 
+    overtimeRoundingStrategy: 'exact' | 'round_down_hour' | 'round_down_half' | 'dynamic_ask'; // Dynamic Ask if e.g. 55m -> ask to count as 1h
+    overtimeMinThresholdMinutes: number; // e.g. 35m -> won't count unless it passes this threshold. (If user works 35m overtime, counts as 0, else rounds down etc)
+    maxOvertimeHours: number;             // Maximum allowed overtime hours
+    overtimeCalculationType: 'fixed_rate' | 'multiplier_formula'; // whether it's a fixed amount per hour or multiplier
+  };
+  savedCharts?: any[];
 }
 
 export interface WorkSession {
@@ -110,8 +122,8 @@ export interface PaymentLog {
   notes?: string;
 }
 
-export type ThemeMode = 'light' | 'dark' | 'egyptian' | 'modern' | 'desert';
-export type SmartMode = 'natural' | 'ramadan' | 'focus' | 'emotional' | 'friday';
+export type ThemeMode = 'light' | 'dark';
+export type SmartMode = 'focus';
 
 export interface AppState {
   theme: ThemeMode;

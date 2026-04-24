@@ -1,12 +1,13 @@
 import React, { useMemo, useState } from 'react';
 import { Card } from '../ui/card';
-import { Wallet, TrendingUp, DollarSign, Briefcase, ChevronLeft, Target, FileText, X } from 'lucide-react';
+import { Wallet, TrendingUp, DollarSign, Briefcase, ChevronLeft, Target, FileText, X, BarChart2 } from 'lucide-react';
 import { useWorkLog } from '../../contexts/WorkLogContext';
 import { format, isSameMonth } from 'date-fns';
 import { ar } from 'date-fns/locale';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '../ui/dialog';
+import { ResponsiveContainer, BarChart, Bar, LineChart, Line, AreaChart, Area, PieChart, Pie, Cell, XAxis, Tooltip, CartesianGrid } from 'recharts';
 
 export default function WalletView() {
   const { sessions, projects, settings, updateSettings } = useWorkLog();
@@ -249,6 +250,40 @@ export default function WalletView() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <div className="space-y-4 pt-4">
+        <div className="flex items-center justify-between px-1">
+          <h3 className="font-bold text-lg flex items-center gap-2">
+              <BarChart2 className="w-5 h-5 text-indigo-500" /> 
+              المخططات المحفوظة
+          </h3>
+        </div>
+        
+        <div className="flex flex-col gap-3">
+           {settings.savedCharts && settings.savedCharts.length > 0 ? (
+              settings.savedCharts.map((chart: any, idx: number) => (
+                 <Card key={idx} className="p-4 bg-card border-white/5 rounded-2xl flex justify-between items-center hover:bg-secondary/20 transition-colors">
+                    <div className="flex flex-col gap-1">
+                       <span className="font-bold text-sm">{chart.name}</span>
+                       <span className="text-[10px] text-muted-foreground flex gap-1">
+                          نوع: {chart.chartType} • معيار: {chart.metric} • تجميع: {chart.groupBy} • فترة: {chart.timeRange}
+                       </span>
+                    </div>
+                    <Button variant="ghost" size="icon" onClick={() => {
+                        const updated = settings.savedCharts!.filter((_, i) => i !== idx);
+                        updateSettings({ ...settings, savedCharts: updated });
+                    }} className="text-red-400 hover:text-red-300 hover:bg-red-500/10 h-8 w-8 rounded-xl">
+                       <X className="w-4 h-4" />
+                    </Button>
+                 </Card>
+              ))
+           ) : (
+              <div className="text-center py-6 text-muted-foreground bg-secondary/5 rounded-3xl border border-white/5 border-dashed">
+                 لا توجد مخططات محفوظة حالياً.
+              </div>
+           )}
+        </div>
+      </div>
 
     </div>
   );

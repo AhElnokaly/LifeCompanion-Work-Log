@@ -21,7 +21,7 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   useEffect(() => {
     const root = window.document.documentElement;
-    root.classList.remove('theme-light', 'dark', 'theme-egyptian', 'theme-modern', 'theme-dynamic');
+    root.classList.remove('theme-light', 'dark');
     
     if (theme === 'dark') {
       root.classList.add('dark');
@@ -32,7 +32,7 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     localStorage.setItem('worklog_theme', theme);
 
     // Apply smart mode classes
-    root.classList.remove('mode-ramadan', 'mode-focus', 'mode-friday', 'mode-natural', 'mode-emotional');
+    root.classList.remove('mode-focus');
     if (smartMode) {
       root.classList.add(`mode-${smartMode}`);
     }

@@ -1,30 +1,19 @@
 import React from 'react';
 import { useTheme } from '../../contexts/ThemeContext';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '../ui/card';
 import { Button } from '../ui/button';
-import { Palette, Moon, Sun, Zap, Heart, Calendar, Focus } from 'lucide-react';
+import { Palette, Moon, Sun, Zap, Heart, Calendar, Focus, Info } from 'lucide-react';
 
 export default function ThemesModes() {
   const { theme, setTheme, smartMode, setSmartMode } = useTheme();
 
   const themes = [
-    { id: 'dynamic', name: 'تلقائي', icon: Sun, color: 'bg-gradient-to-r from-blue-400 to-indigo-500' },
     { id: 'light', name: 'فاتح', icon: Sun, color: 'bg-slate-100' },
     { id: 'dark', name: 'داكن', icon: Moon, color: 'bg-slate-900' },
-    { id: 'bold', name: 'جريء', icon: Zap, color: 'bg-orange-500' },
-    { id: 'pink', name: 'وردي', icon: Heart, color: 'bg-pink-500' },
-    { id: 'metallic', name: 'معدني', icon: Palette, color: 'bg-slate-400' },
-    { id: 'sand', name: 'رملي', icon: Palette, color: 'bg-amber-100' },
-    { id: 'ramadan-night', name: 'ليالي رمضان', icon: Moon, color: 'bg-indigo-900 border-yellow-500' },
-    { id: 'desert', name: 'الصحراء', icon: Sun, color: 'bg-[#fdf6e3] border-orange-500' },
   ];
 
   const modes = [
-    { id: 'natural', name: 'الوضع الطبيعي', desc: 'يتغير مع فصول السنة', icon: Sun },
-    { id: 'ramadan', name: 'وضع رمضان', desc: 'ألوان ليلية وذهبية', icon: Moon },
     { id: 'focus', name: 'وضع التركيز', desc: 'أبيض وأسود بدون مشتتات', icon: Focus },
-    { id: 'emotional', name: 'الوضع العاطفي', desc: 'يتفاعل مع مزاجك', icon: Heart },
-    { id: 'friday', name: 'وضع الجمعة', desc: 'أخضر إسلامي مميز', icon: Calendar },
   ];
 
   return (
@@ -43,7 +32,7 @@ export default function ThemesModes() {
             <CardDescription>اختر الألوان التي تناسب ذوقك.</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+            <div className="grid grid-cols-2 gap-4">
               {themes.map((t) => {
                 const Icon = t.icon;
                 return (

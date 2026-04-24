@@ -121,11 +121,11 @@ export default function HistoryView() {
               dir="rtl"
             />
             <Select value={filterType} onValueChange={setFilterType}>
-              <SelectTrigger className="w-[160px] h-10 bg-card border-none rounded-xl shrink-0">
-                <Filter className="w-4 h-4 mr-2" />
+              <SelectTrigger className="w-[160px] h-10 bg-card border-none rounded-xl shrink-0 min-w-0" dir="rtl">
+                <Filter className="w-4 h-4 ml-2" />
                 <SelectValue placeholder="تصفية..." />
               </SelectTrigger>
-              <SelectContent dir="rtl">
+              <SelectContent dir="rtl" className="min-w-[160px]">
                 <SelectItem value="all">الكل</SelectItem>
                 <SelectItem value="regular">عمل اعتيادي</SelectItem>
                 <SelectItem value="half_day">إجازة نصف يوم</SelectItem>

@@ -11,6 +11,8 @@ import SupportQAView from './worklog/SupportQAView';
 import ArchiveView from './worklog/ArchiveView';
 import WalletView from './worklog/WalletView';
 import SmartPageView from './worklog/SmartPageView';
+import AlarmsView from './worklog/AlarmsView';
+import ChartMakerView from './worklog/ChartMakerView';
 import AICore from './aicore/AICore';
 import ThemesModes from './themes/ThemesModes';
 
@@ -31,6 +33,8 @@ export default function Dashboard({ activeTab, setActiveTab }: { activeTab: stri
       {activeTab === 'support' && <SupportQAView />}
       {activeTab === 'archive' && <ArchiveView />}
       {activeTab === 'smartpage' && <SmartPageView />}
+      {activeTab === 'alarms' && <AlarmsView />}
+      {activeTab === 'chart_maker' && <ChartMakerView />}
       {activeTab === 'aicore' && <AICore />}
       {activeTab === 'themes' && <ThemesModes />}
       {activeTab === 'more' && (
@@ -38,6 +42,7 @@ export default function Dashboard({ activeTab, setActiveTab }: { activeTab: stri
           <h2 className="text-2xl font-bold mb-4">خيارات إضافية</h2>
           <OptionsCard title="صفحتي الحصرية" desc="أدوات مخصصة حسب وظيفتي ونظامي" id="smartpage" onClick={() => setActiveTab('smartpage')} />
           <OptionsCard title="السجل الشهري" desc="تاريخ الدوام والملخص" id="history" onClick={() => setActiveTab('history')} />
+          <OptionsCard title="صانع المخططات" desc="تصميم المخططات المخصصة" id="chart_maker" onClick={() => setActiveTab('chart_maker')} />
           <OptionsCard title="المحفظة (Mahfazty)" desc="الأرباح، التقييم المالي للساعات" id="wallet" onClick={() => setActiveTab('wallet')} />
           <OptionsCard title="أرشيف المهملات" desc="استعادة العمليات المحذوفة" id="archive" onClick={() => setActiveTab('archive')} />
           <OptionsCard title="إعدادات العمل" desc="أنظمة العمل والإجازات" id="settings" onClick={() => setActiveTab('settings')} />

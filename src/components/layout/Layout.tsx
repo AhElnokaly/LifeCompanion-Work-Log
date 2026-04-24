@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useTheme } from '../../contexts/ThemeContext';
+import AppLogo from '../ui/AppLogo';
 import { useWorkLog } from '../../contexts/WorkLogContext';
-import { Moon, Sun, Palette, Brain, Briefcase, Settings, Menu, Home, Calendar, BarChart2, LayoutGrid, MoreHorizontal, History, HelpCircle, MessageCircleQuestion, Wallet, Target, Users, CalendarDays } from 'lucide-react';
+import { Moon, Sun, Palette, Brain, Briefcase, Settings, Menu, Home, Calendar, BarChart2, LayoutGrid, MoreHorizontal, History, HelpCircle, MessageCircleQuestion, Wallet, Target, Users, CalendarDays, Download, Bell, Zap, BarChart, ChevronLeft, Share2, Link as LinkIcon, FileDown } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Sheet, SheetContent, SheetTrigger, SheetHeader, SheetTitle } from '../ui/sheet';
 import PageHelpOverlay from './PageHelpOverlay';
@@ -18,7 +19,50 @@ export default function Layout({ children, activeTab, setActiveTab }: LayoutProp
   const { settings, sessions, activeSession } = useWorkLog();
   const [chatOpen, setChatOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
   const [burnoutOverlay, setBurnoutOverlay] = useState(false);
+  const [installPromptEvent, setInstallPromptEvent] = useState<any>(null);
+
+  useEffect(() => {
+    const handler = (e: any) => {
+      e.preventDefault();
+      setInstallPromptEvent(e);
+    };
+    window.addEventListener('beforeinstallprompt', handler);
+    return () => window.removeEventListener('beforeinstallprompt', handler);
+  }, []);
+
+  const installApp = async () => {
+    if (!installPromptEvent) return;
+    installPromptEvent.prompt();
+    const { outcome } = await installPromptEvent.userChoice;
+    if (outcome === 'accepted') {
+      setInstallPromptEvent(null);
+    }
+  };
+
+  const handleShareLink = async () => {
+     try {
+        const shareUrl = 'https://lifecompanionworklog.netlify.app/';
+        if (navigator.share) {
+           await navigator.share({
+              title: 'LifeCompanion - Work Log',
+              text: 'جرب تطبيق LifeCompanion رفيقك الذكي لإدارة ساعات العمل!',
+              url: shareUrl,
+           });
+        } else {
+           await navigator.clipboard.writeText(shareUrl);
+           alert('تم نسخ الرابط بنجاح!');
+        }
+     } catch (err) {
+        console.error('Share failed', err);
+     }
+  };
+
+  const handleDownloadAPK = () => {
+     const apkUrl = "https://lifecompanionworklog.netlify.app/lifecompanion.apk";
+     window.open(apkUrl, '_blank');
+  };
 
   // Trigger burnout automatically if conditions suggest huge burnout and not previously ignored
   React.useEffect(() => {
@@ -42,16 +86,12 @@ export default function Layout({ children, activeTab, setActiveTab }: LayoutProp
   const isFreelance = settings.system === 'freelance';
 
   return (
-    <div className="min-h-screen flex flex-col md:flex-row bg-background text-foreground transition-colors duration-300" dir="ltr">
+    <div className="min-h-screen flex flex-col md:flex-row bg-background text-foreground transition-colors duration-300 w-full overflow-hidden" dir="ltr">
       {/* Mobile Header */}
       <div className="md:hidden flex items-center justify-between p-4 border-b bg-card relative z-10">
         <div className="flex items-center gap-2">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-primary to-emerald-500 p-0.5 shadow-lg relative overflow-hidden flex-shrink-0">
-            <div className="absolute inset-0 bg-white/20 backdrop-blur-sm" />
-            <div className="w-full h-full bg-card rounded-[10px] flex items-center justify-center relative z-10">
-              <Briefcase className="w-5 h-5 text-emerald-500" />
-              <span className="absolute bottom-0 right-0.5 text-[9px] font-black text-primary">LC</span>
-            </div>
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-primary/20 to-emerald-500/20 shadow-sm relative overflow-hidden flex-shrink-0 flex items-center justify-center p-1 border border-primary/20">
+             <AppLogo className="w-full h-full text-primary" />
           </div>
           <h1 className="text-xl font-extrabold bg-gradient-to-r from-primary to-emerald-500 bg-clip-text text-transparent leading-none">
             LifeCompanion
@@ -62,6 +102,11 @@ export default function Layout({ children, activeTab, setActiveTab }: LayoutProp
           <Button variant="ghost" size="icon" onClick={() => setHelpOpen(true)}>
             <HelpCircle className="h-5 w-5 text-emerald-500" />
           </Button>
+          {installPromptEvent && (
+            <Button variant="ghost" size="icon" onClick={installApp} className="animate-pulse">
+              <Download className="h-5 w-5 text-blue-500" />
+            </Button>
+          )}
           <Button variant="ghost" size="icon" onClick={() => setChatOpen(true)}>
              <MessageCircleQuestion className="h-5 w-5 text-blue-500" />
           </Button>
@@ -69,19 +114,58 @@ export default function Layout({ children, activeTab, setActiveTab }: LayoutProp
             <SheetTrigger className="w-8 h-8 inline-flex items-center justify-center rounded-lg hover:bg-muted text-foreground cursor-pointer focus:outline-none">
                 <Menu className="h-6 w-6" />
             </SheetTrigger>
-            <SheetContent side="right" className="w-64 z-[100]">
-              <nav className="flex flex-col gap-4 mt-8">
-                <Button variant="ghost" className="justify-start" onClick={() => setActiveTab('aicore')}>
-                  <Brain className="mr-2 h-5 w-5" /> AI Core
-                </Button>
-                <Button variant="ghost" className="justify-start" onClick={() => setActiveTab('themes')}>
-                  <Palette className="mr-2 h-5 w-5" /> Themes & Modes
-                </Button>
-                <Button variant="ghost" className="justify-start" onClick={() => setActiveTab('settings')}>
-                  <Settings className="mr-2 h-5 w-5" /> Settings
-                </Button>
-                <ThemeSettings />
-              </nav>
+            <SheetContent side="right" className="w-[85vw] max-w-[320px] p-6 z-[100] bg-background/95 backdrop-blur-xl border-l-0 rounded-l-[2rem] flex flex-col" dir="rtl">
+              <SheetHeader className="pb-6 border-b border-border/50">
+                <SheetTitle className="text-2xl font-black text-right pt-2 text-foreground">القائمة</SheetTitle>
+              </SheetHeader>
+              <div className="flex-1 overflow-y-auto mt-6 no-scrollbar">
+                <div className="flex flex-col gap-2">
+                  
+                  {/* Pro Upgrade (Placeholder from design) */}
+                  <button className="flex items-center w-full p-4 rounded-2xl bg-secondary/30 hover:bg-secondary/50 transition-colors gap-4">
+                     <div className="text-orange-500"><Zap className="w-5 h-5" /></div>
+                     <span className="font-bold text-orange-500 text-sm">الترقية لبرو</span>
+                  </button>
+
+                  <button className="flex items-center w-full p-4 rounded-2xl bg-secondary/30 hover:bg-secondary/50 transition-colors gap-4 mt-2" onClick={() => setActiveTab('wallet')}>
+                     <div className="text-foreground/70"><Wallet className="w-5 h-5" /></div>
+                     <span className="font-bold text-foreground text-sm">محفظتي</span>
+                  </button>
+
+                  <button className="flex items-center w-full p-4 rounded-2xl bg-secondary/30 hover:bg-secondary/50 transition-colors gap-4" onClick={() => setActiveTab('history')}>
+                     <div className="text-foreground/70"><History className="w-5 h-5" /></div>
+                     <span className="font-bold text-foreground text-sm">الأرشيف والسجل</span>
+                  </button>
+                  
+                  <button className="flex items-center w-full p-4 rounded-2xl bg-secondary/30 hover:bg-secondary/50 transition-colors gap-4" onClick={() => setActiveTab('chart_maker')}>
+                     <div className="text-foreground/70"><BarChart className="w-5 h-5" /></div>
+                     <span className="font-bold text-foreground text-sm">صانع المخططات</span>
+                  </button>
+                  
+                  <button className="flex items-center w-full p-4 rounded-2xl bg-secondary/30 hover:bg-secondary/50 transition-colors gap-4" onClick={() => setShareOpen(true)}>
+                     <div className="text-foreground/70"><Share2 className="w-5 h-5" /></div>
+                     <span className="font-bold text-foreground text-sm">مشاركة التطبيق</span>
+                  </button>
+
+                  <button className="flex items-center w-full p-4 rounded-2xl bg-secondary/30 hover:bg-secondary/50 transition-colors gap-4 mt-2 border border-border/50" onClick={() => setActiveTab('settings')}>
+                     <div className="text-foreground/70"><Settings className="w-5 h-5" /></div>
+                     <span className="font-bold text-foreground text-sm">الإعدادات</span>
+                  </button>
+                  
+                  <button className="flex items-center justify-between w-full p-4 rounded-2xl bg-secondary/30 hover:bg-secondary/50 transition-colors mt-2" onClick={() => setActiveTab('alarms')}>
+                     <div className="flex items-center gap-4">
+                       <div className="text-foreground/70"><Bell className="w-5 h-5" /></div>
+                       <span className="font-bold text-foreground text-sm">المنبهات والإشعارات</span>
+                     </div>
+                     <div className="w-5 h-5 rounded-full bg-red-500 text-[10px] text-white flex items-center justify-center font-bold">1</div>
+                  </button>
+                </div>
+              </div>
+              <div className="mt-6 pt-4 border-t border-border/50">
+                  <Button className="w-full h-14 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-base shadow-lg shadow-blue-500/20">
+                     تسجيل الدخول <ChevronLeft className="w-5 h-5 mr-2" />
+                  </Button>
+              </div>
             </SheetContent>
           </Sheet>
         </div>
@@ -90,12 +174,8 @@ export default function Layout({ children, activeTab, setActiveTab }: LayoutProp
       {/* Desktop Sidebar */}
       <aside className="hidden md:flex flex-col w-64 border-r p-4 gap-8 bg-card relative z-10">
         <div className="flex items-center gap-2 px-2 relative">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-primary to-emerald-500 p-0.5 shadow-lg relative overflow-hidden flex-shrink-0">
-            <div className="absolute inset-0 bg-white/20 backdrop-blur-sm" />
-            <div className="w-full h-full bg-card rounded-[10px] flex items-center justify-center relative z-10">
-              <Briefcase className="w-5 h-5 text-emerald-500" />
-              <span className="absolute bottom-0 right-0.5 text-[9px] font-black text-primary">LC</span>
-            </div>
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-primary/20 to-emerald-500/20 shadow-sm relative overflow-hidden flex-shrink-0 flex items-center justify-center p-1 border border-primary/20">
+             <AppLogo className="w-full h-full text-primary" />
           </div>
           <h1 className="text-xl font-extrabold bg-gradient-to-r from-primary to-emerald-500 bg-clip-text text-transparent leading-tight">
             LifeCompanion
@@ -112,6 +192,11 @@ export default function Layout({ children, activeTab, setActiveTab }: LayoutProp
         </div>
         <nav className="flex flex-col gap-2 flex-1">
           <DesktopNavLinks activeTab={activeTab} setActiveTab={setActiveTab} />
+          {installPromptEvent && (
+            <Button onClick={installApp} className="mt-4 w-full bg-blue-500 hover:bg-blue-600 text-white rounded-xl shadow-lg ring-2 ring-blue-500/20">
+              <Download className="w-4 h-4 mr-2" /> تثبيت التطبيق
+            </Button>
+          )}
         </nav>
         <div className="flex flex-col gap-2 border-t pt-4">
           <ThemeSettings />
@@ -139,11 +224,11 @@ export default function Layout({ children, activeTab, setActiveTab }: LayoutProp
         <div className="flex w-full justify-between min-w-max gap-2 px-1">
           <MobileNavItem icon={Home} label="الرئيسية" id="home" activeTab={activeTab} setActive={setActiveTab} />
           <MobileNavItem icon={Calendar} label="التقويم" id="week" activeTab={activeTab} setActive={setActiveTab} />
-          {settings.system === 'freelance' ? (
+          <MobileNavItem icon={Bell} label="المنبه" id="alarms" activeTab={activeTab} setActive={setActiveTab} />
+          {settings.system === 'freelance' && (
             <MobileNavItem icon={Users} label="العملاء" id="smartpage" activeTab={activeTab} setActive={setActiveTab} />
-          ) : settings.system === 'shifts' ? (
-            <MobileNavItem icon={CalendarDays} label="الورادي" id="smartpage" activeTab={activeTab} setActive={setActiveTab} />
-          ) : (
+          )}
+          {settings.system === 'fixed' && (
              <MobileNavItem icon={Target} label="أدائي" id="smartpage" activeTab={activeTab} setActive={setActiveTab} />
           )}
           <MobileNavItem icon={History} label="السجل" id="history" activeTab={activeTab} setActive={setActiveTab} />
@@ -166,6 +251,50 @@ export default function Layout({ children, activeTab, setActiveTab }: LayoutProp
              <EmbeddedAIChat />
           </div>
         </SheetContent>
+      </Sheet>
+
+      {/* Share App Sheet */}
+      <Sheet open={shareOpen} onOpenChange={setShareOpen}>
+         <SheetContent side="bottom" className="rounded-t-[2rem] max-h-[85vh] p-6 z-[120]">
+            <SheetHeader className="pb-4 text-center">
+               <SheetTitle className="text-xl font-bold flex flex-col items-center gap-4">
+                  <div className="w-16 h-16 bg-gradient-to-tr from-primary to-emerald-500 p-0.5 rounded-2xl shadow-lg relative overflow-hidden flex-shrink-0">
+                     <div className="absolute inset-0 bg-white/20 backdrop-blur-sm" />
+                     <div className="w-full h-full bg-card rounded-[14px] flex items-center justify-center relative z-10">
+                       <Briefcase className="w-8 h-8 text-emerald-500" />
+                     </div>
+                  </div>
+                  <div>مشاركة LifeCompanion</div>
+               </SheetTitle>
+            </SheetHeader>
+            <div className="space-y-4 mt-4" dir="rtl">
+               <button 
+                  onClick={handleShareLink}
+                  className="w-full bg-secondary/40 hover:bg-secondary/60 flex items-center gap-4 p-4 rounded-2xl transition-colors border border-border/50"
+               >
+                  <div className="w-10 h-10 rounded-full bg-indigo-500/10 flex items-center justify-center text-indigo-500">
+                     <LinkIcon className="w-5 h-5" />
+                  </div>
+                  <div className="flex flex-col text-right">
+                     <span className="font-bold text-sm">مشاركة كرابط (Link)</span>
+                     <span className="text-xs text-muted-foreground mt-0.5">انسخ الرابط أو شاركه مباشرة عبر التطبيقات</span>
+                  </div>
+               </button>
+               
+               <button 
+                  onClick={handleDownloadAPK}
+                  className="w-full bg-secondary/40 hover:bg-secondary/60 flex items-center gap-4 p-4 rounded-2xl transition-colors border border-border/50"
+               >
+                  <div className="w-10 h-10 rounded-full bg-emerald-500/10 flex items-center justify-center text-emerald-500">
+                     <FileDown className="w-5 h-5" />
+                  </div>
+                  <div className="flex flex-col text-right">
+                     <span className="font-bold text-sm">تنزيل التطبيق (APK)</span>
+                     <span className="text-xs text-muted-foreground mt-0.5">تحميل نسخة أندرويد لتثبيتها كـ App</span>
+                  </div>
+               </button>
+            </div>
+         </SheetContent>
       </Sheet>
 
       {/* Burnout Interceptor Overlay */}
@@ -232,7 +361,7 @@ function DesktopNavLinks({ activeTab, setActiveTab }: { activeTab: string, setAc
   let smartLabel = 'تقييم الأداء';
   let smartIcon = Target;
   if (settings.system === 'freelance') { smartLabel = 'إدارة العملاء'; smartIcon = Users; }
-  else if (settings.system === 'shifts') { smartLabel = 'عربة الورادي'; smartIcon = CalendarDays; }
+  else if (settings.system === 'shifts') { smartLabel = 'سجل البدلات'; smartIcon = Target; }
 
   const linkGroups = [
     {
@@ -240,6 +369,7 @@ function DesktopNavLinks({ activeTab, setActiveTab }: { activeTab: string, setAc
       links: [
         { id: 'home', label: 'الرئيسية', icon: Home },
         { id: 'week', label: 'التقويم الشامل', icon: Calendar },
+        { id: 'alarms', label: 'المنبهات والتركيز', icon: Bell },
         { id: 'smartpage', label: smartLabel, icon: smartIcon },
         ...(isFreelance || isAdvanced ? [{ id: 'projects', label: 'المشاريع / المهام', icon: LayoutGrid }] : []),
       ]
@@ -249,6 +379,7 @@ function DesktopNavLinks({ activeTab, setActiveTab }: { activeTab: string, setAc
       links: [
         { id: 'history', label: 'السجل', icon: History },
         { id: 'wallet', label: 'محفظتي', icon: Wallet },
+        { id: 'chart_maker', label: 'صانع المخططات', icon: BarChart },
         ...(isAdvanced ? [{ id: 'reports', label: 'التقارير', icon: BarChart2 }] : []),
       ]
     },
@@ -305,11 +436,8 @@ function ThemeSettings() {
     <>
       <p className="text-xs text-muted-foreground px-2 mb-2 rtl:text-right">المظهر السريع</p>
       <div className="flex flex-wrap gap-2 px-2">
-        <Button variant="outline" size="sm" onClick={() => setTheme('light')} className={theme === 'light' ? 'border-primary' : ''}>فاتح</Button>
-        <Button variant="outline" size="sm" onClick={() => setTheme('dark')} className={theme === 'dark' ? 'border-primary' : ''}>داكن</Button>
-        <Button variant="outline" size="sm" onClick={() => setTheme('egyptian')} className={theme === 'egyptian' ? 'border-primary' : ''}>مصري</Button>
-        <Button variant="outline" size="sm" onClick={() => setTheme('modern')} className={theme === 'modern' ? 'border-primary' : ''}>مودرن</Button>
-        <Button variant="outline" size="sm" onClick={() => setTheme('desert')} className={theme === 'desert' ? 'border-primary' : ''}>صحراوي</Button>
+        <Button variant="outline" size="sm" onClick={() => setTheme('light')} className={theme === 'light' ? 'border-primary flex-1' : 'flex-1'}>فاتح</Button>
+        <Button variant="outline" size="sm" onClick={() => setTheme('dark')} className={theme === 'dark' ? 'border-primary flex-1' : 'flex-1'}>داكن</Button>
         <Button variant="outline" size="sm" onClick={() => setSmartMode(smartMode === 'focus' ? null : 'focus')} className={smartMode === 'focus' ? 'border-primary bg-primary/10 w-full mt-1' : 'w-full mt-1'}>
           وضع التركيز
         </Button>

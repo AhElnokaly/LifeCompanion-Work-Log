@@ -3,19 +3,26 @@ import { WorkSession, Project, WorkSettings, Job, ScheduledShift } from '../type
 import { db } from '../lib/db';
 import { sendAppNotification } from '../lib/notifications';
 import { format } from 'date-fns';
-import { gregorianToHijri } from '../lib/hijri';
 
-export const isPublicHoliday = (day: Date): boolean => {
+export const isPublicHoliday = (day: Date, customHolidays?: {date: string, name: string}[]): boolean => {
   const EGYPTIAN_HOLIDAYS = ["01-07","01-25","04-25","05-01","06-30","07-23","10-06"];
   const dayKey = format(day, 'MM-dd');
+  const fullDateKey = format(day, 'yyyy-MM-dd');
+
+  if (customHolidays?.some(h => h.date === fullDateKey)) return true;
   if (EGYPTIAN_HOLIDAYS.includes(dayKey)) return true;
   
-  const hijriDate = gregorianToHijri(day);
-  if (hijriDate) {
-    if (hijriDate.month === 9 && hijriDate.day === 1) return true; // أول رمضان is occasionally treated as a half day/holiday 
-    if (hijriDate.month === 10 && hijriDate.day <= 3) return true; // عيد الفطر
-    if (hijriDate.month === 12 && hijriDate.day >= 9 && hijriDate.day <= 13) return true; // عيد الأضحى
-  }
+  try {
+     const hijriFormatter = new Intl.DateTimeFormat('en-u-ca-islamic', { month: 'numeric', day: 'numeric' });
+     const hParts = hijriFormatter.formatToParts(day);
+     const hMonth = parseInt(hParts.find(p => p.type === 'month')?.value || '1');
+     const hDay = parseInt(hParts.find(p => p.type === 'day')?.value || '1');
+     
+     if (hMonth === 9 && hDay === 1) return true; // أول رمضان 
+     if (hMonth === 10 && hDay <= 3) return true; // عيد الفطر
+     if (hMonth === 12 && hDay >= 9 && hDay <= 13) return true; // عيد الأضحى
+  } catch(e) {}
+  
   return false;
 };
 
@@ -25,6 +32,7 @@ interface WorkLogContextType {
   projects: Project[];
   jobs: Job[];
   shifts: ScheduledShift[];
+  shiftAssignments: Record<string, string>; // Maps YYYY-MM-DD to shiftId
   activeSession: WorkSession | null;
   settings: WorkSettings;
   updateSettings: (settings: WorkSettings) => void;
@@ -32,11 +40,15 @@ interface WorkLogContextType {
   endSession: (notes: string, manualData?: Partial<WorkSession>) => void;
   addSession: (session: WorkSession) => void;
   updateSession: (id: string, updates: Partial<WorkSession>) => void;
+  updateActiveSession: (updates: Partial<WorkSession>) => void;
   deleteSession: (id: string, hardDelete?: boolean) => void;
   restoreSession: (id: string) => void;
   addProject: (project: Omit<Project, 'id' | 'totalHours'>) => void;
   addJob: (job: Omit<Job, 'id'>) => void;
   addShift: (shift: Omit<ScheduledShift, 'id'>) => void;
+  removeJob: (id: string) => void;
+  removeShift: (id: string) => void;
+  toggleShiftAssignment: (dateStr: string, shiftId: string) => void;
   toggleBreak: () => void;
   getBalances: () => {
     remainingAnnualLeaves: number;
@@ -69,6 +81,7 @@ export const WorkLogProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const [projects, setProjects] = useState<Project[]>([]);
   const [jobs, setJobs] = useState<Job[]>([]);
   const [shifts, setShifts] = useState<ScheduledShift[]>([]);
+  const [shiftAssignments, setShiftAssignments] = useState<Record<string, string>>({});
   const [activeSession, setActiveSession] = useState<WorkSession | null>(null);
   const [settings, setSettings] = useState<WorkSettings>({ ...defaultSettings, onboardingCompleted: false });
 
@@ -78,12 +91,14 @@ export const WorkLogProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const savedProjects = localStorage.getItem('worklog_projects');
     const savedJobs = localStorage.getItem('worklog_jobs');
     const savedShifts = localStorage.getItem('worklog_shifts');
+    const savedAssignments = localStorage.getItem('worklog_shift_assignments');
     const savedActive = localStorage.getItem('worklog_active');
     const savedSettings = localStorage.getItem('worklog_settings');
 
     if (savedProjects) setProjects(JSON.parse(savedProjects));
     if (savedJobs) setJobs(JSON.parse(savedJobs));
     if (savedShifts) setShifts(JSON.parse(savedShifts));
+    if (savedAssignments) setShiftAssignments(JSON.parse(savedAssignments));
     if (savedActive) setActiveSession(JSON.parse(savedActive));
     if (savedSettings) setSettings(JSON.parse(savedSettings));
 
@@ -107,9 +122,10 @@ export const WorkLogProvider: React.FC<{ children: React.ReactNode }> = ({ child
     localStorage.setItem('worklog_projects', JSON.stringify(projects));
     localStorage.setItem('worklog_jobs', JSON.stringify(jobs));
     localStorage.setItem('worklog_shifts', JSON.stringify(shifts));
+    localStorage.setItem('worklog_shift_assignments', JSON.stringify(shiftAssignments));
     localStorage.setItem('worklog_active', JSON.stringify(activeSession));
     localStorage.setItem('worklog_settings', JSON.stringify(settings));
-  }, [sessions, projects, jobs, shifts, activeSession, settings]);
+  }, [sessions, projects, jobs, shifts, shiftAssignments, activeSession, settings]);
 
   const updateSettings = (newSettings: WorkSettings) => {
     setSettings(newSettings);
@@ -145,21 +161,40 @@ export const WorkLogProvider: React.FC<{ children: React.ReactNode }> = ({ child
   };
 
   const calculateOvertime = (durationMins: number, isRestDay: boolean, compType?: '1_day' | '2_days' | '1_day_plus_overtime') => {
+    let baseOvertime = 0;
+    
     if (isRestDay) {
       if (compType === '1_day_plus_overtime') {
-         // Work on rest day is 1 day leave + the actual hours worked count strictly as overtime.
-         return durationMins;
+         baseOvertime = durationMins;
       } else if (compType === '2_days') {
-         // Paid with 2 alternative rest days, no overtime hours generated
-         return 0;
+         baseOvertime = 0;
       } else {
-         // '1_day' - Paid with 1 alternative rest day. No direct overtime minutes generated (depending on HR policy, but usually 0 overtime minutes if replaced 1:1, or 1:1 overtime)
-         // Defaulting it to count as full overtime (durationMins) for basic tracking, unless specific compensation is chosen.
-         return compType === '1_day' ? 0 : durationMins; 
+         baseOvertime = compType === '1_day' ? 0 : durationMins; 
       }
+    } else {
+      const expectedMins = settings.dailyHours * 60;
+      baseOvertime = durationMins > expectedMins ? durationMins - expectedMins : 0;
     }
-    const expectedMins = settings.dailyHours * 60;
-    return durationMins > expectedMins ? durationMins - expectedMins : 0;
+
+    if (baseOvertime === 0) return 0;
+    
+    const advanced = settings.advancedRules;
+    if (settings.usageComplexity === 'advanced' && advanced) {
+       // Threshold check (e.g. if worked < 60 min overtime, and threshold is 60, counts as 0)
+       if (advanced.overtimeMinThresholdMinutes && baseOvertime < advanced.overtimeMinThresholdMinutes) {
+          return 0; // Did not cross threshold
+       }
+
+       // Rounding Strategy
+       if (advanced.overtimeRoundingStrategy === 'round_down_hour') {
+          return Math.floor(baseOvertime / 60) * 60;
+       } else if (advanced.overtimeRoundingStrategy === 'round_down_half') {
+          return Math.floor(baseOvertime / 30) * 30;
+       }
+       // dynamic_ask is handled at endSession UI level usually, but we keep exact here for now
+    }
+
+    return baseOvertime;
   };
 
   const endSession = (notes: string, manualData?: Partial<WorkSession>) => {
@@ -252,6 +287,10 @@ export const WorkLogProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }));
   };
 
+  const updateActiveSession = (updates: Partial<WorkSession>) => {
+    setActiveSession(current => current ? { ...current, ...updates } : null);
+  };
+
   const deleteSession = (id: string, hardDelete = false) => {
     if (hardDelete) {
       setSessions(current => current.filter(sess => sess.id !== id));
@@ -283,6 +322,26 @@ export const WorkLogProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
   const addShift = (shiftData: Omit<ScheduledShift, 'id'>) => {
     setShifts([...shifts, { ...shiftData, id: Date.now().toString() }]);
+  };
+
+  const removeJob = (id: string) => {
+    setJobs(jobs.filter(j => j.id !== id));
+  };
+
+  const removeShift = (id: string) => {
+    setShifts(shifts.filter(s => s.id !== id));
+  };
+
+  const toggleShiftAssignment = (dateStr: string, shiftId: string) => {
+    setShiftAssignments(current => {
+      const next = { ...current };
+      if (next[dateStr] === shiftId) {
+        delete next[dateStr];
+      } else {
+        next[dateStr] = shiftId;
+      }
+      return next;
+    });
   };
 
   const getBalances = () => {
@@ -406,8 +465,8 @@ export const WorkLogProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
   return (
     <WorkLogContext.Provider value={{ 
-      sessions: activeSessions, archivedSessions, projects, jobs, shifts, activeSession, settings, 
-      updateSettings, startSession, endSession, addSession, updateSession, deleteSession, restoreSession, addProject, addJob, addShift,
+      sessions: activeSessions, archivedSessions, projects, jobs, shifts, shiftAssignments, activeSession, settings, 
+      updateSettings, startSession, endSession, addSession, updateSession, updateActiveSession, deleteSession, restoreSession, addProject, addJob, addShift, removeJob, removeShift, toggleShiftAssignment,
       toggleBreak, getBalances, logSpecialSession, deleteAllData 
     }}>
       {children}

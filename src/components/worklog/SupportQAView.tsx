@@ -120,13 +120,16 @@ export default function SupportQAView() {
             </div>
           </Card>
 
-          <Card className="p-4 bg-primary/10 border-primary/20 rounded-2xl flex items-center gap-4">
+          <Card 
+            className="p-4 bg-primary/10 border-primary/20 rounded-2xl flex items-center gap-4 cursor-pointer hover:bg-primary/20 transition-colors"
+            onClick={() => window.open(`https://wa.me/?text=${encodeURIComponent('Hello, I need support with LifeCompanion App')}`, '_blank')}
+          >
             <div className="w-10 h-10 rounded-full bg-primary/20 flex shrink-0 items-center justify-center text-primary">
               <Phone className="w-5 h-5" />
             </div>
             <div>
-              <p className="font-bold text-sm">التواصل المباشر व्हाट्सएप</p>
-              <p className="text-xs text-muted-foreground dir-ltr text-left mt-1">{WHATSAPP_NUMBER}</p>
+              <p className="font-bold text-sm">التواصل المباشر (WhatsApp)</p>
+              <p className="text-xs text-muted-foreground mt-1">اضغط للتحدث مع فريق الدعم</p>
             </div>
           </Card>
         </div>

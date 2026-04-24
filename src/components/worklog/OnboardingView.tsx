@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { useWorkLog } from '../../contexts/WorkLogContext';
 import { Button } from '../ui/button';
-import { Brain, Settings, Users, LogIn, ChevronLeft } from 'lucide-react';
+import { Settings, Users, LogIn, ChevronLeft } from 'lucide-react';
+import AppLogo from '../ui/AppLogo';
 
 export default function OnboardingView() {
   const { updateSettings, settings } = useWorkLog();
@@ -26,11 +27,12 @@ export default function OnboardingView() {
         {/* Step 1: Welcome */}
         {step === 1 && (
           <div className="flex flex-col items-center p-8 text-center space-y-6">
-            <div className="w-24 h-24 bg-gradient-to-tr from-primary to-emerald-500 rounded-full flex items-center justify-center shadow-lg shadow-primary/30">
-              <Brain className="w-12 h-12 text-black" />
+            <div className="w-24 h-24 bg-gradient-to-tr from-primary/20 to-emerald-500/20 shadow-sm border border-primary/20 rounded-full flex items-center justify-center p-4">
+              <AppLogo className="w-full h-full text-primary" />
             </div>
             <div>
-              <h1 className="text-3xl font-extrabold mb-2">Life Companion</h1>
+              <h1 className="text-3xl font-extrabold mb-1">Life Companion</h1>
+              <p className="text-sm font-bold text-primary mb-4 uppercase tracking-widest text-[10px]">Work Log</p>
               <p className="text-muted-foreground text-sm">رفيقك الذكي لإدارة ساعات العمل، وتحقيق التوازن، والتنبيه قبل الاحتراق الوظيفي.</p>
             </div>
             <Button onClick={() => setStep(2)} className="w-full h-14 rounded-xl text-lg font-bold">
