@@ -98,17 +98,14 @@ export default function Layout({ children, activeTab, setActiveTab }: LayoutProp
             <span className="block text-[10px] font-medium text-muted-foreground uppercase tracking-widest mt-1 text-right">Work Log</span>
           </h1>
         </div>
-        <div className="flex gap-1">
-          <Button variant="ghost" size="icon" onClick={() => setHelpOpen(true)}>
-            <HelpCircle className="h-5 w-5 text-emerald-500" />
-          </Button>
+        <div className="flex gap-1 items-center">
           {installPromptEvent && (
             <Button variant="ghost" size="icon" onClick={installApp} className="animate-pulse">
               <Download className="h-5 w-5 text-blue-500" />
             </Button>
           )}
-          <Button variant="ghost" size="icon" onClick={() => setChatOpen(true)}>
-             <MessageCircleQuestion className="h-5 w-5 text-blue-500" />
+          <Button variant="ghost" size="icon" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}>
+             {theme === 'dark' ? <Sun className="h-5 w-5 text-yellow-500" /> : <Moon className="h-5 w-5 text-indigo-500" />}
           </Button>
           <Sheet>
             <SheetTrigger className="w-8 h-8 inline-flex items-center justify-center rounded-lg hover:bg-muted text-foreground cursor-pointer focus:outline-none">
@@ -145,6 +142,19 @@ export default function Layout({ children, activeTab, setActiveTab }: LayoutProp
                   <button className="flex items-center w-full p-4 rounded-2xl bg-secondary/30 hover:bg-secondary/50 transition-colors gap-4" onClick={() => setShareOpen(true)}>
                      <div className="text-foreground/70"><Share2 className="w-5 h-5" /></div>
                      <span className="font-bold text-foreground text-sm">مشاركة التطبيق</span>
+                  </button>
+
+                  <button className="flex items-center w-full p-4 rounded-2xl bg-indigo-500/10 hover:bg-indigo-500/20 transition-colors gap-4 mt-2 border border-indigo-500/20" onClick={() => { setChatOpen(true); /* close sheet conceptually later but ok for now */ }}>
+                     <div className="text-indigo-500"><Brain className="w-5 h-5" /></div>
+                     <div className="flex flex-col text-right">
+                        <span className="font-bold text-indigo-500 text-sm">المساعد الذكي للعمل</span>
+                        <span className="text-[10px] text-indigo-500/70">تحدث والإجابة على الأسئلة</span>
+                     </div>
+                  </button>
+
+                  <button className="flex items-center w-full p-4 rounded-2xl bg-secondary/30 hover:bg-secondary/50 transition-colors gap-4 mt-2" onClick={() => setHelpOpen(true)}>
+                     <div className="text-foreground/70"><HelpCircle className="w-5 h-5" /></div>
+                     <span className="font-bold text-foreground text-sm">المساعدة والأسئلة الشائعة (Q&A)</span>
                   </button>
 
                   <button className="flex items-center w-full p-4 rounded-2xl bg-secondary/30 hover:bg-secondary/50 transition-colors gap-4 mt-2 border border-border/50" onClick={() => setActiveTab('settings')}>
@@ -434,12 +444,16 @@ function ThemeSettings() {
   const { theme, setTheme, smartMode, setSmartMode } = useTheme();
   return (
     <>
-      <p className="text-xs text-muted-foreground px-2 mb-2 rtl:text-right">المظهر السريع</p>
+      <p className="text-xs text-muted-foreground px-2 mb-2 rtl:text-right">المظهر</p>
       <div className="flex flex-wrap gap-2 px-2">
-        <Button variant="outline" size="sm" onClick={() => setTheme('light')} className={theme === 'light' ? 'border-primary flex-1' : 'flex-1'}>فاتح</Button>
-        <Button variant="outline" size="sm" onClick={() => setTheme('dark')} className={theme === 'dark' ? 'border-primary flex-1' : 'flex-1'}>داكن</Button>
-        <Button variant="outline" size="sm" onClick={() => setSmartMode(smartMode === 'focus' ? null : 'focus')} className={smartMode === 'focus' ? 'border-primary bg-primary/10 w-full mt-1' : 'w-full mt-1'}>
-          وضع التركيز
+        <Button variant="outline" size="sm" onClick={() => setTheme('light')} className={theme === 'light' ? 'border-yellow-500 text-yellow-600 bg-yellow-500/10 flex-1' : 'flex-1'}>
+          <Sun className="w-4 h-4 mr-2" /> فاتح
+        </Button>
+        <Button variant="outline" size="sm" onClick={() => setTheme('dark')} className={theme === 'dark' ? 'border-indigo-500 text-indigo-400 bg-indigo-500/10 flex-1' : 'flex-1'}>
+          <Moon className="w-4 h-4 mr-2" /> داكن
+        </Button>
+        <Button variant="outline" size="sm" onClick={() => setSmartMode(smartMode === 'focus' ? null : 'focus')} className={smartMode === 'focus' ? 'border-primary text-primary bg-primary/10 w-full mt-1' : 'w-full mt-1'}>
+          <Target className="w-4 h-4 mr-2" /> وضع التركيز
         </Button>
       </div>
     </>

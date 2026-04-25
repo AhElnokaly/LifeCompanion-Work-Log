@@ -100,6 +100,9 @@ export default function CalendarView() {
             
             // Find sessions for this day
             const daySessions = sessions.filter(s => isSameDay(new Date(s.startTime), day));
+            const hasSessions = daySessions.length > 0;
+            const hasOvertime = daySessions.some(s => (s.overtimeMinutes || 0) > 0);
+            const hasLeave = daySessions.some(s => s.isAnnualLeave || s.isSickLeave || s.isHalfDayLeave || s.isPermission);
             
             // Holidays logic
             let holidayName = null;
@@ -123,10 +126,10 @@ export default function CalendarView() {
             return (
               <div 
                 key={day.toISOString()} 
-                className={`min-h-[50px] flex flex-col items-center justify-start gap-1 cursor-pointer relative ${
+                className={`min-h-[50px] flex flex-col items-center justify-start gap-1 cursor-pointer relative rounded-xl border border-transparent transition-all ${
                   !isCurrentMonth ? 'opacity-20' : ''
-                } ${isPaintingMode && assignedShift ? 'opacity-90' : ''}`}
-                style={isPaintingMode && assignedShift ? { backgroundColor: assignedShift.color + '20', borderRadius: '1rem' } : {}}
+                } ${isPaintingMode && assignedShift ? 'opacity-90' : ''} ${hasSessions && !isSelected && !isPaintingMode ? 'bg-secondary/20 hover:bg-secondary/40' : 'hover:bg-secondary/10'} ${hasOvertime ? 'border-orange-500/30' : ''} ${hasLeave ? 'border-emerald-500/30' : ''}`}
+                style={isPaintingMode && assignedShift ? { backgroundColor: assignedShift.color + '20' } : {}}
                 onClick={() => {
                    if (isPaintingMode) {
                       if (selectedPaintShiftId) {
@@ -158,9 +161,10 @@ export default function CalendarView() {
                 </div>
 
                 {/* Dots indicator */}
-                <div className="flex gap-0.5 mt-0.5 items-center justify-center h-1.5 object-center relative z-10">
+                <div className="flex flex-wrap gap-0.5 mt-0.5 items-center justify-center relative z-10 w-full px-1">
                   {holidayName && <div className="w-1.5 h-1.5 rounded-full bg-amber-500 shadow-sm" />}
                   {assignedShift && !isPaintingMode && <div className="w-2 h-2 rounded-full shadow-sm mx-0.5" style={{backgroundColor: assignedShift.color}} title={assignedShift.name} />}
+                  {hasOvertime && !isPaintingMode && <div className="w-1.5 h-1.5 rounded-full bg-orange-500 shadow-sm" title="عمل إضافي" />}
                   {daySessions.slice(0, 3).map((sess, i) => {
                     let dotColor = "bg-primary";
                     if (sess.isAnnualLeave) dotColor = "bg-emerald-500";
@@ -182,6 +186,32 @@ export default function CalendarView() {
               </div>
             );
           })}
+        </div>
+        
+        {/* Quick Monthly Summary */}
+        <div className="mt-6 pt-4 border-t border-white/5 flex flex-wrap justify-between items-center z-10 px-2 gap-4">
+           <div className="flex flex-col">
+              <span className="text-[10px] text-muted-foreground uppercase tracking-widest font-bold">ملخص ساعات الشهر</span>
+              <span className="text-xl font-black text-primary">
+                 {sessions.filter(s => isSameMonth(new Date(s.startTime), currentDate)).reduce((acc, s) => acc + (s.duration || 0) / 60, 0).toFixed(1)} <span className="text-sm font-medium text-muted-foreground">ساعة</span>
+              </span>
+           </div>
+           <div className="flex gap-4">
+              <div className="flex flex-col items-center">
+                 <div className="w-2 h-2 rounded-full bg-orange-500 mb-1"></div>
+                 <span className="text-[10px] text-muted-foreground">إضافي</span>
+                 <span className="text-sm font-bold text-orange-500">
+                    {sessions.filter(s => isSameMonth(new Date(s.startTime), currentDate)).reduce((acc, s) => acc + (s.overtimeMinutes || 0) / 60, 0).toFixed(1)}س
+                 </span>
+              </div>
+              <div className="flex flex-col items-center">
+                 <div className="w-2 h-2 rounded-full bg-emerald-500 mb-1"></div>
+                 <span className="text-[10px] text-muted-foreground">إجازات</span>
+                 <span className="text-sm font-bold text-emerald-500">
+                    {sessions.filter(s => isSameMonth(new Date(s.startTime), currentDate) && (s.isAnnualLeave || s.isSickLeave || s.isHalfDayLeave || s.isPermission)).length} يوم
+                 </span>
+              </div>
+           </div>
         </div>
       </Card>
     );
@@ -585,7 +615,7 @@ export default function CalendarView() {
               className={`flex-1 min-w-[70px] h-8 text-xs rounded-lg ${viewType === 'shifts' ? 'font-bold bg-card shadow-sm' : ''}`}
               onClick={() => { setViewType('shifts'); setIsPaintingMode(false); }}
             >
-              <Briefcase className="w-3.5 h-3.5 mr-1.5" /> الإعدادات
+              <Briefcase className="w-3.5 h-3.5 mr-1.5" /> الوظائف والورديات
             </Button>
           </div>
 

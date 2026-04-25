@@ -5,20 +5,51 @@
   fill="none"
   xmlns="http://www.w3.org/2000/svg"
 >
-  <path
-    d="M366.5 281.5C362.8 288.5 358 295 352.5 301.5C345.5 309 344 319.5 348 328L361 356C365 365 362.5 375 354 380C343 386.5 330.5 391 317 394C307.5 396 298.5 391.5 295.5 382.5L286.5 352.5C284.5 344.5 278 338.5 269.5 337C259.5 335.5 251.5 343 250.5 353L247 384C246 394 237.5 401 227.5 401C212.5 401 198 397.5 184 391C175.5 387 172.5 376 177 368.5L191.5 342.5C195.5 335.5 194.5 326.5 188.5 320C183 314 177 308.5 170.5 303.5C163.5 298.5 153.5 299.5 147 305L123.5 324C116 330 105.5 329 99 321.5C92.5 313.5 87 304.5 82 295C77 286.5 78.5 275.5 86.5 269L109.5 252C116.5 247 121 239.5 120 231C118.5 222.5 112 215.5 103 213.5L74 207C64 205 57 196 57 186C57 171.5 60.5 157.5 66.5 144C70 135 79.5 130.5 89 133L118 139.5C126.5 141.5 133 136 135 127.5C136.5 119 130.5 109 122 106L94.5 95C85.5 91 81.5 80.5 86 73C92 63.5 99.5 54.5 107.5 46.5C114.5 39.5 125 39 132 44.5L157 63C163.5 68 174 67.5 180.5 61.5C186.5 56 193 51.5 200 47.5C207.5 43 214 47 217 54.5L227.5 81.5C230.5 89.5 238 95 246.5 94.5C255 93.5 262 86 261 77.5L258 48C257 38 264.5 30 274.5 30C290.5 30 306 34 320.5 40C329 43.5 332.5 53.5 328.5 61.5L314 88C310 95.5 311 105 317.5 111.5C324 117.5 330.5 124 336 130.5C342.5 137.5 352.5 138.5 359 133.5L384.5 116C392 110.5 403 111.5 409.5 119C417 127.5 423.5 136.5 428.5 146.5C434 154.5 432.5 165.5 424.5 171.5L400 188.5C392.5 193.5 387.5 201 388.5 209.5C389.5 218 396 224.5 404.5 226.5L433.5 233C443.5 235 450.5 244 450.5 254"
-    fill="#2A7B8E"
-  />
-  <rect fill="white" height="300" rx="20" width="220" x="171" y="104" />
-  <rect fill="#1C5C6B" height="12" rx="6" width="30" x="156" y="152" />
-  <rect fill="#1C5C6B" height="12" rx="6" width="30" x="156" y="212" />
-  <rect fill="#1C5C6B" height="12" rx="6" width="30" x="156" y="272" />
-  <rect fill="none" height="300" rx="30" stroke="#2A7B8E" stroke-width="20" width="220" x="166" y="104" />
-  <rect fill="#2A7B8E" height="12" rx="6" width="30" x="150" y="152" />
-  <rect fill="#2A7B8E" height="12" rx="6" width="30" x="150" y="212" />
-  <rect fill="#2A7B8E" height="12" rx="6" width="30" x="150" y="272" />
-  <rect fill="#2A7B8E" height="12" rx="6" width="120" x="220" y="154" />
-  <rect fill="#2A7B8E" height="12" rx="6" width="120" x="220" y="214" />
-  <rect fill="#2A7B8E" height="12" rx="6" width="120" x="220" y="274" />
-  <path d="M260 216L288 244L344 188" stroke="#77B84E" stroke-linecap="round" stroke-linejoin="round" stroke-width="16" />
+  <defs>
+    <clipPath id="left-clip">
+      <rect x="0" y="0" width="256" height="512" />
+    </clipPath>
+    <clipPath id="right-clip">
+      <rect x="256" y="0" width="256" height="512" />
+    </clipPath>
+    
+    <g id="gear-shape">
+      <!-- Cross -->
+      <rect x="216" y="50" width="80" height="412" rx="16" />
+      <rect x="50" y="216" width="412" height="80" rx="16" />
+      <!-- Diagonal -->
+      <rect x="216" y="50" width="80" height="412" rx="16" transform="rotate(45 256 256)" />
+      <rect x="216" y="50" width="80" height="412" rx="16" transform="rotate(-45 256 256)" />
+      <!-- Core circle -->
+      <circle cx="256" cy="256" r="160" />
+    </g>
+
+    <g id="notebook-outline">
+      <!-- Outer rounded rect -->
+      <rect x="156" y="140" width="180" height="232" rx="28" fill="none" stroke-width="24" />
+      <!-- Top binder hoops -->
+      <rect x="132" y="180" width="48" height="16" rx="8" />
+      <rect x="132" y="248" width="48" height="16" rx="8" />
+      <rect x="132" y="316" width="48" height="16" rx="8" />
+      <!-- Lines -->
+      <rect x="180" y="180" width="100" height="16" rx="8" />
+      <rect x="180" y="235" width="80" height="16" rx="8" />
+      <rect x="180" y="290" width="120" height="16" rx="8" />
+    </g>
+  </defs>
+
+  <!-- Left Side #185669 Dark Teal -->
+  <use href="#gear-shape" fill="#185669" clipPath="url(#left-clip)" />
+  <!-- Right Side #217b96 Light Teal -->
+  <use href="#gear-shape" fill="#217b96" clipPath="url(#right-clip)" />
+
+  <!-- The white background of the notebook -->
+  <rect x="156" y="140" width="180" height="232" rx="28" fill="white" />
+  
+  <!-- The outline/details of notebook -->
+  <use href="#notebook-outline" fill="#185669" stroke="#185669" clipPath="url(#left-clip)" />
+  <use href="#notebook-outline" fill="#217b96" stroke="#217b96" clipPath="url(#right-clip)" />
+
+  <!-- Green Checkmark Overlapping -->
+  <path d="M245 270 L275 300 L345 210" stroke="#71b54a" stroke-width="24" stroke-linecap="round" stroke-linejoin="round" fill="none" />
 </svg>

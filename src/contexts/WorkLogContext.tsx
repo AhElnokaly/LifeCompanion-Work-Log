@@ -45,7 +45,9 @@ interface WorkLogContextType {
   restoreSession: (id: string) => void;
   addProject: (project: Omit<Project, 'id' | 'totalHours'>) => void;
   addJob: (job: Omit<Job, 'id'>) => void;
+  updateJob: (id: string, updates: Partial<Job>) => void;
   addShift: (shift: Omit<ScheduledShift, 'id'>) => void;
+  updateShift: (id: string, updates: Partial<ScheduledShift>) => void;
   removeJob: (id: string) => void;
   removeShift: (id: string) => void;
   toggleShiftAssignment: (dateStr: string, shiftId: string) => void;
@@ -320,8 +322,16 @@ export const WorkLogProvider: React.FC<{ children: React.ReactNode }> = ({ child
     setJobs([...jobs, { ...jobData, id: Date.now().toString() }]);
   };
 
+  const updateJob = (id: string, updates: Partial<Job>) => {
+    setJobs(current => current.map(job => job.id === id ? { ...job, ...updates } : job));
+  };
+
   const addShift = (shiftData: Omit<ScheduledShift, 'id'>) => {
     setShifts([...shifts, { ...shiftData, id: Date.now().toString() }]);
+  };
+
+  const updateShift = (id: string, updates: Partial<ScheduledShift>) => {
+    setShifts(current => current.map(shift => shift.id === id ? { ...shift, ...updates } : shift));
   };
 
   const removeJob = (id: string) => {
@@ -466,7 +476,7 @@ export const WorkLogProvider: React.FC<{ children: React.ReactNode }> = ({ child
   return (
     <WorkLogContext.Provider value={{ 
       sessions: activeSessions, archivedSessions, projects, jobs, shifts, shiftAssignments, activeSession, settings, 
-      updateSettings, startSession, endSession, addSession, updateSession, updateActiveSession, deleteSession, restoreSession, addProject, addJob, addShift, removeJob, removeShift, toggleShiftAssignment,
+      updateSettings, startSession, endSession, addSession, updateSession, updateActiveSession, deleteSession, restoreSession, addProject, addJob, updateJob, addShift, updateShift, removeJob, removeShift, toggleShiftAssignment,
       toggleBreak, getBalances, logSpecialSession, deleteAllData 
     }}>
       {children}

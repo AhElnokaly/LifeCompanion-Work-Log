@@ -8,7 +8,11 @@ import { useWorkLog } from '../../contexts/WorkLogContext';
 import { Briefcase, Clock, Plus, Trash2, Edit2 } from 'lucide-react';
 
 export default function JobsShiftsView() {
-  const { jobs, shifts, addJob, addShift, removeJob, removeShift } = useWorkLog();
+  const { jobs, shifts, addJob, addShift, updateJob, updateShift, removeJob, removeShift } = useWorkLog();
+
+  // Editing state
+  const [editingJobId, setEditingJobId] = useState<string | null>(null);
+  const [editingShiftId, setEditingShiftId] = useState<string | null>(null);
 
   // Job Form
   const [jobName, setJobName] = useState('');
@@ -24,28 +28,66 @@ export default function JobsShiftsView() {
 
   const submitJob = () => {
     if (!jobName) return;
-    addJob({
-      name: jobName,
-      type: jobType as any,
-      color: jobColor
-    });
+    if (editingJobId) {
+       updateJob(editingJobId, {
+         name: jobName,
+         type: jobType as any,
+         color: jobColor
+       });
+       setEditingJobId(null);
+    } else {
+       addJob({
+         name: jobName,
+         type: jobType as any,
+         color: jobColor
+       });
+    }
     setJobName('');
+    setJobType('salary');
+    setJobColor('#2563eb');
   };
 
   const submitShift = () => {
     if (!shiftName || !shiftStart || !shiftEnd) return;
-    addShift({
-      name: shiftName,
-      startTime: shiftStart,
-      endTime: shiftEnd,
-      frequency: shiftFrequency as any,
-      color: shiftColor
-    });
+    if (editingShiftId) {
+       updateShift(editingShiftId, {
+         name: shiftName,
+         startTime: shiftStart,
+         endTime: shiftEnd,
+         frequency: shiftFrequency as any,
+         color: shiftColor
+       });
+       setEditingShiftId(null);
+    } else {
+       addShift({
+         name: shiftName,
+         startTime: shiftStart,
+         endTime: shiftEnd,
+         frequency: shiftFrequency as any,
+         color: shiftColor
+       });
+    }
     setShiftName('');
     setShiftStart('');
     setShiftEnd('');
     setShiftFrequency('daily');
     setShiftColor('#10b981');
+  };
+
+  const handleEditShift = (shift: any) => {
+    setEditingShiftId(shift.id);
+    setShiftName(shift.name);
+    setShiftStart(shift.startTime);
+    setShiftEnd(shift.endTime);
+    setShiftFrequency(shift.frequency);
+    setShiftColor(shift.color);
+  };
+
+  const handleEditJob = (job: any) => {
+    setEditingJobId(job.id);
+    setJobName(job.name);
+    setJobType(job.type);
+    setJobColor(job.color || '#2563eb');
   };
 
   return (
@@ -71,6 +113,9 @@ export default function JobsShiftsView() {
                 </div>
                 <div className="flex items-center gap-2">
                   <div className="text-[10px] px-2 py-1 bg-emerald-500/10 text-emerald-500 rounded-md">مُسجلة</div>
+                  <Button variant="ghost" size="icon" className="h-7 w-7 text-indigo-500 hover:bg-indigo-500/10" onClick={() => handleEditShift(shift)}>
+                    <Edit2 className="w-4 h-4" />
+                  </Button>
                   <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:bg-destructive/10" onClick={() => removeShift(shift.id)}>
                     <Trash2 className="w-4 h-4" />
                   </Button>
@@ -81,7 +126,7 @@ export default function JobsShiftsView() {
         )}
 
         <div className="space-y-3 bg-secondary/10 p-4 rounded-2xl">
-          <h4 className="text-sm font-bold text-muted-foreground">إضافة وردية جديدة</h4>
+          <h4 className="text-sm font-bold text-muted-foreground">{editingShiftId ? 'تعديل الوردية' : 'إضافة وردية جديدة'}</h4>
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>مسمى الوردية</Label>
@@ -115,7 +160,9 @@ export default function JobsShiftsView() {
                </SelectContent>
              </Select>
           </div>
-          <Button className="w-full mt-2" onClick={submitShift}><Plus className="w-4 h-4 mr-2" /> إضافة الوردية</Button>
+          <Button className="w-full mt-2" onClick={submitShift}>
+             {editingShiftId ? <><Edit2 className="w-4 h-4 mr-2" /> حفظ التعديلات</> : <><Plus className="w-4 h-4 mr-2" /> إضافة الوردية</>}
+          </Button>
         </div>
       </Card>
 
@@ -139,6 +186,9 @@ export default function JobsShiftsView() {
                 </div>
                 <div className="flex items-center gap-2">
                   <div className="text-xs px-2 py-1 bg-indigo-500/10 text-indigo-500 rounded-md">جاهز</div>
+                  <Button variant="ghost" size="icon" className="h-7 w-7 text-indigo-500 hover:bg-indigo-500/10" onClick={() => handleEditJob(job)}>
+                    <Edit2 className="w-4 h-4" />
+                  </Button>
                   <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:bg-destructive/10" onClick={() => removeJob(job.id)}>
                     <Trash2 className="w-4 h-4" />
                   </Button>
@@ -149,7 +199,7 @@ export default function JobsShiftsView() {
         )}
 
         <div className="space-y-3 bg-secondary/10 p-4 rounded-2xl">
-          <h4 className="text-sm font-bold text-muted-foreground">إضافة وظيفة/عمل جديد</h4>
+          <h4 className="text-sm font-bold text-muted-foreground">{editingJobId ? 'تعديل الوظيفة/العمل' : 'إضافة وظيفة/عمل جديد'}</h4>
           <div className="space-y-2">
             <Label>مسمى الوظيفة/الجهة</Label>
             <Input placeholder="مثال: شركة س، أو عميل ص" value={jobName} onChange={(e) => setJobName(e.target.value)} />
@@ -175,7 +225,9 @@ export default function JobsShiftsView() {
                </div>
             </div>
           </div>
-          <Button className="w-full mt-2" onClick={submitJob}><Plus className="w-4 h-4 mr-2" /> إضافة العمل</Button>
+          <Button className="w-full mt-2" onClick={submitJob}>
+             {editingJobId ? <><Edit2 className="w-4 h-4 mr-2" /> حفظ التعديلات</> : <><Plus className="w-4 h-4 mr-2" /> إضافة العمل</>}
+          </Button>
         </div>
       </Card>
 
