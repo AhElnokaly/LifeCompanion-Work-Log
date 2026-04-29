@@ -66,6 +66,7 @@ export default function WorkLog() {
         name: newProjectName,
         clientName: 'عميل جديد',
         hourlyRate: Number(newProjectRate) || 0,
+        color: '#10b981'
       });
       setNewProjectName('');
       setNewProjectRate('');

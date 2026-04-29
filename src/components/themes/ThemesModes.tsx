@@ -10,6 +10,11 @@ export default function ThemesModes() {
   const themes = [
     { id: 'light', name: 'فاتح', icon: Sun, color: 'bg-slate-100' },
     { id: 'dark', name: 'داكن', icon: Moon, color: 'bg-slate-900' },
+    { id: 'ocean', name: 'محيط', icon: Zap, color: 'bg-blue-500' },
+    { id: 'midnight', name: 'منتصف الليل', icon: Moon, color: 'bg-indigo-950' },
+    { id: 'forest', name: 'غابة', icon: Calendar, color: 'bg-emerald-600' },
+    { id: 'sunset', name: 'غروب', icon: Sun, color: 'bg-orange-500' },
+    { id: 'monochrome', name: 'أحادي', icon: Palette, color: 'bg-gray-800' }
   ];
 
   const modes = [
@@ -32,7 +37,7 @@ export default function ThemesModes() {
             <CardDescription>اختر الألوان التي تناسب ذوقك.</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
               {themes.map((t) => {
                 const Icon = t.icon;
                 return (

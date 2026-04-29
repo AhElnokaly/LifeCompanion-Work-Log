@@ -6,6 +6,7 @@ import { Label } from '../ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { useWorkLog } from '../../contexts/WorkLogContext';
 import { Briefcase, Clock, Plus, Trash2, Edit2 } from 'lucide-react';
+import { toast } from 'sonner';
 
 export default function JobsShiftsView() {
   const { jobs, shifts, addJob, addShift, updateJob, updateShift, removeJob, removeShift } = useWorkLog();
@@ -35,12 +36,14 @@ export default function JobsShiftsView() {
          color: jobColor
        });
        setEditingJobId(null);
+       toast.success('تم تعديل جهة العمل');
     } else {
        addJob({
          name: jobName,
          type: jobType as any,
          color: jobColor
        });
+       toast.success('تمت إضافة جهة العمل');
     }
     setJobName('');
     setJobType('salary');
@@ -58,6 +61,7 @@ export default function JobsShiftsView() {
          color: shiftColor
        });
        setEditingShiftId(null);
+       toast.success('تم تعديل الوردية');
     } else {
        addShift({
          name: shiftName,
@@ -66,6 +70,7 @@ export default function JobsShiftsView() {
          frequency: shiftFrequency as any,
          color: shiftColor
        });
+       toast.success('تمت إضافة الوردية');
     }
     setShiftName('');
     setShiftStart('');

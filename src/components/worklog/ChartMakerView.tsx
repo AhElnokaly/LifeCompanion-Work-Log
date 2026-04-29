@@ -38,12 +38,12 @@ export default function ChartMakerView() {
        if (groupBy === 'day') {
           key = format(new Date(s.startTime), 'MMM d');
        } else if (groupBy === 'project') {
-          key = s.projectId ? (projects.find(p => p.id === s.projectId)?.name || 'مجهول') : (s.isPermission ? 'استئذان' : 'دوام أساسي');
+          key = s.projectId ? (projects.find(p => p.id === s.projectId)?.name || 'مجهول') : (s.dayStatus === 'permission' ? 'استئذان' : 'دوام أساسي');
        } else if (groupBy === 'type') {
-          if (s.isAnnualLeave) key = 'إجازة سنوية';
-          else if (s.isPermission) key = 'استئذان';
-          else if (s.isSickLeave) key = 'إجازة مرضية';
-          else if (s.isHalfDay) key = 'نصف يوم';
+          if (s.dayStatus === 'annual_leave') key = 'إجازة سنوية';
+          else if (s.dayStatus === 'permission') key = 'استئذان';
+          else if (s.dayStatus === 'sick_leave') key = 'إجازة مرضية';
+          else if (s.dayStatus === 'half_day_leave') key = 'نصف يوم';
           else key = 'عمل';
        }
 
@@ -106,7 +106,7 @@ export default function ChartMakerView() {
   };
 
   return (
-    <div className="flex flex-col gap-6 animate-in fade-in slide-in-from-bottom-4 duration-500" dir="rtl">
+    <div className="flex flex-col gap-6 animate-in fade-in slide-in-from-bottom-4 duration-500" >
        <header className="flex flex-col md:flex-row md:justify-between md:items-center gap-4 mb-2">
          <div>
             <h2 className="text-2xl font-bold bg-gradient-to-l from-indigo-400 to-emerald-400 bg-clip-text text-transparent">صانع المخططات</h2>
@@ -133,11 +133,11 @@ export default function ChartMakerView() {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-2">
              <div className="space-y-1">
                 <label className="text-[10px] font-bold text-muted-foreground uppercase">نوع المخطط</label>
-                <Select value={chartType} onValueChange={(val: any) => setChartType(val)} dir="rtl">
+                <Select value={chartType} onValueChange={(val: any) => setChartType(val)} >
                   <SelectTrigger className="rounded-xl border-white/10 bg-secondary/30 h-10 w-full min-w-[120px]">
                     <SelectValue />
                   </SelectTrigger>
-                  <SelectContent className="rounded-xl p-1 z-[150] bg-card/95 backdrop-blur-xl border-white/10" dir="rtl">
+                  <SelectContent className="rounded-xl p-1 z-[150] bg-card/95 backdrop-blur-xl border-white/10" >
                     <SelectItem value="bar" className="rounded-lg"><div className="flex items-center gap-2"><BarChart2 className="w-4 h-4"/> أعمدة</div></SelectItem>
                     <SelectItem value="stacked_bar" className="rounded-lg"><div className="flex items-center gap-2"><BarChart2 className="w-4 h-4"/> أعمدة مكدسة</div></SelectItem>
                     <SelectItem value="line" className="rounded-lg"><div className="flex items-center gap-2"><LineIcon className="w-4 h-4"/> خطي</div></SelectItem>
@@ -149,11 +149,11 @@ export default function ChartMakerView() {
 
              <div className="space-y-1">
                 <label className="text-[10px] font-bold text-muted-foreground uppercase">المحور السيني (تجميع بـ)</label>
-                <Select value={groupBy} onValueChange={(val: any) => setGroupBy(val)} dir="rtl">
+                <Select value={groupBy} onValueChange={(val: any) => setGroupBy(val)} >
                   <SelectTrigger className="rounded-xl border-white/10 bg-secondary/30 h-10 w-full min-w-[120px]">
                     <SelectValue />
                   </SelectTrigger>
-                  <SelectContent className="rounded-xl p-1 z-[150] bg-card/95 backdrop-blur-xl border-white/10" dir="rtl">
+                  <SelectContent className="rounded-xl p-1 z-[150] bg-card/95 backdrop-blur-xl border-white/10" >
                     <SelectItem value="day" className="rounded-lg">التاريخ (الأيام)</SelectItem>
                     <SelectItem value="project" className="rounded-lg">المشاريع / العملاء</SelectItem>
                     <SelectItem value="type" className="rounded-lg">نوع السجل</SelectItem>
@@ -163,11 +163,11 @@ export default function ChartMakerView() {
 
              <div className="space-y-1">
                 <label className="text-[10px] font-bold text-muted-foreground uppercase">القيمة (المحور الصادي)</label>
-                <Select value={metric} onValueChange={(val: any) => setMetric(val)} dir="rtl">
+                <Select value={metric} onValueChange={(val: any) => setMetric(val)} >
                   <SelectTrigger className="rounded-xl border-white/10 bg-secondary/30 h-10 w-full min-w-[120px]">
                     <SelectValue />
                   </SelectTrigger>
-                  <SelectContent className="rounded-xl p-1 z-[150] bg-card/95 backdrop-blur-xl border-white/10" dir="rtl">
+                  <SelectContent className="rounded-xl p-1 z-[150] bg-card/95 backdrop-blur-xl border-white/10" >
                     <SelectItem value="duration" className="rounded-lg">إجمالي الساعات</SelectItem>
                     <SelectItem value="overtime" className="rounded-lg">العمل الإضافي</SelectItem>
                     <SelectItem value="both" className="rounded-lg">الأساسي والإضافي</SelectItem>
@@ -177,11 +177,11 @@ export default function ChartMakerView() {
 
              <div className="space-y-1">
                 <label className="text-[10px] font-bold text-muted-foreground uppercase">النطاق الزمني</label>
-                <Select value={timeRange} onValueChange={(val: any) => setTimeRange(val)} dir="rtl">
+                <Select value={timeRange} onValueChange={(val: any) => setTimeRange(val)} >
                   <SelectTrigger className="rounded-xl border-white/10 bg-secondary/30 h-10 w-full min-w-[120px]">
                     <SelectValue />
                   </SelectTrigger>
-                  <SelectContent className="rounded-xl p-1 z-[150] bg-card/95 backdrop-blur-xl border-white/10" dir="rtl">
+                  <SelectContent className="rounded-xl p-1 z-[150] bg-card/95 backdrop-blur-xl border-white/10" >
                     <SelectItem value="week" className="rounded-lg">هذا الأسبوع</SelectItem>
                     <SelectItem value="month" className="rounded-lg">هذا الشهر</SelectItem>
                     <SelectItem value="all" className="rounded-lg">كل السجلات</SelectItem>

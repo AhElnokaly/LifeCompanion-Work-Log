@@ -86,9 +86,15 @@ export default function Layout({ children, activeTab, setActiveTab }: LayoutProp
   const isFreelance = settings.system === 'freelance';
 
   return (
-    <div className="min-h-screen flex flex-col md:flex-row bg-background text-foreground transition-colors duration-300 w-full overflow-hidden" dir="ltr">
+    <div className="min-h-screen flex flex-col md:flex-row bg-background text-foreground transition-colors duration-300 w-full overflow-hidden relative" dir="ltr">
+      {/* Dynamic Background Elements */}
+      <div className="fixed inset-0 pointer-events-none z-0">
+        <div className="absolute top-0 left-1/4 w-[50vw] h-[50vw] bg-emerald-500/10 rounded-full blur-[100px] opacity-50 dark:opacity-20 animate-pulse" style={{ animationDuration: '8s' }} />
+        <div className="absolute bottom-0 right-1/4 w-[40vw] h-[40vw] bg-indigo-500/10 rounded-full blur-[100px] opacity-50 dark:opacity-20 animate-pulse" style={{ animationDuration: '10s' }} />
+      </div>
+      
       {/* Mobile Header */}
-      <div className="md:hidden flex items-center justify-between p-4 border-b bg-card relative z-10">
+      <div className="md:hidden flex items-center justify-between p-4 border-b bg-card/80 backdrop-blur-xl relative z-10">
         <div className="flex items-center gap-2">
           <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-primary/20 to-emerald-500/20 shadow-sm relative overflow-hidden flex-shrink-0 flex items-center justify-center p-1 border border-primary/20">
              <AppLogo className="w-full h-full text-primary" />

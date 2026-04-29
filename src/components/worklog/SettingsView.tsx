@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Settings as SettingsIcon, Save, Calendar, Clock, Briefcase, FileText, Bell, MapPin, CheckCircle, Trash2, Plus } from 'lucide-react';
 import { sendAppNotification } from '../../lib/notifications';
 import { db } from '../../lib/db';
+import { toast } from 'sonner';
 
 export default function SettingsView() {
   const { settings, updateSettings, deleteAllData } = useWorkLog();
@@ -15,6 +16,7 @@ export default function SettingsView() {
 
   const handleSave = () => {
     updateSettings(localSettings);
+    toast.success('تم حفظ الإعدادات بنجاح');
   };
 
   const requestNotificationPermission = async () => {
@@ -76,7 +78,7 @@ export default function SettingsView() {
   };
 
   return (
-    <div className="flex flex-col gap-6 animate-in fade-in slide-in-from-bottom-4 duration-500" dir="rtl">
+    <div className="flex flex-col gap-6 animate-in fade-in slide-in-from-bottom-4 duration-500" >
       <header className="flex items-center gap-3 mb-2">
         <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary">
           <SettingsIcon className="w-6 h-6" />
@@ -99,10 +101,10 @@ export default function SettingsView() {
             value={localSettings.system} 
             onValueChange={(v: 'fixed' | 'shifts' | 'freelance') => setLocalSettings({...localSettings, system: v})}
           >
-            <SelectTrigger className="h-12 rounded-2xl bg-secondary/30 border-none w-full min-w-0" dir="rtl">
+            <SelectTrigger className="h-12 rounded-2xl bg-secondary/30 border-none w-full min-w-0" >
               <SelectValue placeholder="اختر النظام" />
             </SelectTrigger>
-            <SelectContent position="popper" sideOffset={5} dir="rtl" className="min-w-[150px]">
+            <SelectContent  sideOffset={5}  className="min-w-[150px]">
               <SelectItem value="fixed">ثابت (موظف)</SelectItem>
               <SelectItem value="shifts">ورديات (شيفات)</SelectItem>
               <SelectItem value="freelance">عمل حر (مستقل)</SelectItem>
@@ -120,10 +122,10 @@ export default function SettingsView() {
             value={localSettings.usageComplexity || 'basic'} 
             onValueChange={(v: 'basic' | 'advanced') => setLocalSettings({...localSettings, usageComplexity: v})}
           >
-            <SelectTrigger className="h-12 rounded-2xl bg-secondary/30 border-none w-full min-w-0" dir="rtl">
+            <SelectTrigger className="h-12 rounded-2xl bg-secondary/30 border-none w-full min-w-0" >
               <SelectValue placeholder="اختر أسلوب الاستخدام" />
             </SelectTrigger>
-            <SelectContent position="popper" sideOffset={5} dir="rtl" className="min-w-[200px]">
+            <SelectContent  sideOffset={5}  className="min-w-[200px]">
               <SelectItem value="basic" className="py-3 items-start"><span className="text-right block w-full">بسيط (تسجيل سريع)</span></SelectItem>
               <SelectItem value="advanced" className="py-3 items-start"><span className="text-right block w-full whitespace-normal leading-tight">متقدم (ذكاء وتقارير)</span></SelectItem>
             </SelectContent>
@@ -371,10 +373,10 @@ export default function SettingsView() {
                       value={localSettings.advancedRules?.overtimeRoundingStrategy || 'exact'} 
                       onValueChange={(val: any) => setLocalSettings({...localSettings, advancedRules: {...(localSettings.advancedRules || {} as any), overtimeRoundingStrategy: val}})}
                    >
-                     <SelectTrigger className="h-12 bg-secondary/30 border-none rounded-xl w-full min-w-0" dir="rtl">
+                     <SelectTrigger className="h-12 bg-secondary/30 border-none rounded-xl w-full min-w-0" >
                        <SelectValue />
                      </SelectTrigger>
-                     <SelectContent dir="rtl" className="min-w-[250px]">
+                     <SelectContent  className="min-w-[250px]">
                        <SelectItem value="exact">بالدقيقة (Exact)</SelectItem>
                        <SelectItem value="round_down_hour">تقريب لأقرب ساعة</SelectItem>
                        <SelectItem value="round_down_half">تقريب لأقرب نصف ساعة</SelectItem>
@@ -389,10 +391,10 @@ export default function SettingsView() {
                       value={localSettings.advancedRules?.overtimeCalculationType || 'fixed_rate'} 
                       onValueChange={(val: any) => setLocalSettings({...localSettings, advancedRules: {...(localSettings.advancedRules || {} as any), overtimeCalculationType: val}})}
                    >
-                     <SelectTrigger className="h-12 bg-secondary/30 border-none rounded-xl w-full min-w-0" dir="rtl">
+                     <SelectTrigger className="h-12 bg-secondary/30 border-none rounded-xl w-full min-w-0" >
                        <SelectValue />
                      </SelectTrigger>
-                     <SelectContent dir="rtl" className="min-w-[200px]">
+                     <SelectContent  className="min-w-[200px]">
                        <SelectItem value="fixed_rate">مبلغ ثابت لكل ساعة</SelectItem>
                        <SelectItem value="multiplier_formula">معادلة ذكية (1.25 / 1.35)</SelectItem>
                      </SelectContent>
@@ -472,6 +474,26 @@ export default function SettingsView() {
                       />
                     </div>
                  )}
+
+                 <div className="flex flex-col gap-2 mt-4 pt-4 border-t border-border">
+                    <Label className="text-sm font-bold">صوت أداة التنبيه</Label>
+                    <div className="flex gap-2">
+                        {['digital', 'analog', 'gentle', 'vibrate_only'].map(snd => (
+                            <Button 
+                              key={snd} 
+                              variant={localSettings.notificationPreferences?.alarmSound === snd ? 'default' : 'outline'}
+                              size="sm"
+                              className={`flex-1 rounded-xl text-xs h-9 ${localSettings.notificationPreferences?.alarmSound === snd ? 'bg-indigo-500 text-white font-bold' : 'text-muted-foreground'}`}
+                              onClick={() => {
+                                 setLocalSettings({...localSettings, notificationPreferences: {...localSettings.notificationPreferences!, alarmSound: snd as any}});
+                                 import('../../lib/notifications').then(({playAlarm}) => playAlarm(snd as any));
+                              }}
+                            >
+                               {snd === 'digital' ? 'رقمي' : snd === 'analog' ? 'محاكي' : snd === 'gentle' ? 'هادئ' : 'اهتزاز'}
+                            </Button>
+                        ))}
+                    </div>
+                 </div>
 
                  <Button 
                    variant="outline" 

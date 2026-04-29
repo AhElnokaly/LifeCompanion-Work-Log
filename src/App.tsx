@@ -10,6 +10,7 @@ import { AICoreProvider } from './contexts/AICoreContext';
 import Layout from './components/layout/Layout';
 import Dashboard from './components/Dashboard';
 import OnboardingView from './components/worklog/OnboardingView';
+import { Toaster } from './components/ui/sonner';
 
 function AppContent() {
   const [activeTab, setActiveTab] = useState('home');
@@ -47,6 +48,7 @@ export default function App() {
       <WorkLogProvider>
         <AICoreProvider>
           <AppContent />
+          <Toaster position="top-center" dir="rtl" />
         </AICoreProvider>
       </WorkLogProvider>
     </ThemeProvider>

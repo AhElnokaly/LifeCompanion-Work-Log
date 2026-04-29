@@ -1,11 +1,15 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Button } from '../ui/button';
-import { Play, Square, Clock, Calendar, Coffee, FileText, Check, Bell, Zap, Timer, Shuffle, Brain, Loader2, Send } from 'lucide-react';
+import { Play, Square, Clock, Calendar, Coffee, FileText, Check, Bell, Zap, Timer, Shuffle, Brain, Loader2, Send, Activity } from 'lucide-react';
 import { useWorkLog, isPublicHoliday } from '../../contexts/WorkLogContext';
 import { useAICore } from '../../contexts/AICoreContext';
 import { format, differenceInMinutes, addMinutes } from 'date-fns';
 import { ar } from 'date-fns/locale';
 import { Input } from '../ui/input';
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '../ui/sheet';
+import { WorkSession } from '../../types';
+import { toast } from 'sonner';
+import { detectPermissionType, analyzeAttendancePattern } from '../../lib/smartAttendance';
 
 export default function HomeView() {
   const { activeSession, sessions, jobs, shifts, startSession, addSession, endSession, settings, getBalances, logSpecialSession, updateSession, updateActiveSession, toggleBreak } = useWorkLog();
@@ -18,7 +22,7 @@ export default function HomeView() {
   const [actionDialog, setActionDialog] = useState<'permission' | 'note' | 'pomodoro' | null>(null);
   const [dispatcherOpen, setDispatcherOpen] = useState(false);
   const [moodDialogState, setMoodDialogState] = useState<'start' | 'end' | null>(null);
-  const [pendingStartData, setPendingStartData] = useState<{ type: any, jobId?: string } | null>(null);
+  const [pendingStartData, setPendingStartData] = useState<{ type: any, jobId?: string, overrideData?: any } | null>(null);
   
   // AI Logging State
   const [aiPrompt, setAiPrompt] = useState('');
@@ -41,12 +45,22 @@ export default function HomeView() {
   const [absenceType, setAbsenceType] = useState<'annual_leave' | 'sick_leave' | 'casual_leave' | 'half_day_leave' | 'compensation'>('annual_leave');
   const [absenceDate, setAbsenceDate] = useState<string>(format(now, 'yyyy-MM-dd'));
   const [compensationLeaveSourceId, setCompensationLeaveSourceId] = useState<string>('');
-  const [showHalfDayPrompt, setShowHalfDayPrompt] = useState<{show: boolean, type: any, entityId?: string, forceYesterday?: boolean}>({show: false, type: 'salary'});
-  const [selectedPreEntryMode, setSelectedPreEntryMode] = useState<'regular' | 'annual_leave' | 'compensation' | 'half_day'>('regular');
+  const [showHalfDayPrompt, setShowHalfDayPrompt] = useState<{show: boolean, type: any, entityId?: string, forceYesterday?: boolean, explicitOverrides?: any, isGracePeriodHit?: boolean, lateMins?: number}>({show: false, type: 'salary'});
+  const [selectedPreEntryMode, setSelectedPreEntryMode] = useState<'regular' | 'annual_leave' | 'compensation' | 'half_day_leave'>('regular');
   const [compensationTypeDialogOpen, setCompensationTypeDialogOpen] = useState(false);
   const [selectedCompType, setSelectedCompType] = useState<'1_day' | '1_day_plus_overtime' | '2_days'>('1_day');
   const [showManualEntry, setShowManualEntry] = useState(false);
   const [manualEntryTime, setManualEntryTime] = useState(format(now, 'HH:mm'));
+
+  const [retroDialogOpen, setRetroDialogOpen] = useState(false);
+  const [retroDate, setRetroDate] = useState(format(new Date(now.getTime() - 86400000), 'yyyy-MM-dd'));
+  const [retroStart, setRetroStart] = useState('09:00');
+  const [retroEnd, setRetroEnd] = useState('17:00');
+  const [retroType, setRetroType] = useState<'salary' | 'freelance' | 'project' | 'annual_leave' | 'sick_leave' | 'half_day_leave' | 'rest_day_work'>('salary');
+  const [retroJobId, setRetroJobId] = useState<string>('none');
+  const [retroBreak, setRetroBreak] = useState('0');
+  const [retroCompType, setRetroCompType] = useState<'1_day' | '1_day_plus_overtime' | '2_days'>('1_day');
+
 
   const getAvailableCompensations = () => {
     return sessions.filter(s => s.isRestDayWork && !s.isArchived).map(s => {
@@ -73,10 +87,10 @@ export default function HomeView() {
   const handlePreEntrySubmit = () => {
      if (selectedPreEntryMode === 'regular') {
         handleStartSession();
-     } else if (selectedPreEntryMode === 'half_day') {
-        logSpecialSession('half_day');
+     } else if (selectedPreEntryMode === 'half_day_leave') {
+        logSpecialSession('half_day_leave');
      } else {
-        setAbsenceType(selectedPreEntryMode);
+        setAbsenceType(selectedPreEntryMode as any);
         setAbsenceDate(format(now, 'yyyy-MM-dd'));
         setAbsenceDialogOpen(true);
      }
@@ -91,9 +105,12 @@ export default function HomeView() {
       }, 1000);
     } else if (isPomodoroActive && pomodoroTimeLeft <= 0) {
       setIsPomodoroActive(false);
-      import('../../lib/notifications').then(({ sendAppNotification }) => {
+      import('../../lib/notifications').then(({ sendAppNotification, playAlarm }) => {
          if (settings.notificationsEnabled) {
             sendAppNotification('انتهت جلسة التركيز', { body: 'أحسنت! خذ استراحة قصيرة لتجديد نشاطك.' });
+            if (settings.notificationPreferences?.pomodoro) {
+               playAlarm(settings.notificationPreferences?.alarmSound || 'digital');
+            }
          }
       });
     }
@@ -147,17 +164,17 @@ export default function HomeView() {
   const balances = getBalances();
   
   const isOnFullDayLeave = todaySessions.some(s => 
-    (s.isAnnualLeave && s.duration >= targetMins) || 
-    s.isCompensationLeave
+    (s.dayStatus === 'annual_leave' && (s.duration || 0) >= targetMins) || 
+    s.dayStatus === 'compensation'
   );
 
   const getLeaveIcon = () => {
-    if (todaySessions.some(s => s.isCompensationLeave)) return <Coffee className="w-16 h-16 text-red-500/50 mb-4" />;
+    if (todaySessions.some(s => s.dayStatus === 'compensation')) return <Coffee className="w-16 h-16 text-red-500/50 mb-4" />;
     return <Calendar className="w-16 h-16 text-emerald-500/50 mb-4" />;
   };
 
   const getLeaveText = () => {
-    if (todaySessions.some(s => s.isCompensationLeave)) return "تستمتع بيوم راحة كـ (بديل)";
+    if (todaySessions.some(s => s.dayStatus === 'compensation')) return "تستمتع بيوم راحة كـ (بديل)";
     return "تستمتع بإجازة سنوية";
   };
 
@@ -302,7 +319,7 @@ export default function HomeView() {
         }
      } else {
         if (accept === true) {
-          logSpecialSession('half_day', { note: 'تأخير تلقائي' });
+          logSpecialSession('half_day_leave', { note: 'تأخير تلقائي' });
         } else {
           processSessionStart(type, entityId, forceYesterday, true, explicitOverrides);
         }
@@ -378,6 +395,63 @@ export default function HomeView() {
     setPendingStartData(null);
   };
 
+  const submitRetroSession = () => {
+    if (!retroDate) return;
+    
+    // Parse times
+    const startStr = `${retroDate}T${retroStart}:00`;
+    const endStr = `${retroDate}T${retroEnd}:00`;
+    
+    const startTimeDate = new Date(startStr);
+    const endTimeDate = new Date(endStr);
+    
+    // Check validity
+    if (endTimeDate < startTimeDate && !['annual_leave', 'sick_leave', 'half_day_leave'].includes(retroType)) {
+      toast.error("وقت الانصراف يجب أن يكون بعد وقت الحضور");
+      return;
+    }
+
+    const startIso = startTimeDate.toISOString();
+    const endIso = endTimeDate.toISOString();
+    let duration = differenceInMinutes(endTimeDate, startTimeDate);
+    const breaks = parseInt(retroBreak) || 0;
+    duration = Math.max(0, duration - breaks);
+
+    const isRestDayWork = retroType === 'rest_day_work';
+
+    if (['annual_leave', 'sick_leave', 'half_day_leave'].includes(retroType)) {
+       addSession({
+         id: Date.now().toString(),
+         startTime: startIso,
+         endTime: startIso,
+         type: 'salary',
+         duration: retroType === 'half_day_leave' ? (settings.dailyHours * 60) / 2 : settings.dailyHours * 60,
+         dayStatus: retroType as any,
+         location: 'remote',
+         notes: noteText || 'أدخلت يدويا من سجل الأيام السابقة'
+       } as any);
+    } else {
+       addSession({
+         id: Date.now().toString(),
+         startTime: startIso,
+         endTime: endIso,
+         type: retroType === 'rest_day_work' ? 'salary' : (retroType as any),
+         jobId: retroJobId !== 'none' ? retroJobId : undefined,
+         duration,
+         breaks,
+         dayStatus: 'work',
+         isRestDayWork,
+         restDayCompensation: isRestDayWork ? retroCompType : undefined,
+         location: 'office',
+         notes: noteText || 'أدخلت يدويا من سجل الأيام السابقة'
+       } as any);
+    }
+
+    setRetroDialogOpen(false);
+    setNoteText('');
+    alert('تم إضافة السجل بنجاح!');
+  };
+
   const submitPermission = () => {
     logSpecialSession('permission', { hours: permissionHours, subtype: permissionType, note: noteText });
     setActionDialog(null);
@@ -394,7 +468,8 @@ export default function HomeView() {
 
   const openPermissionDialog = (hours: number) => {
     setPermissionHours(hours);
-    setPermissionType(currentSessionMinutes < targetMins / 2 ? 'entry' : 'exit');
+    const pType = detectPermissionType(new Date(), settings, shifts, shiftAssignments);
+    setPermissionType(pType);
     setNoteText('');
     setActionDialog('permission');
   };
@@ -462,7 +537,7 @@ export default function HomeView() {
       }
 
       setAiPrompt('');
-      alert('تم التسجيل بنجاح عبر المحرك الذكي!');
+      toast.success('تم التسجيل بنجاح عبر المحرك الذكي!');
     } catch (err: any) {
       alert(err.message || 'حدث خطأ في فهم طلبك. تأكد من إدخال المفتاح في الإعدادات.');
     } finally {
@@ -550,7 +625,7 @@ export default function HomeView() {
                 activeSession 
                   ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-500/20 shadow-lg' 
                   : selectedPreEntryMode === 'regular' ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-500/20 shadow-lg'
-                  : selectedPreEntryMode === 'half_day' ? 'bg-orange-500 hover:bg-orange-600 text-white shadow-orange-500/20 shadow-lg'
+                  : selectedPreEntryMode === 'half_day_leave' ? 'bg-orange-500 hover:bg-orange-600 text-white shadow-orange-500/20 shadow-lg'
                   : 'bg-indigo-500 hover:bg-indigo-600 text-white shadow-indigo-500/20 shadow-lg'
               }`}
             >
@@ -563,7 +638,7 @@ export default function HomeView() {
                 <>
                    {selectedPreEntryMode === 'regular' ? (
                      <>تسجيل الحضور</>
-                   ) : selectedPreEntryMode === 'half_day' ? (
+                   ) : selectedPreEntryMode === 'half_day_leave' ? (
                      <>تسجيل نصف يوم</>
                    ) : (
                      <>تسجيل إجازة</>
@@ -589,9 +664,9 @@ export default function HomeView() {
                    {isTodayRestDay ? 'إضافي' : 'عمل منتظم'}
                  </Button>
                  <Button 
-                   variant={selectedPreEntryMode === 'half_day' ? 'default' : 'secondary'} 
-                   className={`snap-start shrink-0 rounded-xl h-9 px-4 text-xs font-bold flex-1 ${selectedPreEntryMode === 'half_day' ? 'bg-orange-500 text-white' : 'bg-secondary/50 text-foreground hover:bg-secondary'}`}
-                   onClick={() => setSelectedPreEntryMode('half_day')}
+                   variant={selectedPreEntryMode === 'half_day_leave' ? 'default' : 'secondary'} 
+                   className={`snap-start shrink-0 rounded-xl h-9 px-4 text-xs font-bold flex-1 ${selectedPreEntryMode === 'half_day_leave' ? 'bg-orange-500 text-white' : 'bg-secondary/50 text-foreground hover:bg-secondary'}`}
+                   onClick={() => setSelectedPreEntryMode('half_day_leave')}
                  >
                    نصف يوم
                  </Button>
@@ -603,6 +678,22 @@ export default function HomeView() {
                    إجازة كاملة
                  </Button>
                </div>
+            )}
+
+            {/* Smart Insights for non-active sessions */}
+            {!activeSession && analyzeAttendancePattern(sessions) && (
+              <div className="w-full bg-gradient-to-br from-indigo-500/10 to-purple-500/10 border border-indigo-500/20 rounded-2xl p-4 mt-2 flex gap-3 text-right" dir="rtl">
+                 <div className="bg-indigo-500/20 w-10 h-10 rounded-xl shrink-0 flex flex-col items-center justify-center">
+                    <Brain className="w-5 h-5 text-indigo-500" />
+                 </div>
+                 <div className="flex flex-col flex-1">
+                    <span className="text-[11px] font-extrabold text-indigo-500 uppercase tracking-widest mb-1">الذكاء الاصطناعي</span>
+                    <span className="text-sm font-bold text-foreground">نمط حضورك المعتاد</span>
+                    <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
+                      خلال آخر 30 يوماً، تحضر عادةً الساعة <strong className="text-foreground">{analyzeAttendancePattern(sessions)?.formattedStart}</strong> وتغادر <strong className="text-foreground">{analyzeAttendancePattern(sessions)?.formattedEnd}</strong> بمتوسط <strong className="text-foreground">{analyzeAttendancePattern(sessions)?.avgDurationH} ساعة</strong>.
+                    </p>
+                 </div>
+              </div>
             )}
             
             {/* Action Bar (Only shows during active session) */}
@@ -630,10 +721,8 @@ export default function HomeView() {
           {settings.customAIApiKey && (
              <div className="fixed bottom-24 left-4 z-50">
                <Sheet>
-                 <SheetTrigger asChild>
-                   <Button className="w-14 h-14 rounded-full shadow-2xl shadow-indigo-500/30 bg-indigo-500 hover:bg-indigo-600 text-white p-0 flex items-center justify-center border-[3px] border-background animate-in slide-in-from-bottom-4">
+                 <SheetTrigger render={<Button className="w-14 h-14 rounded-full shadow-2xl shadow-indigo-500/30 bg-indigo-500 hover:bg-indigo-600 text-white p-0 flex items-center justify-center border-[3px] border-background animate-in slide-in-from-bottom-4" />}>
                       <Brain className="w-6 h-6" />
-                   </Button>
                  </SheetTrigger>
                  <SheetContent side="bottom" className="rounded-t-[2rem] z-[110] p-6 text-center shadow-2xl">
                    <SheetHeader className="pb-4">
@@ -699,7 +788,7 @@ export default function HomeView() {
 
                    todaySessions.forEach(s => {
                      if (s.dayStatus === 'permission') permissionMins += (s.permissionHours || 0) * 60;
-                     else if (s.dayStatus === 'half_day') halfDayMins += (s.duration || 0);
+                     else if (s.dayStatus === 'half_day_leave') halfDayMins += (s.duration || 0);
                      else {
                        workMins += (s.duration || 0);
                      }
@@ -770,22 +859,32 @@ export default function HomeView() {
                   setDispatcherOpen(true);
                 }
               }}
-              className="flex-1 bg-card/40 hover:bg-card/60 backdrop-blur-2xl border border-white/5 rounded-[1.5rem] p-4 flex flex-col items-center justify-center gap-2.5 transition-colors shadow-lg active:scale-95"
+              className="flex-1 bg-card/40 hover:bg-card/60 backdrop-blur-2xl border border-white/5 rounded-[1.2rem] p-3 flex flex-col items-center justify-center gap-1.5 transition-colors shadow-sm active:scale-95"
             >
-              <div className="w-9 h-9 rounded-full bg-orange-500/10 text-orange-500 flex items-center justify-center border border-orange-500/20">
+              <div className="w-8 h-8 rounded-full bg-orange-500/10 text-orange-500 flex items-center justify-center border border-orange-500/20">
                  <Zap className="w-4 h-4 fill-current opacity-80" />
               </div>
-              <span className="text-xs font-bold text-foreground/90">بدء مهمة/مشروع</span>
+              <span className="text-[11px] font-bold text-foreground/90 leading-tight">مهمة/مشروع</span>
             </button>
             
             <button 
               onClick={() => openPomodoroDialog()}
-              className="flex-1 bg-card/40 hover:bg-card/60 backdrop-blur-2xl border border-white/5 rounded-[1.5rem] p-4 flex flex-col items-center justify-center gap-2.5 transition-colors shadow-lg active:scale-95"
+              className="flex-1 bg-card/40 hover:bg-card/60 backdrop-blur-2xl border border-white/5 rounded-[1.2rem] p-3 flex flex-col items-center justify-center gap-1.5 transition-colors shadow-sm active:scale-95"
             >
-              <div className="w-9 h-9 rounded-full bg-indigo-500/10 text-indigo-500 flex items-center justify-center border border-indigo-500/20">
+              <div className="w-8 h-8 rounded-full bg-indigo-500/10 text-indigo-500 flex items-center justify-center border border-indigo-500/20">
                  <Timer className="w-4 h-4 opacity-80" />
               </div>
-              <span className="text-xs font-bold text-foreground/90">تتبع تركيز (Focus)</span>
+              <span className="text-[11px] font-bold text-foreground/90 leading-tight">تتبع تركيز</span>
+            </button>
+
+            <button 
+              onClick={() => setRetroDialogOpen(true)}
+              className="flex-1 bg-card/40 hover:bg-card/60 backdrop-blur-2xl border border-white/5 rounded-[1.2rem] p-3 flex flex-col items-center justify-center gap-1.5 transition-colors shadow-sm active:scale-95"
+            >
+              <div className="w-8 h-8 rounded-full bg-emerald-500/10 text-emerald-500 flex items-center justify-center border border-emerald-500/20">
+                 <Calendar className="w-4 h-4 opacity-80" />
+              </div>
+              <span className="text-[11px] font-bold text-foreground/90 leading-tight">أيام سابقة</span>
             </button>
           </div>
 
@@ -1075,21 +1174,17 @@ export default function HomeView() {
             </h3>
             
             {actionDialog === 'permission' && (
-              <div className="flex gap-2">
-                <Button 
-                  className="flex-1 rounded-xl h-10" 
-                  variant={permissionType === 'entry' ? 'default' : 'secondary'}
-                  onClick={() => setPermissionType('entry')}
-                >
-                  دخول متأخر
-                </Button>
-                <Button 
-                  className="flex-1 rounded-xl h-10" 
-                  variant={permissionType === 'exit' ? 'default' : 'secondary'}
-                  onClick={() => setPermissionType('exit')}
-                >
-                  خروج مبكر
-                </Button>
+              <div className="flex flex-col gap-2">
+                <div className="flex items-start gap-3 p-3 bg-indigo-500/10 text-indigo-500 rounded-xl mb-2 text-sm border border-indigo-500/20">
+                  <Activity className="w-5 h-5 auto flex-shrink-0 mt-0.5" />
+                  <span className="leading-relaxed">
+                    <strong>الذكاء الاصطناعي:</strong> تم تصنيف الإذن تلقائياً كـ <strong className="bg-indigo-500/20 px-1 rounded">{permissionType === 'entry' ? 'تأخير دخول' : 'خروج مبكر'}</strong> بناءً على جدول عملك اليوم.
+                  </span>
+                </div>
+                <div className="flex gap-2 opacity-60 grayscale scale-95 pointer-events-none">
+                  <Button className="flex-1 rounded-xl h-10" variant={permissionType === 'entry' ? 'default' : 'secondary'}>دخول متأخر</Button>
+                  <Button className="flex-1 rounded-xl h-10" variant={permissionType === 'exit' ? 'default' : 'secondary'}>خروج مبكر</Button>
+                </div>
               </div>
             )}
 
@@ -1341,6 +1436,97 @@ export default function HomeView() {
                 >
                   إلغاء
                 </Button>
+              </div>
+           </div>
+         </div>
+      )}
+
+      {/* Overlay: Retroactive Past Day Log */}
+      {retroDialogOpen && (
+         <div className="absolute inset-0 z-[60] flex items-center justify-center backdrop-blur-sm bg-background/60 p-4" dir="rtl">
+           <div className="bg-card border border-border p-6 rounded-[2rem] w-full max-w-sm shadow-2xl flex flex-col gap-4 animate-in slide-in-from-bottom-8 overflow-y-auto max-h-full">
+              <h3 className="text-xl font-bold mt-2 text-center text-emerald-500">سجل يوم سابق</h3>
+              <p className="text-sm text-muted-foreground leading-relaxed text-center mb-2">أضف أعمال، إجازات، أو تصاريح لأي يوم مضى.</p>
+              
+              <div className="space-y-4">
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-foreground">التاريخ</label>
+                  <Input type="date" value={retroDate} onChange={e => setRetroDate(e.target.value)} max={format(now, 'yyyy-MM-dd')} />
+                </div>
+                
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-foreground">نوع السجل</label>
+                  <select 
+                    className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm"
+                    value={retroType}
+                    onChange={e => setRetroType(e.target.value as any)}
+                  >
+                    <option value="salary">عمل (راتب / أساسي)</option>
+                    <option value="project">مشروع / وظيفة أخرى</option>
+                    <option value="rest_day_work">عمل في يوم راحة / بديلة</option>
+                    <option value="half_day_leave">نصف يوم</option>
+                    <option value="annual_leave">إجازة</option>
+                    <option value="sick_leave">إجازة مرضية</option>
+                  </select>
+                </div>
+
+                {retroType === 'project' && (
+                  <div className="space-y-1 animate-in fade-in">
+                    <label className="text-xs font-bold text-foreground">المشروع/الجهة</label>
+                    <select 
+                      className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm"
+                      value={retroJobId}
+                      onChange={e => setRetroJobId(e.target.value)}
+                    >
+                      <option value="none">-- اختر عمل --</option>
+                      {jobs.map(j => <option key={j.id} value={j.id}>{j.name}</option>)}
+                    </select>
+                  </div>
+                )}
+
+                {!['annual_leave', 'sick_leave', 'half_day_leave'].includes(retroType) && (
+                  <>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-1">
+                        <label className="text-xs font-bold text-foreground">وقت الحضور</label>
+                        <Input type="time" value={retroStart} onChange={e => setRetroStart(e.target.value)} />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-xs font-bold text-foreground">وقت الانصراف</label>
+                        <Input type="time" value={retroEnd} onChange={e => setRetroEnd(e.target.value)} />
+                      </div>
+                    </div>
+                    <div className="space-y-1 pb-2">
+                       <label className="text-xs font-bold text-foreground inline-flex items-center gap-1"><Coffee className="w-3 h-3"/> الخصومات/الاستراحات (بالدقائق)</label>
+                       <Input type="number" min="0" value={retroBreak} onChange={e => setRetroBreak(e.target.value)} placeholder="مثال: 30" />
+                    </div>
+                    
+                    {retroType === 'rest_day_work' && (
+                       <div className="space-y-1 animate-in fade-in pb-2">
+                         <label className="text-xs font-bold text-orange-500">طبيعة تعويض يوم الراحة/الإجازة</label>
+                         <select 
+                           className="w-full rounded-xl border border-orange-500/50 bg-orange-500/10 px-3 py-2 text-sm text-orange-600 font-bold"
+                           value={retroCompType}
+                           onChange={e => setRetroCompType(e.target.value as any)}
+                         >
+                           <option value="1_day">يوم راحة بديل واحد</option>
+                           <option value="1_day_plus_overtime">يوم راحة بديل + ساعات إضافية</option>
+                           <option value="2_days">يومي راحة بديلة (2)</option>
+                         </select>
+                       </div>
+                    )}
+                  </>
+                )}
+                
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-foreground">ملاحظات (اختياري)</label>
+                  <Input placeholder="أضف أي ملحوظة عن اليوم..." value={noteText} onChange={e => setNoteText(e.target.value)} />
+                </div>
+              </div>
+
+              <div className="flex gap-2 mt-4">
+                 <Button onClick={submitRetroSession} className="flex-1 rounded-xl h-12 bg-emerald-600 hover:bg-emerald-700 text-white font-bold">حفظ السجل</Button>
+                 <Button variant="ghost" onClick={() => {setRetroDialogOpen(false); setNoteText('');}} className="h-12 rounded-xl text-muted-foreground hover:bg-secondary">إلغاء</Button>
               </div>
            </div>
          </div>

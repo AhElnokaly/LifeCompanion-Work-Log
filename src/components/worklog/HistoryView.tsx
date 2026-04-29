@@ -43,8 +43,8 @@ export default function HistoryView() {
   const activeSessions = sessions.filter(s => !s.isArchived);
   const totalHours = activeSessions.reduce((acc, s) => acc + ((s.duration || 0) / 60), 0);
   const totalOvertime = activeSessions.reduce((acc, s) => acc + ((s.overtimeMinutes || 0) / 60), 0);
-  const totalPermissions = activeSessions.filter(s => s.isPermission).length * (settings.monthlyPermissions > 0 ? 1 : 0); // Dummy calculation
-  const totalLeaves = activeSessions.filter(s => s.isAnnualLeave).length;
+  const totalPermissions = activeSessions.filter(s => s.dayStatus === 'permission').length * (settings.monthlyPermissions > 0 ? 1 : 0); // Dummy calculation
+  const totalLeaves = activeSessions.filter(s => s.dayStatus === 'annual_leave').length;
 
   const handleEditSave = () => {
     if (editingSession) {
@@ -164,7 +164,7 @@ export default function HistoryView() {
                 else if (session.dayStatus === 'annual_leave') statusLabel = 'إجازة سنوية';
                 else if (session.dayStatus === 'casual_leave') statusLabel = 'إجازة عارضة';
                 else if (session.dayStatus === 'sick_leave') statusLabel = 'إجازة مرضية';
-                else if (session.dayStatus === 'half_day') statusLabel = 'نصف يوم';
+                else if (session.dayStatus === 'half_day_leave') statusLabel = 'نصف يوم';
                 else if (session.dayStatus === 'permission') statusLabel = 'تصريح/مأمورية';
                 else if (session.dayStatus === 'compensation') statusLabel = 'يوم بديل';
                 else if (session.location === 'home') statusLabel = 'عمل من المنزل';
@@ -177,7 +177,7 @@ export default function HistoryView() {
                        <span className="text-xs text-muted-foreground">{format(sDate, 'EEEE', { locale: ar })}</span>
                     </td>
                     <td className="p-3">
-                       <span className={`px-2 py-1 rounded-full text-[10px] font-bold ${session.dayStatus === 'rest_day_work' ? 'bg-red-500/10 text-red-500' : session.dayStatus === 'annual_leave' || session.dayStatus === 'compensation' ? 'bg-emerald-500/10 text-emerald-500' : session.dayStatus === 'permission' || session.dayStatus === 'half_day' ? 'bg-yellow-500/10 text-yellow-500' : 'bg-primary/10 text-primary'}`}>
+                       <span className={`px-2 py-1 rounded-full text-[10px] font-bold ${session.dayStatus === 'rest_day_work' ? 'bg-red-500/10 text-red-500' : session.dayStatus === 'annual_leave' || session.dayStatus === 'compensation' ? 'bg-emerald-500/10 text-emerald-500' : session.dayStatus === 'permission' || session.dayStatus === 'half_day_leave' ? 'bg-yellow-500/10 text-yellow-500' : 'bg-primary/10 text-primary'}`}>
                          {statusLabel}
                        </span>
                     </td>
@@ -255,10 +255,8 @@ export default function HistoryView() {
 
                           {/* Delete Dialog */}
                           <Dialog>
-                            <DialogTrigger asChild>
-                              <Button variant="ghost" size="sm" onClick={() => setDeletingSessionId(session.id)} className="h-8 w-8 p-0 hover:bg-red-500/10">
+                            <DialogTrigger render={<Button variant="ghost" size="sm" onClick={() => setDeletingSessionId(session.id)} className="h-8 w-8 p-0 hover:bg-red-500/10" />}>
                                 <Trash2 className="w-4 h-4 text-red-500" />
-                              </Button>
                             </DialogTrigger>
                             <DialogContent className="sm:max-w-[425px] whitespace-normal text-start" dir="rtl">
                               <DialogHeader>

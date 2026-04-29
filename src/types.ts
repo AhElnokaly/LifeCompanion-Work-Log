@@ -22,6 +22,7 @@ export interface WorkSettings {
     pomodoroMinutes?: number;
     overtimeWarningMinutes?: number;
     endOfDayReminderTime?: string;
+    alarmSound?: 'digital' | 'analog' | 'gentle' | 'vibrate_only';
   };
   autoCheckIn?: boolean;
   onboardingCompleted?: boolean;
@@ -60,7 +61,7 @@ export interface WorkSession {
   type: WorkType;
   hourlyRate?: number;
   // Enhanced Tracking
-  dayStatus: 'work' | 'annual_leave' | 'sick_leave' | 'casual_leave' | 'half_day' | 'late' | 'absent' | 'mission' | 'rest_day_work' | 'permission' | 'compensation';
+  dayStatus: 'work' | 'annual_leave' | 'sick_leave' | 'casual_leave' | 'half_day_leave' | 'late' | 'absent' | 'mission' | 'rest_day_work' | 'permission' | 'compensation';
   isRestDayWork?: boolean;
   restDayCompensation?: '1_day' | '2_days' | '1_day_plus_overtime';
   overtimeMinutes?: number;
@@ -78,6 +79,15 @@ export interface Job {
   hourlyRate?: number;
   monthlyTargetHours?: number;
   isDefault?: boolean;
+}
+
+export interface Project {
+  id: string;
+  name: string;
+  color: string;
+  totalHours: number;
+  hourlyRate?: number;
+  clientName?: string;
 }
 
 export interface ScheduledShift {
@@ -122,7 +132,7 @@ export interface PaymentLog {
   notes?: string;
 }
 
-export type ThemeMode = 'light' | 'dark';
+export type ThemeMode = 'light' | 'dark' | 'ocean' | 'midnight' | 'forest' | 'sunset' | 'monochrome';
 export type SmartMode = 'focus';
 
 export interface AppState {

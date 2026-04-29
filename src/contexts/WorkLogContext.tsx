@@ -3,6 +3,7 @@ import { WorkSession, Project, WorkSettings, Job, ScheduledShift } from '../type
 import { db } from '../lib/db';
 import { sendAppNotification } from '../lib/notifications';
 import { format } from 'date-fns';
+import { toast } from 'sonner';
 
 export const isPublicHoliday = (day: Date, customHolidays?: {date: string, name: string}[]): boolean => {
   const EGYPTIAN_HOLIDAYS = ["01-07","01-25","04-25","05-01","06-30","07-23","10-06"];
@@ -57,7 +58,7 @@ interface WorkLogContextType {
     remainingPermissionsHours: number;
     availableCompensations: WorkSession[];
   };
-  logSpecialSession: (type: 'annual_leave' | 'half_day_leave' | 'permission' | 'compensation', data?: any) => void;
+  logSpecialSession: (type: 'annual_leave' | 'half_day_leave' | 'permission' | 'compensation' | 'sick_leave' | 'casual_leave', data?: any) => void;
   deleteAllData: () => Promise<void>;
 }
 
@@ -137,9 +138,9 @@ export const WorkLogProvider: React.FC<{ children: React.ReactNode }> = ({ child
     if (activeSession) return;
     
     const startTime = new Date();
-    // Check if rest day
+    // Check if rest day or public holiday
     const dayOfWeek = startTime.getDay(); // 0 = Sun, 1 = Mon ... 6 = Sat
-    const isRestDayWork = settings.restDays.includes(dayOfWeek);
+    const isRestDayWork = settings.restDays.includes(dayOfWeek) || isPublicHoliday(startTime, settings.customHolidays);
 
     const newSession: WorkSession = {
       id: Date.now().toString(),
@@ -160,6 +161,7 @@ export const WorkLogProvider: React.FC<{ children: React.ReactNode }> = ({ child
     if (settings.notificationsEnabled) {
       sendAppNotification('تم تسجيل الحضور بنجاح', { body: 'نتمنى لك يوم عمل مثمر! يعتمد عليك المحرك الذكي في تتبع إنتاجيتك.' });
     }
+    toast.success('تم تسجيل الحضور بنجاح');
   };
 
   const calculateOvertime = (durationMins: number, isRestDay: boolean, compType?: '1_day' | '2_days' | '1_day_plus_overtime') => {
@@ -242,6 +244,7 @@ export const WorkLogProvider: React.FC<{ children: React.ReactNode }> = ({ child
       const mins = duration % 60;
       sendAppNotification('تم تسجيل الانصراف بنجاح', { body: `مدة العمل: ${hours} ساعة و ${mins} دقيقة. استرح الآن لتجديد طاقتك!` });
     }
+    toast.success('تم إنهاء الجلسة وحفظها بنجاح');
   };
 
   const toggleBreak = () => {
@@ -267,10 +270,15 @@ export const WorkLogProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
   const addSession = (session: WorkSession) => {
     const isRestDay = session.isRestDayWork || false;
-    const duration = session.duration || 0;
+    let duration = session.duration || 0;
+    
+    if (!duration && session.startTime && session.endTime) {
+      duration = Math.round((new Date(session.endTime).getTime() - new Date(session.startTime).getTime()) / 60000);
+    }
+    
     const overtimeMinutes = session.overtimeMinutes !== undefined ? session.overtimeMinutes : calculateOvertime(duration, isRestDay, session.restDayCompensation);
     
-    setSessions([...sessions, { ...session, overtimeMinutes }]);
+    setSessions([...sessions, { ...session, duration, overtimeMinutes }]);
   };
 
   const updateSession = (id: string, updates: Partial<WorkSession>) => {
@@ -360,13 +368,13 @@ export const WorkLogProvider: React.FC<{ children: React.ReactNode }> = ({ child
     
     // Annual leaves
     const usedAnnualLeaves = sessions
-      .filter(s => s.isAnnualLeave && new Date(s.startTime).getFullYear() === currentYear)
+      .filter(s => s.dayStatus === "annual_leave" && new Date(s.startTime).getFullYear() === currentYear)
       .reduce((acc, s) => acc + (s.duration === (settings.dailyHours * 60) / 2 ? 0.5 : 1), 0);
     const remainingAnnualLeaves = settings.annualLeaves - usedAnnualLeaves;
 
     // Permissions (hours)
     const usedPermissionsHours = sessions
-      .filter(s => s.isPermission && new Date(s.startTime).getMonth() === currentMonth && new Date(s.startTime).getFullYear() === currentYear)
+      .filter(s => s.dayStatus === 'permission' && new Date(s.startTime).getMonth() === currentMonth && new Date(s.startTime).getFullYear() === currentYear)
       .reduce((acc, s) => acc + (s.permissionHours || ((s.duration || 0) / 60)), 0);
     const remainingPermissionsHours = settings.monthlyPermissions - usedPermissionsHours;
 
@@ -411,7 +419,7 @@ export const WorkLogProvider: React.FC<{ children: React.ReactNode }> = ({ child
       newSession.duration = settings.dailyHours * 60;
       newSession.notes = data?.note || 'إجازة سنوية/اعتيادية';
     } else if (type === 'half_day_leave') {
-      newSession.dayStatus = 'half_day';
+      newSession.dayStatus = 'half_day_leave';
       newSession.duration = (settings.dailyHours * 60) / 2;
       newSession.notes = data?.note || 'إجازة نصف يوم';
     } else if (type === 'sick_leave') {

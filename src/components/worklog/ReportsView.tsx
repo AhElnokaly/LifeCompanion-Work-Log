@@ -28,7 +28,7 @@ export default function ReportsView() {
   // Aggregate data for PieChart (Projects/Types)
   const projectDataMap = new Map();
   currentMonthSessions.forEach(s => {
-    const key = s.projectId ? (projects.find(p => p.id === s.projectId)?.name || 'مجهول') : (s.isPermission ? 'استئذان' : 'أساسي');
+    const key = s.projectId ? (projects.find(p => p.id === s.projectId)?.name || 'مجهول') : (s.dayStatus === 'permission' ? 'استئذان' : 'أساسي');
     projectDataMap.set(key, (projectDataMap.get(key) || 0) + ((s.duration || 0) / 60));
   });
   const pieData = Array.from(projectDataMap, ([name, value]) => ({ name, value }));
