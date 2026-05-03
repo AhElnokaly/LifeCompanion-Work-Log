@@ -5,25 +5,58 @@ import { sendAppNotification } from '../lib/notifications';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
 
-export const isPublicHoliday = (day: Date, customHolidays?: {date: string, name: string}[]): boolean => {
-  const EGYPTIAN_HOLIDAYS = ["01-07","01-25","04-25","05-01","06-30","07-23","10-06"];
-  const dayKey = format(day, 'MM-dd');
-  const fullDateKey = format(day, 'yyyy-MM-dd');
+export const generateEgyptianHolidays = (currentYear: number): {date: string, name: string}[] => {
+  const generatedHolidays: {date: string, name: string}[] = [
+    { date: `${currentYear}-01-07`, name: 'عيد الميلاد المجيد' },
+    { date: `${currentYear}-01-25`, name: 'عيد الشرطة وثورة 25 يناير' },
+    { date: `${currentYear}-04-25`, name: 'عيد تحرير سيناء' },
+    { date: `${currentYear}-05-01`, name: 'عيد العمال' },
+    { date: `${currentYear}-06-30`, name: 'ثورة 30 يونيو' },
+    { date: `${currentYear}-07-23`, name: 'ثورة 23 يوليو' },
+    { date: `${currentYear}-10-06`, name: 'عيد القوات المسلحة' },
+  ];
 
+  for(let i=0; i<366; i++) {
+     const day = new Date(currentYear, 0, 1 + i);
+     if (day.getFullYear() > currentYear) break;
+
+     let hMonth = 0, hDay = 0;
+     try {
+        const hijriFormatter = new Intl.DateTimeFormat('en-u-ca-islamic', { month: 'numeric', day: 'numeric' });
+        const hParts = hijriFormatter.formatToParts(day);
+        const mPart = hParts.find(p => p.type === 'month')?.value;
+        const dPart = hParts.find(p => p.type === 'day')?.value;
+        if(mPart && dPart) {
+           hMonth = parseInt(mPart);
+           hDay = parseInt(dPart);
+        }
+     } catch(e) {}
+
+     const yyyy = day.getFullYear();
+     const mm = String(day.getMonth() + 1).padStart(2, '0');
+     const dd = String(day.getDate()).padStart(2, '0');
+     const dateStr = `${yyyy}-${mm}-${dd}`;
+
+     if (hMonth === 10 && hDay === 1) generatedHolidays.push({date: dateStr, name: 'عيد الفطر المبارك'});
+     if (hMonth === 10 && hDay === 2) generatedHolidays.push({date: dateStr, name: 'عيد الفطر (اليوم الثاني)'});
+     if (hMonth === 10 && hDay === 3) generatedHolidays.push({date: dateStr, name: 'عيد الفطر (اليوم الثالث)'});
+
+     if (hMonth === 12 && hDay === 9) generatedHolidays.push({date: dateStr, name: 'وقفة عرفات'});
+     if (hMonth === 12 && hDay === 10) generatedHolidays.push({date: dateStr, name: 'عيد الأضحى المبارك'});
+     if (hMonth === 12 && hDay === 11) generatedHolidays.push({date: dateStr, name: 'عيد الأضحى (اليوم الثاني)'});
+     if (hMonth === 12 && hDay === 12) generatedHolidays.push({date: dateStr, name: 'عيد الأضحى (اليوم الثالث)'});
+     if (hMonth === 12 && hDay === 13) generatedHolidays.push({date: dateStr, name: 'عيد الأضحى (اليوم الرابع)'});
+
+     if (hMonth === 1 && hDay === 1) generatedHolidays.push({date: dateStr, name: 'رأس السنة الهجرية'});
+     if (hMonth === 3 && hDay === 12) generatedHolidays.push({date: dateStr, name: 'المولد النبوي الشريف'});
+  }
+  
+  return generatedHolidays.sort((a,b) => a.date.localeCompare(b.date));
+};
+
+export const isPublicHoliday = (day: Date, customHolidays?: {date: string, name: string}[]): boolean => {
+  const fullDateKey = format(day, 'yyyy-MM-dd');
   if (customHolidays?.some(h => h.date === fullDateKey)) return true;
-  if (EGYPTIAN_HOLIDAYS.includes(dayKey)) return true;
-  
-  try {
-     const hijriFormatter = new Intl.DateTimeFormat('en-u-ca-islamic', { month: 'numeric', day: 'numeric' });
-     const hParts = hijriFormatter.formatToParts(day);
-     const hMonth = parseInt(hParts.find(p => p.type === 'month')?.value || '1');
-     const hDay = parseInt(hParts.find(p => p.type === 'day')?.value || '1');
-     
-     if (hMonth === 9 && hDay === 1) return true; // أول رمضان 
-     if (hMonth === 10 && hDay <= 3) return true; // عيد الفطر
-     if (hMonth === 12 && hDay >= 9 && hDay <= 13) return true; // عيد الأضحى
-  } catch(e) {}
-  
   return false;
 };
 
@@ -103,7 +136,21 @@ export const WorkLogProvider: React.FC<{ children: React.ReactNode }> = ({ child
     if (savedShifts) setShifts(JSON.parse(savedShifts));
     if (savedAssignments) setShiftAssignments(JSON.parse(savedAssignments));
     if (savedActive) setActiveSession(JSON.parse(savedActive));
-    if (savedSettings) setSettings(JSON.parse(savedSettings));
+    if (savedSettings) {
+      const parsedSettings = JSON.parse(savedSettings);
+      
+      // Auto-populate Egyptian holidays for the current year if customHolidays is missing or empty
+      if (!parsedSettings.customHolidays || parsedSettings.customHolidays.length === 0) {
+        parsedSettings.customHolidays = generateEgyptianHolidays(new Date().getFullYear());
+      }
+      
+      setSettings(parsedSettings);
+    } else {
+      // Auto-populate for default settings
+      const newSettings = { ...defaultSettings, onboardingCompleted: false };
+      newSettings.customHolidays = generateEgyptianHolidays(new Date().getFullYear());
+      setSettings(newSettings);
+    }
 
     // Load sessions and cleanup old archived sessions automatically (Feature 8)
     if (savedSessions) {

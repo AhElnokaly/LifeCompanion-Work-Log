@@ -3,9 +3,10 @@ import { Card } from '../ui/card';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
+import { SmartTimePicker } from '../ui/smart-time-picker';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { useWorkLog } from '../../contexts/WorkLogContext';
-import { Briefcase, Clock, Plus, Trash2, Edit2 } from 'lucide-react';
+import { Briefcase, Clock, Plus, Trash2, Edit2, Check } from 'lucide-react';
 import { toast } from 'sonner';
 
 export default function JobsShiftsView() {
@@ -130,43 +131,58 @@ export default function JobsShiftsView() {
           </div>
         )}
 
-        <div className="space-y-3 bg-secondary/10 p-4 rounded-2xl">
-          <h4 className="text-sm font-bold text-muted-foreground">{editingShiftId ? 'تعديل الوردية' : 'إضافة وردية جديدة'}</h4>
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label>مسمى الوردية</Label>
-              <Input placeholder="مثال: نهارية" value={shiftName} onChange={(e) => setShiftName(e.target.value)} />
+        <div className="space-y-4 bg-secondary/10 p-5 rounded-3xl border border-white/5">
+          <h4 className="text-sm font-bold flex items-center gap-2">
+            {editingShiftId ? <Edit2 className="w-4 h-4 text-emerald-500" /> : <Plus className="w-4 h-4 text-emerald-500" />}
+            {editingShiftId ? 'تعديل الوردية' : 'إضافة وردية جديدة'}
+          </h4>
+          <div className="space-y-3">
+            <div className="space-y-1.5 flex-1">
+              <Label className="text-xs text-muted-foreground font-bold">مسمى الوردية</Label>
+              <Input className="h-12 rounded-xl bg-background/50 border-white/10" placeholder="مثال: الوردية الصباحية" value={shiftName} onChange={(e) => setShiftName(e.target.value)} />
             </div>
-            <div className="space-y-2">
-               <Label>اللون المميز</Label>
-               <Input type="color" value={shiftColor} onChange={(e) => setShiftColor(e.target.value)} className="p-1 h-10 w-full" />
+            
+            <div className="space-y-1.5">
+               <Label className="text-xs text-muted-foreground font-bold">اللون المُميِّز</Label>
+               <div className="flex gap-2 flex-wrap pb-1">
+                 {['#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6', '#64748b'].map(color => (
+                   <button 
+                     key={color}
+                     onClick={() => setShiftColor(color)}
+                     className={`w-8 h-8 rounded-full transition-transform ${shiftColor === color ? 'scale-110 ring-2 ring-offset-2 ring-offset-background ring-foreground' : 'hover:scale-105'}`}
+                     style={{ backgroundColor: color }}
+                   />
+                 ))}
+               </div>
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label>وقت البدء</Label>
-              <Input type="time" value={shiftStart} onChange={(e) => setShiftStart(e.target.value)} />
+
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground font-bold">وقت البدء</Label>
+              <SmartTimePicker className="h-12 rounded-xl bg-background/50 border-white/10 w-full" value={shiftStart} onChange={setShiftStart} />
             </div>
-            <div className="space-y-2">
-              <Label>وقت الانتهاء</Label>
-              <Input type="time" value={shiftEnd} onChange={(e) => setShiftEnd(e.target.value)} />
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground font-bold">وقت الانتهاء</Label>
+              <SmartTimePicker className="h-12 rounded-xl bg-background/50 border-white/10 w-full" value={shiftEnd} onChange={setShiftEnd} />
             </div>
           </div>
-          <div className="space-y-2">
-             <Label>التكرار</Label>
+
+          <div className="space-y-1.5">
+             <Label className="text-xs text-muted-foreground font-bold">نمط التكرار التلقائي</Label>
              <Select value={shiftFrequency} onValueChange={setShiftFrequency}>
-               <SelectTrigger className="min-w-0 w-full" dir="rtl">
+               <SelectTrigger className="min-w-0 w-full h-12 rounded-xl bg-background/50 border-white/10" dir="rtl">
                  <SelectValue />
                </SelectTrigger>
-               <SelectContent dir="rtl" className="min-w-[150px]">
-                 <SelectItem value="daily">يومياً</SelectItem>
-                 <SelectItem value="weekly">أسبوعياً (أيام العمل)</SelectItem>
-                 <SelectItem value="custom">حسب الطلب</SelectItem>
+               <SelectContent dir="rtl" className="min-w-[150px] rounded-xl z-[150]">
+                 <SelectItem value="daily">يومياً (كل الأيام)</SelectItem>
+                 <SelectItem value="weekly">أسبوعياً (أيام العمل فقط)</SelectItem>
+                 <SelectItem value="custom">مخصص (حسب الطلب في التقويم)</SelectItem>
                </SelectContent>
              </Select>
           </div>
-          <Button className="w-full mt-2" onClick={submitShift}>
-             {editingShiftId ? <><Edit2 className="w-4 h-4 mr-2" /> حفظ التعديلات</> : <><Plus className="w-4 h-4 mr-2" /> إضافة الوردية</>}
+          <Button className="w-full mt-2 h-12 rounded-xl font-bold shadow-lg" onClick={submitShift}>
+             {editingShiftId ? <><Check className="w-4 h-4 mr-2" /> حفظ التعديلات</> : <><Plus className="w-4 h-4 mr-2" /> إضافة للورديات</>}
           </Button>
         </div>
       </Card>

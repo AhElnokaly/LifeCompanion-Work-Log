@@ -20,6 +20,7 @@ export default function Layout({ children, activeTab, setActiveTab }: LayoutProp
   const [chatOpen, setChatOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [burnoutOverlay, setBurnoutOverlay] = useState(false);
   const [installPromptEvent, setInstallPromptEvent] = useState<any>(null);
 
@@ -113,69 +114,16 @@ export default function Layout({ children, activeTab, setActiveTab }: LayoutProp
           <Button variant="ghost" size="icon" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}>
              {theme === 'dark' ? <Sun className="h-5 w-5 text-yellow-500" /> : <Moon className="h-5 w-5 text-indigo-500" />}
           </Button>
-          <Sheet>
-            <SheetTrigger className="w-8 h-8 inline-flex items-center justify-center rounded-lg hover:bg-muted text-foreground cursor-pointer focus:outline-none">
+          <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
+            <SheetTrigger render={<button className="w-8 h-8 inline-flex items-center justify-center rounded-lg hover:bg-muted text-foreground cursor-pointer focus:outline-none" />}>
                 <Menu className="h-6 w-6" />
             </SheetTrigger>
             <SheetContent side="right" className="w-[85vw] max-w-[320px] p-6 z-[100] bg-background/95 backdrop-blur-xl border-l-0 rounded-l-[2rem] flex flex-col" dir="rtl">
               <SheetHeader className="pb-6 border-b border-border/50">
                 <SheetTitle className="text-2xl font-black text-right pt-2 text-foreground">القائمة</SheetTitle>
               </SheetHeader>
-              <div className="flex-1 overflow-y-auto mt-6 no-scrollbar">
-                <div className="flex flex-col gap-2">
-                  
-                  {/* Pro Upgrade (Placeholder from design) */}
-                  <button className="flex items-center w-full p-4 rounded-2xl bg-secondary/30 hover:bg-secondary/50 transition-colors gap-4">
-                     <div className="text-orange-500"><Zap className="w-5 h-5" /></div>
-                     <span className="font-bold text-orange-500 text-sm">الترقية لبرو</span>
-                  </button>
-
-                  <button className="flex items-center w-full p-4 rounded-2xl bg-secondary/30 hover:bg-secondary/50 transition-colors gap-4 mt-2" onClick={() => setActiveTab('wallet')}>
-                     <div className="text-foreground/70"><Wallet className="w-5 h-5" /></div>
-                     <span className="font-bold text-foreground text-sm">محفظتي</span>
-                  </button>
-
-                  <button className="flex items-center w-full p-4 rounded-2xl bg-secondary/30 hover:bg-secondary/50 transition-colors gap-4" onClick={() => setActiveTab('history')}>
-                     <div className="text-foreground/70"><History className="w-5 h-5" /></div>
-                     <span className="font-bold text-foreground text-sm">الأرشيف والسجل</span>
-                  </button>
-                  
-                  <button className="flex items-center w-full p-4 rounded-2xl bg-secondary/30 hover:bg-secondary/50 transition-colors gap-4" onClick={() => setActiveTab('chart_maker')}>
-                     <div className="text-foreground/70"><BarChart className="w-5 h-5" /></div>
-                     <span className="font-bold text-foreground text-sm">صانع المخططات</span>
-                  </button>
-                  
-                  <button className="flex items-center w-full p-4 rounded-2xl bg-secondary/30 hover:bg-secondary/50 transition-colors gap-4" onClick={() => setShareOpen(true)}>
-                     <div className="text-foreground/70"><Share2 className="w-5 h-5" /></div>
-                     <span className="font-bold text-foreground text-sm">مشاركة التطبيق</span>
-                  </button>
-
-                  <button className="flex items-center w-full p-4 rounded-2xl bg-indigo-500/10 hover:bg-indigo-500/20 transition-colors gap-4 mt-2 border border-indigo-500/20" onClick={() => { setChatOpen(true); /* close sheet conceptually later but ok for now */ }}>
-                     <div className="text-indigo-500"><Brain className="w-5 h-5" /></div>
-                     <div className="flex flex-col text-right">
-                        <span className="font-bold text-indigo-500 text-sm">المساعد الذكي للعمل</span>
-                        <span className="text-[10px] text-indigo-500/70">تحدث والإجابة على الأسئلة</span>
-                     </div>
-                  </button>
-
-                  <button className="flex items-center w-full p-4 rounded-2xl bg-secondary/30 hover:bg-secondary/50 transition-colors gap-4 mt-2" onClick={() => setHelpOpen(true)}>
-                     <div className="text-foreground/70"><HelpCircle className="w-5 h-5" /></div>
-                     <span className="font-bold text-foreground text-sm">المساعدة والأسئلة الشائعة (Q&A)</span>
-                  </button>
-
-                  <button className="flex items-center w-full p-4 rounded-2xl bg-secondary/30 hover:bg-secondary/50 transition-colors gap-4 mt-2 border border-border/50" onClick={() => setActiveTab('settings')}>
-                     <div className="text-foreground/70"><Settings className="w-5 h-5" /></div>
-                     <span className="font-bold text-foreground text-sm">الإعدادات</span>
-                  </button>
-                  
-                  <button className="flex items-center justify-between w-full p-4 rounded-2xl bg-secondary/30 hover:bg-secondary/50 transition-colors mt-2" onClick={() => setActiveTab('alarms')}>
-                     <div className="flex items-center gap-4">
-                       <div className="text-foreground/70"><Bell className="w-5 h-5" /></div>
-                       <span className="font-bold text-foreground text-sm">المنبهات والإشعارات</span>
-                     </div>
-                     <div className="w-5 h-5 rounded-full bg-red-500 text-[10px] text-white flex items-center justify-center font-bold">1</div>
-                  </button>
-                </div>
+              <div className="flex-1 overflow-y-auto mt-6 no-scrollbar" dir="rtl">
+                 <DesktopNavLinks activeTab={activeTab} setActiveTab={(t) => { setActiveTab(t); setMobileMenuOpen(false); }} />
               </div>
               <div className="mt-6 pt-4 border-t border-border/50">
                   <Button className="w-full h-14 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-base shadow-lg shadow-blue-500/20">
@@ -236,19 +184,12 @@ export default function Layout({ children, activeTab, setActiveTab }: LayoutProp
       </main>
 
       {/* Mobile Bottom Navigation */}
-      <div className="md:hidden fixed bottom-0 left-0 right-0 border-t bg-card/90 backdrop-blur pb-safe px-2 py-2 flex justify-between overflow-x-auto no-scrollbar z-50 min-w-0">
-        <div className="flex w-full justify-between min-w-max gap-2 px-1">
+      <div className="md:hidden fixed bottom-0 left-0 right-0 border-t bg-card/90 backdrop-blur pb-safe px-6 py-2 flex justify-between overflow-x-auto no-scrollbar z-50 min-w-0">
+        <div className="flex w-full justify-between min-w-max gap-4 px-1">
+          <MobileNavItem icon={BarChart2} label="التقارير" id="reports" activeTab={activeTab} setActive={setActiveTab} />
+          <MobileNavItem icon={CalendarDays} label="السجل" id="history" activeTab={activeTab} setActive={setActiveTab} />
           <MobileNavItem icon={Home} label="الرئيسية" id="home" activeTab={activeTab} setActive={setActiveTab} />
           <MobileNavItem icon={Calendar} label="التقويم" id="week" activeTab={activeTab} setActive={setActiveTab} />
-          <MobileNavItem icon={Bell} label="المنبه" id="alarms" activeTab={activeTab} setActive={setActiveTab} />
-          {settings.system === 'freelance' && (
-            <MobileNavItem icon={Users} label="العملاء" id="smartpage" activeTab={activeTab} setActive={setActiveTab} />
-          )}
-          {settings.system === 'fixed' && (
-             <MobileNavItem icon={Target} label="أدائي" id="smartpage" activeTab={activeTab} setActive={setActiveTab} />
-          )}
-          <MobileNavItem icon={History} label="السجل" id="history" activeTab={activeTab} setActive={setActiveTab} />
-          <MobileNavItem icon={MoreHorizontal} label="المزيد" id="more" activeTab={activeTab} setActive={setActiveTab} />
         </div>
       </div>
 

@@ -2,13 +2,14 @@ import React, { useState, useMemo } from 'react';
 import { Card } from '../ui/card';
 import { Button } from '../ui/button';
 import { ChevronRight, ChevronLeft, Calendar as CalendarIcon, List, LayoutGrid, Activity, Clock, Briefcase, Plus, Palette, Trash2, Edit, RefreshCw } from 'lucide-react';
-import { useWorkLog } from '../../contexts/WorkLogContext';
+import { useWorkLog, isPublicHoliday, generateEgyptianHolidays } from '../../contexts/WorkLogContext';
 import { format, differenceInMinutes, addMonths, subMonths, startOfMonth, endOfMonth, eachDayOfInterval, startOfWeek, endOfWeek, isSameMonth, isSameDay, addWeeks, subWeeks, subDays, addDays } from 'date-fns';
 import { ar } from 'date-fns/locale';
 import { ResponsiveContainer, BarChart, Bar, XAxis, Tooltip, Cell, ReferenceLine } from 'recharts';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '../ui/sheet';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '../ui/dropdown-menu';
 import { Input } from '../ui/input';
+import { SmartTimePicker } from '../ui/smart-time-picker';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogDescription } from '../ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Label } from '../ui/label';
@@ -19,7 +20,7 @@ import JobsShiftsView from './JobsShiftsView';
 import { detectPermissionType } from '../../lib/smartAttendance';
 
 export default function CalendarView() {
-  const { sessions, jobs, shifts, shiftAssignments, toggleShiftAssignment, settings, deleteSession, logSpecialSession, addSession } = useWorkLog();
+  const { sessions, jobs, shifts, shiftAssignments, toggleShiftAssignment, settings, updateSettings, deleteSession, logSpecialSession, addSession } = useWorkLog();
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDay, setSelectedDay] = useState<Date>(new Date());
   const [sheetOpen, setSheetOpen] = useState(false);
@@ -45,7 +46,7 @@ export default function CalendarView() {
        endStr = `${format(addDays(selectedDay, 1), 'yyyy-MM-dd')}T${customEntryData.endTime}`;
     }
 
-    const isLeave = ['annual_leave', 'sick_leave', 'casual_leave', 'half_day_leave', 'permission', 'permission_1h', 'permission_2h'].includes(customEntryData.type);
+    const isLeave = ['annual_leave', 'sick_leave', 'casual_leave', 'half_day_leave', 'permission', 'permission_1h', 'permission_2h', 'compensation'].includes(customEntryData.type);
     
     if (isLeave) {
        let duration = settings.dailyHours * 60;
@@ -78,17 +79,21 @@ export default function CalendarView() {
        });
     } else {
        const duration = differenceInMinutes(new Date(endStr), new Date(startStr));
+       const isRestDay = (settings.restDays || []).includes(selectedDay.getDay()) || isPublicHoliday(selectedDay, settings.customHolidays);
+       
        addSession({
          id: Date.now().toString(),
          type: customEntryData.jobId !== 'none' ? 'project' : 'salary',
          startTime: new Date(startStr).toISOString(),
          endTime: new Date(endStr).toISOString(),
          jobId: customEntryData.jobId === 'none' ? undefined : customEntryData.jobId,
-         dayStatus: 'work',
+         dayStatus: isRestDay ? 'rest_day_work' : 'work',
+         isRestDayWork: isRestDay,
+         restDayCompensation: isRestDay ? '1_day' : undefined,
          breaks: 0,
          duration: duration,
          location: 'office',
-         notes: ''
+         notes: isRestDay ? 'أضيف يدويا (عمل في يوم راحة)' : ''
        });
     }
     setSheetOpen(false); // Close sheet on save
@@ -169,7 +174,7 @@ export default function CalendarView() {
           </div>
 
           {/* Calendar Days */}
-          <div className="grid grid-cols-7 gap-y-4 gap-x-1 text-center">
+          <div className="grid grid-cols-7 gap-2 text-center mt-2">
             {days.map((day) => {
               const isCurrentMonth = isSameMonth(day, currentDate);
               const isToday = isSameDay(day, new Date());
@@ -190,28 +195,36 @@ export default function CalendarView() {
                  } catch(e) {}
               }
 
+              const isHol = isPublicHoliday(day, settings.customHolidays);
+              const isRestD = (settings.restDays || []).includes(day.getDay());
+
               return (
                 <div 
                   key={day.toISOString()} 
-                  className={`min-h-[44px] flex flex-col items-center justify-start relative cursor-pointer group ${!isCurrentMonth ? 'opacity-0 pointer-events-none' : ''}`}
+                  className={`min-h-[64px] flex flex-col p-1 sm:p-2 items-center justify-between relative cursor-pointer rounded-2xl transition-all border ${!isCurrentMonth ? 'opacity-30 pointer-events-none grayscale' : ''}
+                    ${isSelected ? 'border-primary ring-2 ring-primary/50 bg-primary/5 shadow-md scale-[1.02] z-20' : 'border-transparent hover:border-border/60'}
+                    ${isToday && !isSelected ? 'bg-secondary/40 border-secondary' : ''}
+                    ${isHol || isRestD ? 'bg-rose-500/5 hover:bg-rose-500/10' : 'hover:bg-secondary/20'}
+                  `}
                   onClick={() => {
                      setSelectedDay(day);
                      setSheetOpen(true);
                   }}
                 >
-                  <div className={`w-10 h-10 flex items-center justify-center rounded-full text-[15px] font-bold transition-all relative z-10
+                  <span className={`text-[13px] sm:text-[15px] font-bold w-7 h-7 flex items-center justify-center rounded-full
                     ${isSelected ? 'bg-primary text-primary-foreground' : 
-                      isToday ? 'bg-secondary text-foreground' : 'text-foreground/90'}
-                    ${daySessions.length > 0 && !isSelected && !isToday ? 'hover:bg-secondary/50' : 'hover:bg-secondary/30'}
+                      (isHol || isRestD) ? 'text-rose-500' :
+                      isToday ? 'text-primary' : 'text-foreground/90'}
                   `}>
                     {displayMode === 'gregorian' ? format(day, 'd') : hDayNum}
-                  </div>
+                  </span>
                   
-                  {/* Indicator Dots */}
-                  <div className="flex gap-1 mt-1 justify-center relative z-10 h-1.5 w-full">
-                     {hasWork && <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />}
-                     {hasLeave && <div className="w-1.5 h-1.5 rounded-full bg-amber-500" />}
-                     {hasPermission && <div className="w-1.5 h-1.5 rounded-full bg-purple-500" />}
+                  {/* Indicator Section */}
+                  <div className="flex flex-wrap gap-1 mt-auto w-full justify-center">
+                     {hasWork && <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-sm border border-background" />}
+                     {hasLeave && <div className="w-2.5 h-2.5 rounded-full bg-amber-500 shadow-sm border border-background" />}
+                     {hasPermission && <div className="w-2.5 h-2.5 rounded-full bg-purple-500 shadow-sm border border-background" />}
+                     {daySessions.length > 3 && <div className="w-2.5 h-2.5 rounded-full bg-blue-500 shadow-sm border border-background" />}
                   </div>
                 </div>
               );
@@ -363,7 +376,7 @@ export default function CalendarView() {
            </button>
            <button 
              onClick={() => setCustomEntryData(d => ({...d, type: 'annual_leave'}))}
-             className={`flex-1 py-3 text-sm font-bold transition-all rounded-xl z-10 ${['annual_leave', 'sick_leave', 'casual_leave'].includes(customEntryData.type) ? 'bg-stone-300 dark:bg-stone-600 text-stone-900 dark:text-white shadow-md' : 'text-foreground/70 hover:text-foreground'}`}
+             className={`flex-1 py-3 text-sm font-bold transition-all rounded-xl z-10 ${['annual_leave', 'sick_leave', 'casual_leave', 'compensation'].includes(customEntryData.type) ? 'bg-stone-300 dark:bg-stone-600 text-stone-900 dark:text-white shadow-md' : 'text-foreground/70 hover:text-foreground'}`}
            >
              في إجازة
            </button>
@@ -378,7 +391,7 @@ export default function CalendarView() {
 
         {/* Dynamic form based on type */}
         <div className="flex flex-col gap-4">
-          {['annual_leave', 'sick_leave', 'casual_leave'].includes(customEntryData.type) && (
+          {['annual_leave', 'sick_leave', 'casual_leave', 'compensation'].includes(customEntryData.type) && (
              <div className="space-y-2">
                <Label className="text-muted-foreground font-bold">نوع الإجازة</Label>
                <div className="flex flex-wrap gap-2">
@@ -402,6 +415,13 @@ export default function CalendarView() {
                    onClick={() => setCustomEntryData({...customEntryData, type: 'casual_leave'})}
                  >
                    عارضة
+                 </Button>
+                 <Button 
+                   variant={customEntryData.type === 'compensation' ? 'default' : 'secondary'}
+                   className={`rounded-xl h-12 flex-1 font-bold ${customEntryData.type === 'compensation' ? 'bg-emerald-600 hover:bg-emerald-700 text-white' : ''}`}
+                   onClick={() => setCustomEntryData({...customEntryData, type: 'compensation'})}
+                 >
+                   إجازة بديلة
                  </Button>
                </div>
              </div>
@@ -463,24 +483,22 @@ export default function CalendarView() {
              </div>
           )}
 
-          {(!['annual_leave', 'sick_leave', 'casual_leave', 'permission_1h', 'permission_2h'].includes(customEntryData.type)) && (
+          {(!['annual_leave', 'sick_leave', 'casual_leave', 'permission_1h', 'permission_2h', 'compensation'].includes(customEntryData.type)) && (
             <>
               <div className="space-y-2">
                 <Label className="text-muted-foreground font-bold flex items-center gap-1"><Clock className="w-4 h-4"/>تسجيل دخول</Label>
-                <Input 
-                  type="time" 
+                <SmartTimePicker 
                   value={customEntryData.startTime} 
-                  onChange={e => setCustomEntryData({...customEntryData, startTime: e.target.value})}
-                  className="h-14 rounded-2xl bg-secondary/30 border-none font-bold text-lg"
+                  onChange={val => setCustomEntryData({...customEntryData, startTime: val})}
+                  className="h-14 rounded-2xl bg-secondary/30 border-none font-bold text-lg w-full"
                 />
               </div>
               <div className="space-y-2">
                 <Label className="text-muted-foreground font-bold flex items-center gap-1"><Clock className="w-4 h-4"/>تسجيل خروج</Label>
-                <Input 
-                  type="time" 
+                <SmartTimePicker 
                   value={customEntryData.endTime} 
-                  onChange={e => setCustomEntryData({...customEntryData, endTime: e.target.value})}
-                  className="h-14 rounded-2xl bg-secondary/30 border-none font-bold text-lg"
+                  onChange={val => setCustomEntryData({...customEntryData, endTime: val})}
+                  className="h-14 rounded-2xl bg-secondary/30 border-none font-bold text-lg w-full"
                 />
               </div>
             </>
@@ -511,6 +529,7 @@ export default function CalendarView() {
                     if (sess.dayStatus === 'annual_leave') typeLabel = 'إجازة اعتيادية';
                     if (sess.dayStatus === 'sick_leave') typeLabel = 'إجازة مرضية';
                     if (sess.dayStatus === 'casual_leave') typeLabel = 'إجازة عارضة';
+                    if (sess.dayStatus === 'compensation') typeLabel = 'إجازة بديلة';
                     if (sess.dayStatus === 'half_day_leave') typeLabel = 'نصف يوم';
                     if (sess.dayStatus === 'permission') typeLabel = 'إذن';
                     if (sess.type === 'project') typeLabel = 'مشروع/عميل';
@@ -538,6 +557,136 @@ export default function CalendarView() {
     );
   };
 
+  const renderHolidaysTable = () => {
+    if (viewType === 'shifts') return null;
+    
+    // Sort holidays by date
+    const hols = [...(settings.customHolidays || [])].sort((a,b) => a.date.localeCompare(b.date));
+    
+    // Filter to show only ones in the current year
+    const currentYear = currentDate.getFullYear();
+    const currentYearHols = hols.filter(h => h.date.startsWith(currentYear.toString()));
+    
+    return (
+      <div className="bg-card rounded-[2rem] p-6 shadow-sm border border-border/50 relative mt-4 overflow-hidden">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4 px-2">
+          <div>
+            <h3 className="text-xl font-black text-right flex items-center gap-2">
+               <CalendarIcon className="w-5 h-5 text-indigo-500" />
+               الإجازات الرسمية والأعياد ({currentYear})
+            </h3>
+            <p className="text-sm text-muted-foreground mt-1">تتبع أوقات العمل في العطلات الرسمية</p>
+          </div>
+          
+          <div className="flex bg-secondary/30 p-1.5 rounded-[1.2rem] items-center w-full sm:w-auto">
+             <Button 
+                variant="ghost" 
+                size="sm"
+                className="h-9 px-4 text-xs font-bold text-emerald-500 hover:text-emerald-600 hover:bg-emerald-500/10 rounded-xl w-full sm:w-auto"
+                onClick={() => {
+                   const generated = generateEgyptianHolidays(currentYear);
+                   const existingDates = new Set((settings.customHolidays || []).map(h => h.date));
+                   const added = generated.filter(h => !existingDates.has(h.date));
+                   if (added.length > 0) {
+                       const newHolidays = [...(settings.customHolidays || []), ...added].sort((a,b) => a.date.localeCompare(b.date));
+                       updateSettings({ ...settings, customHolidays: newHolidays });
+                       toast.success(`تم استيراد ${added.length} إجازات رسمية بنجاح`);
+                   } else {
+                       toast.info('تم تسجيل جميع الإجازات مسبقاً');
+                   }
+                }}
+             >
+                <RefreshCw className="w-4 h-4 ml-1.5" /> استيراد عطلات مصر
+             </Button>
+          </div>
+        </div>
+
+        <div className="overflow-x-auto rounded-xl border border-border/50 bg-secondary/10">
+          <table className="w-full text-right text-sm">
+            <thead>
+              <tr className="bg-secondary/40 text-muted-foreground">
+                <th className="p-3 font-bold w-1/4">التاريخ</th>
+                <th className="p-3 font-bold w-1/3">المناسبة</th>
+                <th className="p-3 font-bold w-1/4">الحالة</th>
+                <th className="p-3 font-bold w-1/6 text-center">إجراءات</th>
+              </tr>
+            </thead>
+            <tbody>
+              {currentYearHols.length === 0 ? (
+                <tr>
+                   <td colSpan={4} className="p-8 text-center text-muted-foreground font-medium">لا توجد إجازات مسجلة لهذا العام.</td>
+                </tr>
+              ) : currentYearHols.map((h, i) => {
+                // Check if worked
+                const daySessions = sessions.filter(s => s.startTime.toString().startsWith(h.date));
+                const workedHours = daySessions.filter(s => !s.dayStatus || ['work', 'rest_day_work'].includes(s.dayStatus)).reduce((acc, s) => acc + (s.duration || 0), 0) / 60;
+                const isPast = new Date(h.date) < new Date();
+                
+                return (
+                  <tr key={i} className="border-b border-border/50 hover:bg-secondary/20 transition-colors">
+                    <td className="p-3 font-mono text-xs">{h.date}</td>
+                    <td className="p-3 font-bold">{h.name}</td>
+                    <td className="p-3 text-xs">
+                      {workedHours > 0 ? (
+                        <span className="bg-emerald-500/10 text-emerald-500 font-bold px-2 py-1 rounded-full text-[10px]">
+                          تم العمل ({workedHours.toFixed(1)} س) - تحتسب بديلة
+                        </span>
+                      ) : isPast ? (
+                         <span className="bg-blue-500/10 text-blue-500 font-bold px-2 py-1 rounded-full text-[10px]">إجازة عادية</span>
+                      ) : (
+                         <span className="bg-secondary/40 text-muted-foreground font-bold px-2 py-1 rounded-full text-[10px]">قادمة</span>
+                      )}
+                    </td>
+                    <td className="p-3 text-center">
+                      <Button variant="ghost" size="icon" className="h-7 w-7 hover:bg-red-500/10 hover:text-red-500 transition-colors" onClick={() => {
+                          const newH = [...(settings.customHolidays || [])];
+                          const idx = newH.findIndex(x => x.date === h.date && x.name === h.name);
+                          if (idx > -1) newH.splice(idx, 1);
+                          updateSettings({ ...settings, customHolidays: newH });
+                      }}>
+                          <Trash2 className="w-3.5 h-3.5" />
+                      </Button>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+          
+          <div className="p-3 bg-card border-t border-border/50 flex flex-col sm:flex-row gap-2">
+              <Input 
+                type="date" 
+                className="flex-shrink border-border/50 bg-secondary/20 text-sm h-9 w-full sm:w-fit custom-holiday-date" 
+              />
+              <Input 
+                placeholder="اسم الإجازة (مثال: عطلة أجنبية، مناسبة شخصية)" 
+                className="flex-1 border-border/50 bg-secondary/20 text-sm h-9 custom-holiday-name" 
+              />
+              <Button 
+                variant="default" 
+                className="h-9 rounded-lg bg-indigo-500 hover:bg-indigo-600 text-white font-bold px-5"
+                onClick={(e) => {
+                    const parent = (e.target as HTMLElement).closest('.p-3');
+                    const dateInput = parent?.querySelector('.custom-holiday-date') as HTMLInputElement;
+                    const nameInput = parent?.querySelector('.custom-holiday-name') as HTMLInputElement;
+                    if (dateInput?.value && nameInput?.value) {
+                      const newH = [...(settings.customHolidays || []), { date: dateInput.value, name: nameInput.value }];
+                      updateSettings({ ...settings, customHolidays: newH.sort((a,b) => a.date.localeCompare(b.date)) });
+                      dateInput.value = '';
+                      nameInput.value = '';
+                    } else {
+                      toast.error('يرجى إدخال التاريخ والاسم');
+                    }
+                }}
+              >
+                <Plus className="w-4 h-4 ml-1" /> إضافة عطلة مخصصة
+              </Button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   const renderCurrentView = () => {
     switch (viewType) {
       case 'monthly':
@@ -555,35 +704,35 @@ export default function CalendarView() {
     <div className="flex flex-col gap-4 animate-in fade-in slide-in-from-bottom-4 duration-500 h-full pb-20" >
       
       {/* Header and Controls */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mt-2 px-2 shrink-0">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full bg-indigo-500/10 flex items-center justify-center text-indigo-500">
+      <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-5 mt-2 px-2 shrink-0">
+        <div className="flex items-center gap-4">
+          <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-indigo-500/20 to-purple-500/20 flex items-center justify-center text-indigo-500 shadow-sm border border-indigo-500/10">
             {viewType === 'shifts' ? <Briefcase className="w-6 h-6" /> : <CalendarIcon className="w-6 h-6" />}
           </div>
-          <div>
-            <h2 className="text-2xl font-bold">{viewType === 'shifts' ? 'جدولة الورديات' : 'التقويم المتقدم'}</h2>
-            <p className="text-muted-foreground text-sm flex items-center gap-2">
+          <div className="flex flex-col">
+            <h2 className="text-2xl font-black tracking-tight">{viewType === 'shifts' ? 'جدولة الورديات' : 'التقويم المتقدم'}</h2>
+            <div className="text-muted-foreground text-sm flex items-center gap-2 mt-0.5 font-medium">
               {viewType === 'monthly' && format(currentDate, 'MMMM yyyy', { locale: ar })}
               {viewType === 'weekly' && `الأسبوع: ${format(startOfWeek(currentDate, {weekStartsOn:6}), 'd MMM')} - ${format(endOfWeek(currentDate, {weekStartsOn:6}), 'd MMM')}`}
               {viewType === 'shifts' && 'إعداد الورديات والوظائف'}
-            </p>
+            </div>
           </div>
         </div>
 
-        <div className="flex flex-col sm:flex-row w-full md:w-auto items-center gap-3">
+        <div className="flex flex-col sm:flex-row w-full xl:w-auto items-stretch sm:items-center gap-3 bg-secondary/20 p-1.5 rounded-[1.5rem] shadow-sm border border-border/50 backdrop-blur-md">
           
           {/* Smart Toggle: Gregorian / Hijri */}
           {viewType !== 'shifts' && (
-             <div className="bg-card/40 backdrop-blur-2xl border border-white/5 p-1 rounded-full flex items-center gap-1 shadow-sm w-full sm:w-auto overflow-hidden">
+             <div className="flex bg-secondary/40 p-1 rounded-2xl w-full sm:w-auto">
                 <button 
                    onClick={() => setDisplayMode('gregorian')}
-                   className={`flex-1 sm:px-6 py-2 rounded-full text-xs font-bold transition-all duration-300 ${displayMode === 'gregorian' ? 'bg-primary/20 text-indigo-500 border border-indigo-500/10 shadow-inner' : 'text-muted-foreground hover:text-foreground'}`}
+                   className={`flex-1 sm:px-6 py-2 rounded-xl text-[13px] sm:text-sm transition-all duration-200 ${displayMode === 'gregorian' ? 'bg-background font-bold text-indigo-500 shadow-sm' : 'text-muted-foreground hover:text-foreground font-medium'}`}
                 >
                    ميلادي
                 </button>
                 <button 
                    onClick={() => setDisplayMode('hijri')}
-                   className={`flex-1 sm:px-6 py-2 rounded-full text-xs font-bold transition-all duration-300 ${displayMode === 'hijri' ? 'bg-primary/20 text-indigo-500 border border-indigo-500/10 shadow-inner' : 'text-muted-foreground hover:text-foreground'}`}
+                   className={`flex-1 sm:px-6 py-2 rounded-xl text-[13px] sm:text-sm transition-all duration-200 ${displayMode === 'hijri' ? 'bg-background font-bold text-indigo-500 shadow-sm' : 'text-muted-foreground hover:text-foreground font-medium'}`}
                 >
                    هجري
                 </button>
@@ -591,44 +740,47 @@ export default function CalendarView() {
           )}
 
           {viewType !== 'shifts' && (
-             <Button variant="outline" size="sm" onClick={() => setConverterOpen(true)} className="w-full sm:w-auto h-9 text-xs rounded-full font-bold bg-secondary/50">
-               <RefreshCw className="w-4 h-4 ml-1.5" /> محول التاريخ
+             <Button variant="outline" size="sm" onClick={() => setConverterOpen(true)} className="h-10 sm:h-auto rounded-2xl sm:rounded-xl font-bold bg-secondary/30 hover:bg-secondary/60 flex-shrink-0 px-4 border-transparent shadow-none" title="محول التاريخ">
+               <RefreshCw className="w-4 h-4 ml-1.5" />
+               <span className="inline-block">محول التاريخ</span>
              </Button>
           )}
 
+          {viewType !== 'shifts' && <div className="hidden sm:block w-px h-8 bg-border/50 self-center mx-1"></div>}
+
           {/* View Toggles */}
-          <div className="flex bg-secondary/30 p-1 rounded-xl w-full sm:w-auto flex-wrap sm:flex-nowrap gap-1">
+          <div className="flex bg-secondary/40 p-1 rounded-2xl w-full sm:w-auto flex-wrap sm:flex-nowrap gap-1">
             <Button 
               variant={viewType === 'monthly' && !isPaintingMode ? 'secondary' : 'ghost'} 
               size="sm" 
-              className={`flex-1 min-w-[70px] h-8 text-xs rounded-lg ${viewType === 'monthly' && !isPaintingMode ? 'font-bold bg-card shadow-sm' : ''}`}
+              className={`flex-1 min-w-[70px] h-10 text-[13px] sm:text-sm rounded-xl transition-all ${viewType === 'monthly' && !isPaintingMode ? 'font-bold bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
               onClick={() => { setViewType('monthly'); setIsPaintingMode(false); }}
             >
-              <LayoutGrid className="w-3.5 h-3.5 mr-1.5" /> شهري
+              <LayoutGrid className="w-4 h-4 mr-1.5" /> شهري
             </Button>
             <Button 
               variant={viewType === 'weekly' ? 'secondary' : 'ghost'} 
               size="sm" 
-              className={`flex-1 min-w-[70px] h-8 text-xs rounded-lg ${viewType === 'weekly' ? 'font-bold bg-card shadow-sm' : ''}`}
+              className={`flex-1 min-w-[70px] h-10 text-[13px] sm:text-sm rounded-xl transition-all ${viewType === 'weekly' ? 'font-bold bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
               onClick={() => { setViewType('weekly'); setIsPaintingMode(false); }}
             >
-              <List className="w-3.5 h-3.5 mr-1.5" /> أسبوعي
+              <List className="w-4 h-4 mr-1.5" /> أسبوعي
             </Button>
             <Button 
               variant={isPaintingMode ? 'default' : 'ghost'} 
               size="sm" 
-              className={`flex-1 min-w-[70px] h-8 text-xs rounded-lg ${isPaintingMode ? 'font-bold bg-indigo-500 hover:bg-indigo-600 text-white shadow-sm' : ''}`}
+              className={`flex-1 min-w-[70px] h-10 text-[13px] sm:text-sm rounded-xl transition-all ${isPaintingMode ? 'font-bold shadow-md bg-indigo-500 hover:bg-indigo-600 text-white' : 'text-muted-foreground hover:text-foreground'}`}
               onClick={() => { setViewType('monthly'); setIsPaintingMode(true); }}
             >
-              <Palette className="w-3.5 h-3.5 mr-1.5" /> جدولة
+              <Palette className="w-4 h-4 mr-1.5" /> جدولة
             </Button>
             <Button 
               variant={viewType === 'shifts' ? 'secondary' : 'ghost'} 
               size="sm" 
-              className={`flex-1 min-w-[70px] h-8 text-xs rounded-lg ${viewType === 'shifts' ? 'font-bold bg-card shadow-sm' : ''}`}
+              className={`flex-1 min-w-[70px] h-10 text-[13px] sm:text-sm rounded-xl transition-all ${viewType === 'shifts' ? 'font-bold bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
               onClick={() => { setViewType('shifts'); setIsPaintingMode(false); }}
             >
-              <Briefcase className="w-3.5 h-3.5 mr-1.5" /> الوظائف والورديات
+              <Briefcase className="w-4 h-4 mr-1.5" /> وظائف
             </Button>
           </div>
 
@@ -671,6 +823,7 @@ export default function CalendarView() {
           </div>
         )}
         {renderCurrentView()}
+        {renderHolidaysTable()}
       </div>
 
       <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>

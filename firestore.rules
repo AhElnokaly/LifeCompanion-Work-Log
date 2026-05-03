@@ -1,0 +1,132 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Default Deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Global Helpers
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function incoming() { return request.resource.data; }
+    function existing() { return resource.data; }
+
+    match /users/{userId} {
+      match /settings/{documentId} {
+        function isValidSettings(data) {
+          return data.keys().hasAll(['userId', 'system', 'dailyHours', 'monthlyPermissions', 'annualLeaves'])
+                 && data.userId == userId;
+        }
+
+        allow read, delete: if isOwner(userId) && isValidId(documentId);
+        allow create: if isOwner(userId) && isValidId(documentId) && isValidSettings(incoming());
+        allow update: if isOwner(userId) && isValidId(documentId) && isValidSettings(incoming())
+                      && incoming().userId == existing().userId;
+        allow list: if isOwner(userId);
+      }
+
+      match /sessions/{sessionId} {
+         function isValidSession(data) {
+            return data.keys().hasAll(['userId', 'startTime', 'breaks', 'location', 'notes', 'type', 'dayStatus'])
+                   && data.userId == userId;
+         }
+
+         allow read, delete: if isOwner(userId) && isValidId(sessionId);
+         allow create: if isOwner(userId) && isValidId(sessionId) && isValidSession(incoming());
+         allow update: if isOwner(userId) && isValidId(sessionId) && isValidSession(incoming())
+                       && incoming().userId == existing().userId;
+         allow list: if isOwner(userId);
+      }
+
+      match /jobs/{jobId} {
+         function isValidJob(data) {
+            return data.keys().hasAll(['userId', 'name', 'color', 'type'])
+                   && data.userId == userId;
+         }
+
+         allow read, delete: if isOwner(userId) && isValidId(jobId);
+         allow create: if isOwner(userId) && isValidId(jobId) && isValidJob(incoming());
+         allow update: if isOwner(userId) && isValidId(jobId) && isValidJob(incoming())
+                       && incoming().userId == existing().userId;
+         allow list: if isOwner(userId);
+      }
+
+      match /projects/{projectId} {
+         function isValidProject(data) {
+            return data.keys().hasAll(['userId', 'name', 'color', 'totalHours'])
+                   && data.userId == userId;
+         }
+
+         allow read, delete: if isOwner(userId) && isValidId(projectId);
+         allow create: if isOwner(userId) && isValidId(projectId) && isValidProject(incoming());
+         allow update: if isOwner(userId) && isValidId(projectId) && isValidProject(incoming())
+                       && incoming().userId == existing().userId;
+         allow list: if isOwner(userId);
+      }
+
+      match /shifts/{shiftId} {
+         function isValidShift(data) {
+            return data.keys().hasAll(['userId', 'name', 'startTime', 'endTime'])
+                   && data.userId == userId;
+         }
+
+         allow read, delete: if isOwner(userId) && isValidId(shiftId);
+         allow create: if isOwner(userId) && isValidId(shiftId) && isValidShift(incoming());
+         allow update: if isOwner(userId) && isValidId(shiftId) && isValidShift(incoming())
+                       && incoming().userId == existing().userId;
+         allow list: if isOwner(userId);
+      }
+
+      match /moodLogs/{moodLogId} {
+         function isValidMoodLog(data) {
+            return data.keys().hasAll(['userId', 'sessionId', 'date'])
+                   && data.userId == userId;
+         }
+
+         allow read, delete: if isOwner(userId) && isValidId(moodLogId);
+         allow create: if isOwner(userId) && isValidId(moodLogId) && isValidMoodLog(incoming());
+         allow update: if isOwner(userId) && isValidId(moodLogId) && isValidMoodLog(incoming())
+                       && incoming().userId == existing().userId;
+         allow list: if isOwner(userId);
+      }
+
+      match /alarms/{alarmId} {
+         function isValidAlarm(data) {
+            return data.keys().hasAll(['userId', 'timing', 'anchor', 'minutes', 'ringtone', 'enabled'])
+                   && data.userId == userId;
+         }
+
+         allow read, delete: if isOwner(userId) && isValidId(alarmId);
+         allow create: if isOwner(userId) && isValidId(alarmId) && isValidAlarm(incoming());
+         allow update: if isOwner(userId) && isValidId(alarmId) && isValidAlarm(incoming())
+                       && incoming().userId == existing().userId;
+         allow list: if isOwner(userId);
+      }
+
+      match /payments/{paymentId} {
+         function isValidPayment(data) {
+            return data.keys().hasAll(['userId', 'jobId', 'amount', 'expectedDate', 'status'])
+                   && data.userId == userId;
+         }
+
+         allow read, delete: if isOwner(userId) && isValidId(paymentId);
+         allow create: if isOwner(userId) && isValidId(paymentId) && isValidPayment(incoming());
+         allow update: if isOwner(userId) && isValidId(paymentId) && isValidPayment(incoming())
+                       && incoming().userId == existing().userId;
+         allow list: if isOwner(userId);
+      }
+    }
+  }
+}

@@ -1,0 +1,146 @@
+{
+  "entities": {
+    "WorkSettings": {
+      "title": "WorkSettings",
+      "description": "User specific application settings",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "system": { "type": "string" },
+        "dailyHours": { "type": "number" },
+        "monthlyPermissions": { "type": "number" },
+        "annualLeaves": { "type": "number" },
+        "restDays": { "type": "array" }
+      },
+      "required": ["userId", "system", "dailyHours", "monthlyPermissions", "annualLeaves"]
+    },
+    "WorkSession": {
+      "title": "WorkSession",
+      "description": "Logged work session",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "jobId": { "type": "string" },
+        "projectId": { "type": "string" },
+        "startTime": { "type": "string" },
+        "endTime": { "type": "string" },
+        "duration": { "type": "number" },
+        "breaks": { "type": "number" },
+        "location": { "type": "string" },
+        "notes": { "type": "string" },
+        "type": { "type": "string" },
+        "dayStatus": { "type": "string" }
+      },
+      "required": ["userId", "startTime", "breaks", "location", "notes", "type", "dayStatus"]
+    },
+    "Job": {
+       "title": "Job",
+       "description": "Job Definition",
+       "type": "object",
+       "properties": {
+         "userId": { "type": "string" },
+         "name": { "type": "string" },
+         "color": { "type": "string" },
+         "type": { "type": "string" }
+       },
+       "required": ["userId", "name", "color", "type"]
+    },
+    "Project": {
+       "title": "Project",
+       "description": "Project Definition",
+       "type": "object",
+       "properties": {
+         "userId": { "type": "string" },
+         "name": { "type": "string" },
+         "color": { "type": "string" },
+         "totalHours": { "type": "number" }
+       },
+       "required": ["userId", "name", "color", "totalHours"]
+    },
+    "ScheduledShift": {
+       "title": "ScheduledShift",
+       "description": "Shift schedule for the user",
+       "type": "object",
+       "properties": {
+         "userId": { "type": "string" },
+         "jobId": { "type": "string" },
+         "name": { "type": "string" },
+         "startTime": { "type": "string" },
+         "endTime": { "type": "string" }
+       },
+       "required": ["userId", "name", "startTime", "endTime"]
+    },
+    "MoodLog": {
+       "title": "MoodLog",
+       "description": "Mood log linked to session",
+       "type": "object",
+       "properties": {
+         "userId": { "type": "string" },
+         "sessionId": { "type": "string" },
+         "date": { "type": "string" }
+       },
+       "required": ["userId", "sessionId", "date"]
+    },
+    "AlarmConfig": {
+       "title": "AlarmConfig",
+       "description": "Custom alarms",
+       "type": "object",
+       "properties": {
+         "userId": { "type": "string" },
+         "timing": { "type": "string" },
+         "anchor": { "type": "string" },
+         "minutes": { "type": "number" },
+         "ringtone": { "type": "string" },
+         "enabled": { "type": "boolean" }
+       },
+       "required": ["userId", "timing", "anchor", "minutes", "ringtone", "enabled"]
+    },
+    "PaymentLog": {
+       "title": "PaymentLog",
+       "description": "Payment history details",
+       "type": "object",
+       "properties": {
+         "userId": { "type": "string" },
+         "jobId": { "type": "string" },
+         "amount": { "type": "number" },
+         "expectedDate": { "type": "string" },
+         "status": { "type": "string" }
+       },
+       "required": ["userId", "jobId", "amount", "expectedDate", "status"]
+    }
+  },
+  "firestore": {
+    "users/{userId}/settings/{documentId}": {
+      "schema": { "$ref": "#/entities/WorkSettings" },
+      "description": "User specific app settings"
+    },
+    "users/{userId}/sessions/{sessionId}": {
+      "schema": { "$ref": "#/entities/WorkSession" },
+      "description": "User's work sessions"
+    },
+    "users/{userId}/jobs/{jobId}": {
+      "schema": { "$ref": "#/entities/Job" },
+      "description": "User's jobs"
+    },
+    "users/{userId}/projects/{projectId}": {
+        "schema": { "$ref": "#/entities/Project" },
+        "description": "User's projects"
+    },
+    "users/{userId}/shifts/{shiftId}": {
+        "schema": { "$ref": "#/entities/ScheduledShift" },
+        "description": "User's shifts"
+    },
+    "users/{userId}/moodLogs/{moodLogId}": {
+        "schema": { "$ref": "#/entities/MoodLog" },
+        "description": "User's mood logs"
+    },
+    "users/{userId}/alarms/{alarmId}": {
+        "schema": { "$ref": "#/entities/AlarmConfig" },
+        "description": "User's alarms"
+    },
+    "users/{userId}/payments/{paymentId}": {
+        "schema": { "$ref": "#/entities/PaymentLog" },
+        "description": "User's payments"
+    }
+  }
+}

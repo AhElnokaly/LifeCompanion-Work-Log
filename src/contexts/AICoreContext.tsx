@@ -18,7 +18,7 @@ export const AICoreProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const getSettingsSafely = () => {
     try {
       // Direct local storage read just to be totally safe if context is not fully ready
-      const stored = localStorage.getItem('lifecompanion_settings');
+      const stored = localStorage.getItem('worklog_settings');
       if (stored) return JSON.parse(stored);
     } catch(e) {}
     return null;
@@ -37,7 +37,7 @@ export const AICoreProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       
       const ai = new GoogleGenAI({ apiKey });
       const response = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
+        model: 'gemini-1.5-pro',
         contents: prompt,
         config: {
           systemInstruction: systemInstructionOverride || 'أنت مساعد ذكي للإنتاجية في تطبيق يسمى Life Companion (رفيق الحياة). وظيفتك هي إرشاد المستخدم لتحقيق التوازن بين العمل والحياة الشخصية، وتحليل أوقات عمله لتنبيهه عن أخطار الاحتراق الوظيفي. تواصل دائماً باللغة العربية بأسلوب ودود، مشجع، واحترافي. لا تستخدم مصطلحات تقنية معقدة. ركز على تقديم نصائح قابلة للتنفيذ.',

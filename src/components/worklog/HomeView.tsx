@@ -1,18 +1,19 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Button } from '../ui/button';
-import { Play, Square, Clock, Calendar, Coffee, FileText, Check, Bell, Zap, Timer, Shuffle, Brain, Loader2, Send, Activity } from 'lucide-react';
+import { Play, Square, Clock, Calendar, Coffee, FileText, Check, Bell, Zap, Timer, Shuffle, Brain, Loader2, Send, Activity, Moon, Sun, Sunrise, Sunset, Plus, Minus, LogIn, LogOut, Palmtree } from 'lucide-react';
 import { useWorkLog, isPublicHoliday } from '../../contexts/WorkLogContext';
 import { useAICore } from '../../contexts/AICoreContext';
 import { format, differenceInMinutes, addMinutes } from 'date-fns';
 import { ar } from 'date-fns/locale';
 import { Input } from '../ui/input';
+import { SmartTimePicker } from '../ui/smart-time-picker';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '../ui/sheet';
 import { WorkSession } from '../../types';
 import { toast } from 'sonner';
-import { detectPermissionType, analyzeAttendancePattern } from '../../lib/smartAttendance';
+import { detectPermissionType, generateSmartInsights, AttendanceInsight } from '../../lib/smartAttendance';
 
 export default function HomeView() {
-  const { activeSession, sessions, jobs, shifts, startSession, addSession, endSession, settings, getBalances, logSpecialSession, updateSession, updateActiveSession, toggleBreak } = useWorkLog();
+  const { activeSession, sessions, jobs, shifts, shiftAssignments, startSession, addSession, endSession, settings, updateSettings, getBalances, logSpecialSession, updateSession, updateActiveSession, toggleBreak } = useWorkLog();
   const { askAI } = useAICore();
   const [now, setNow] = useState(new Date());
 
@@ -51,26 +52,42 @@ export default function HomeView() {
   const [selectedCompType, setSelectedCompType] = useState<'1_day' | '1_day_plus_overtime' | '2_days'>('1_day');
   const [showManualEntry, setShowManualEntry] = useState(false);
   const [manualEntryTime, setManualEntryTime] = useState(format(now, 'HH:mm'));
+  
+  const [isLeaveSheetOpen, setIsLeaveSheetOpen] = useState(false);
+  const [isPermissionSheetOpen, setIsPermissionSheetOpen] = useState(false);
 
   const [retroDialogOpen, setRetroDialogOpen] = useState(false);
   const [retroDate, setRetroDate] = useState(format(new Date(now.getTime() - 86400000), 'yyyy-MM-dd'));
   const [retroStart, setRetroStart] = useState('09:00');
   const [retroEnd, setRetroEnd] = useState('17:00');
-  const [retroType, setRetroType] = useState<'salary' | 'freelance' | 'project' | 'annual_leave' | 'sick_leave' | 'half_day_leave' | 'rest_day_work'>('salary');
+  const [retroType, setRetroType] = useState<'salary' | 'freelance' | 'project' | 'annual_leave' | 'sick_leave' | 'half_day_leave' | 'casual_leave' | 'permission' | 'compensation' | 'rest_day_work'>('salary');
   const [retroJobId, setRetroJobId] = useState<string>('none');
   const [retroBreak, setRetroBreak] = useState('0');
   const [retroCompType, setRetroCompType] = useState<'1_day' | '1_day_plus_overtime' | '2_days'>('1_day');
 
+  const activeInsight = useMemo(() => {
+     const insights = generateSmartInsights(sessions, settings, jobs, shifts, shiftAssignments);
+     if (!insights || insights.length === 0) return null;
+     // Pick a random insight based on today's date so it doesn't flicker too often, or just random
+     const daySeed = new Date().getDate();
+     return insights[daySeed % insights.length];
+  }, [sessions, settings, jobs, shifts, shiftAssignments]);
 
-  const getAvailableCompensations = () => {
+
+  const getAvailableCompensations = (dateBeingProcessed: string = format(now, 'yyyy-MM-dd')) => {
     return sessions.filter(s => s.isRestDayWork && !s.isArchived).map(s => {
       let accrued = 0;
       if (s.restDayCompensation === '1_day' || s.restDayCompensation === '1_day_plus_overtime') accrued = 1;
       else if (s.restDayCompensation === '2_days') accrued = 2;
 
+      // Check validity
+      const validityDays = settings.compensationValidityDays || 30; // default 30
+      const daysSinceEarned = (new Date(dateBeingProcessed).getTime() - new Date(s.startTime).getTime()) / (1000 * 60 * 60 * 24);
+      const isExpired = daysSinceEarned > validityDays && !s.compensationException;
+
       // Count how many compensation leaves point to this session
       const taken = sessions.filter(t => t.dayStatus === 'compensation' && t.linkedCompensationSessionId === s.id && !t.isArchived).length;
-      return { ...s, availableDays: accrued - taken };
+      return { ...s, availableDays: accrued - taken, isExpired, daysUntilExpiry: Math.floor(validityDays - daysSinceEarned) };
     }).filter(s => s.availableDays > 0);
   };
 
@@ -165,6 +182,8 @@ export default function HomeView() {
   
   const isOnFullDayLeave = todaySessions.some(s => 
     (s.dayStatus === 'annual_leave' && (s.duration || 0) >= targetMins) || 
+    s.dayStatus === 'casual_leave' ||
+    s.dayStatus === 'sick_leave' ||
     s.dayStatus === 'compensation'
   );
 
@@ -406,7 +425,7 @@ export default function HomeView() {
     const endTimeDate = new Date(endStr);
     
     // Check validity
-    if (endTimeDate < startTimeDate && !['annual_leave', 'sick_leave', 'half_day_leave'].includes(retroType)) {
+    if (endTimeDate < startTimeDate && !['annual_leave', 'sick_leave', 'half_day_leave', 'casual_leave', 'permission', 'compensation'].includes(retroType)) {
       toast.error("وقت الانصراف يجب أن يكون بعد وقت الحضور");
       return;
     }
@@ -419,14 +438,19 @@ export default function HomeView() {
 
     const isRestDayWork = retroType === 'rest_day_work';
 
-    if (['annual_leave', 'sick_leave', 'half_day_leave'].includes(retroType)) {
+    if (['annual_leave', 'sick_leave', 'half_day_leave', 'casual_leave', 'permission', 'compensation'].includes(retroType)) {
+       if (retroType === 'compensation' && !compensationLeaveSourceId) {
+          toast.error("يرجى اختيار يوم العمل الإضافي المراد استبداله");
+          return;
+       }
        addSession({
          id: Date.now().toString(),
          startTime: startIso,
          endTime: startIso,
          type: 'salary',
-         duration: retroType === 'half_day_leave' ? (settings.dailyHours * 60) / 2 : settings.dailyHours * 60,
+         duration: retroType === 'half_day_leave' ? (settings.dailyHours * 60) / 2 : (retroType === 'permission' ? 60 : settings.dailyHours * 60),
          dayStatus: retroType as any,
+         linkedCompensationSessionId: retroType === 'compensation' ? compensationLeaveSourceId : undefined,
          location: 'remote',
          notes: noteText || 'أدخلت يدويا من سجل الأيام السابقة'
        } as any);
@@ -485,8 +509,9 @@ export default function HomeView() {
     try {
       const response = await askAI(
         `قم بتحليل هذا النص: "${aiPrompt}". واستخرج منه البيانات التالية بتنسيق JSON فقط:
-        - action: (إما "log_past_session" إذا كان يذكر عملاً انتهى، أو "start_new" إذا كان سيبدأ الآن)
-        - durationMinutes: (المدة بالدقائق إذا صرح بها، وإلا 0)
+        - action: (إما "log_past_session" للإضافة المباشرة ليوم عمل، أو "start_new" للبدء الآن، أو "log_leave" لتسجيل إجازة، أو "log_permission" لإذن أو نصف يوم)
+        - leaveType: (إذا كان إجازة: "annual_leave", "sick_leave", "casual_leave", وإلا اتركه فارغ)
+        - durationMinutes: (المدة بالدقائق إذا صرح بها للاستئذان أو العمل، وإلا 0)
         - breakMinutes: (مدة الاستراحة بالدقائق إن ذكرها، وإلا 0)
         - projectKeywords: (كلمة دالة على المشروع إذا ذكر، وإلا فارغ)
         - notes: (توليد ملاحظة احترافية بناءً على المدخل)`,
@@ -495,6 +520,7 @@ export default function HomeView() {
           type: "object",
           properties: {
              action: { type: "string" },
+             leaveType: { type: "string" },
              durationMinutes: { type: "number" },
              breakMinutes: { type: "number" },
              projectKeywords: { type: "string" },
@@ -512,7 +538,11 @@ export default function HomeView() {
          if (match) matchedJobId = match.id;
       }
 
-      if (parsed.action === 'log_past_session' && parsed.durationMinutes > 0) {
+      if (parsed.action === 'log_leave') {
+         logSpecialSession((parsed.leaveType as any) || 'casual_leave', { note: parsed.notes || 'تسجيل ذكي للإجازة' });
+      } else if (parsed.action === 'log_permission') {
+         logSpecialSession('permission', { hours: (parsed.durationMinutes || 60) / 60, note: parsed.notes || 'تسجيل ذكي للإذن' });
+      } else if (parsed.action === 'log_past_session' && parsed.durationMinutes > 0) {
          // Create a past session right now
          const end = new Date();
          const start = addMinutes(end, -parsed.durationMinutes);
@@ -556,33 +586,47 @@ export default function HomeView() {
 
   const displayHours = (totalMinutesToday / 60).toFixed(1);
 
+  // Dynamic header based on time of day
+  const hour = now.getHours();
+  let timeGreeting = '';
+  let timeGradient = '';
+  if (hour >= 5 && hour < 12) {
+    timeGreeting = 'صباح الخير';
+    timeGradient = 'from-amber-400 to-orange-500'; 
+  } else if (hour >= 12 && hour < 17) {
+    timeGreeting = 'طاب يومك';
+    timeGradient = 'from-sky-400 to-blue-600'; 
+  } else if (hour >= 17 && hour < 20) {
+    timeGreeting = 'مساء الخير';
+    timeGradient = 'from-rose-400 to-purple-600'; 
+  } else {
+    timeGreeting = 'طابت ليلتك';
+    timeGradient = 'from-indigo-800 to-slate-900'; 
+  }
+
   return (
     <div className="flex flex-col h-full animate-in fade-in zoom-in-95 duration-700 max-w-sm w-full mx-auto pb-4" dir="ltr">
       
       {/* Date / Title Row */}
-      <div className="flex justify-between items-start px-1 mb-2 shrink-0 pt-2" dir="rtl">
-        <div className="flex flex-col">
-          <h2 className="text-xl font-bold bg-gradient-to-r from-foreground to-foreground/80 bg-clip-text text-transparent">سجل يومك</h2>
-          <p className="text-[10px] font-bold text-muted-foreground mt-1 tracking-wide">{format(now, 'EEEE، d MMMM', { locale: ar })}</p>
-          <p className="text-[9px] font-medium text-muted-foreground/80 mt-0.5">
-             {new Intl.DateTimeFormat('ar-SA-u-ca-islamic', { day: 'numeric', month: 'long', year: 'numeric' }).format(now)}
-          </p>
-        </div>
-        <div className="flex gap-2 items-center mt-1">
-           {!isFreelance && (
-             <div className="text-[10px] text-muted-foreground bg-card shadow-sm px-2.5 py-1 rounded-full border border-border flex items-center gap-1 font-medium">
-               <Calendar className="w-3 h-3 text-emerald-500" />
-               الإجازات: {balances.remainingAnnualLeaves}
-             </div>
-           )}
-           <div className="w-8 h-8 rounded-full bg-card shadow-sm border border-border flex items-center justify-center">
-             <Bell className="w-3.5 h-3.5 text-foreground/80" />
+      <div className={`bg-gradient-to-br ${timeGradient} rounded-[2rem] p-6 text-white text-center shadow-lg relative overflow-hidden shrink-0 mt-2 mx-1`} dir="rtl">
+        <div className="absolute top-0 right-0 -mr-8 -mt-8 w-32 h-32 rounded-full border-[16px] border-white/10 opacity-50"></div>
+        <div className="relative z-10 flex flex-col items-center">
+           <div className="flex items-center justify-center gap-2 mb-2">
+             {hour >= 5 && hour < 12 ? <Sunrise className="w-5 h-5 text-white/90" /> : 
+              hour >= 12 && hour < 17 ? <Sun className="w-5 h-5 text-white/90" /> : 
+              hour >= 17 && hour < 20 ? <Sunset className="w-5 h-5 text-white/90" /> : 
+              <Moon className="w-5 h-5 text-white/90" />}
+             <span className="text-sm font-medium text-white/90">{timeGreeting}</span>
            </div>
+           <h2 className="text-2xl font-bold mb-1">
+             {format(now, 'EEEE، d MMMM', { locale: ar })}
+           </h2>
+           <p className="text-sm text-white/80 mt-1">سجل حضورك اليوم بدقة وأناقة.</p>
         </div>
       </div>
 
       {isOnFullDayLeave ? (
-         <div className="flex flex-col items-center justify-center bg-card/40 backdrop-blur-2xl border border-white/5 rounded-[2rem] p-8 shadow-2xl my-auto text-center mx-1 flex-1" dir="rtl">
+         <div className="flex flex-col items-center justify-center bg-card/40 backdrop-blur-2xl border border-white/5 rounded-[2rem] p-8 shadow-2xl my-auto text-center mx-1 flex-1 mt-4" dir="rtl">
             {getLeaveIcon()}
             <span className="text-lg font-bold tracking-wide">
               {getLeaveText()}
@@ -590,132 +634,99 @@ export default function HomeView() {
             <p className="text-xs text-muted-foreground mt-2 opacity-60 leading-relaxed">
               نتمنى لك يوماً سعيداً بعيداً عن ضغوط العمل
             </p>
-            <Button variant="outline" className="mt-6 rounded-full h-10 px-6 text-sm" onClick={() => startSpecificSession('salary')}>
-              تخطي وبدء العمل
-            </Button>
          </div>
       ) : (
-        <div className="flex flex-col gap-3 mx-1 flex-1 justify-center min-h-0 relative z-10 pb-16">
-          
-          {/* Card 1: Main Metric & Check-out */}
-          <div className="relative bg-card rounded-[2rem] p-6 shadow-sm border border-border/50 flex flex-col items-center gap-6 shrink-0 mt-4">
-            
-            <div className="flex flex-col items-center w-full" dir="rtl">
-              <span className="text-sm font-bold text-foreground mb-4">
-                {isTodayRestDay && !activeSession ? 'هل لديك عمل إضافي اليوم؟' : 'سجل اليوم:'}
-              </span>
-              
-              <div className="flex items-center justify-center w-48 h-48 rounded-full border-8 border-secondary relative mb-2">
-                 <svg className="absolute inset-0 w-full h-full -rotate-90" viewBox="0 0 100 100">
-                    <circle cx="50" cy="50" r="46" fill="transparent" stroke="currentColor" strokeWidth="8" className="text-emerald-500 opacity-20" />
-                    <circle cx="50" cy="50" r="46" fill="transparent" stroke="currentColor" strokeWidth="8" className="text-emerald-500 transition-all duration-1000 ease-out" 
-                       strokeDasharray={`${Math.min(289, (totalMinutesToday / (settings.dailyHours * 60)) * 289)} 289`}
-                    />
-                 </svg>
-                 <div className="flex flex-col items-center justify-center relative z-10">
-                    <span className="text-5xl font-black tracking-tighter text-foreground drop-shadow-sm leading-none">{displayHours}</span>
-                    <span className="text-sm text-foreground/60 font-medium mt-1">ساعات</span>
-                 </div>
-              </div>
-            </div>
+        <div className="flex flex-col gap-3 mx-1 flex-1 min-h-0 relative z-10 pb-16 mt-4">
+        
 
-            <button 
-              onClick={() => activeSession ? handleEndSession() : handlePreEntrySubmit()}
-              className={`w-full rounded-[1.2rem] h-14 font-extrabold text-lg transition-transform active:scale-95 flex items-center justify-center gap-2 ${
-                activeSession 
-                  ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-500/20 shadow-lg' 
-                  : selectedPreEntryMode === 'regular' ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-500/20 shadow-lg'
-                  : selectedPreEntryMode === 'half_day_leave' ? 'bg-orange-500 hover:bg-orange-600 text-white shadow-orange-500/20 shadow-lg'
-                  : 'bg-indigo-500 hover:bg-indigo-600 text-white shadow-indigo-500/20 shadow-lg'
-              }`}
-            >
-              {activeSession ? (
-                <>
-                   <Square className="fill-current w-5 h-5 flex-shrink-0" />
-                   تسجيل الانصراف
-                </>
-              ) : (
-                <>
-                   {selectedPreEntryMode === 'regular' ? (
-                     <>تسجيل الحضور</>
-                   ) : selectedPreEntryMode === 'half_day_leave' ? (
-                     <>تسجيل نصف يوم</>
-                   ) : (
-                     <>تسجيل إجازة</>
-                   )}
-                </>
-              )}
-            </button>
-            {!activeSession && selectedPreEntryMode === 'regular' && (
-              <div className="flex justify-center -mt-2 w-full">
-                 <Button variant="link" className="text-[11px] font-medium text-muted-foreground h-auto p-0 hover:text-foreground" onClick={() => setShowManualEntry(true)}>
-                   تسجيل وقت مختلف؟
-                 </Button>
-              </div>
-            )}
 
-            {!activeSession && (
-               <div className="flex w-full gap-2 overflow-x-auto pb-1 scrollbar-none snap-x mt-1" dir="rtl">
-                 <Button 
-                   variant={selectedPreEntryMode === 'regular' ? 'default' : 'secondary'} 
-                   className={`snap-start shrink-0 rounded-xl h-9 px-4 text-xs font-bold flex-1 ${selectedPreEntryMode === 'regular' ? 'bg-emerald-600 text-white' : 'bg-secondary/50 text-foreground hover:bg-secondary'}`}
-                   onClick={() => setSelectedPreEntryMode('regular')}
-                 >
-                   {isTodayRestDay ? 'إضافي' : 'عمل منتظم'}
-                 </Button>
-                 <Button 
-                   variant={selectedPreEntryMode === 'half_day_leave' ? 'default' : 'secondary'} 
-                   className={`snap-start shrink-0 rounded-xl h-9 px-4 text-xs font-bold flex-1 ${selectedPreEntryMode === 'half_day_leave' ? 'bg-orange-500 text-white' : 'bg-secondary/50 text-foreground hover:bg-secondary'}`}
-                   onClick={() => setSelectedPreEntryMode('half_day_leave')}
-                 >
-                   نصف يوم
-                 </Button>
-                 <Button 
-                   variant={selectedPreEntryMode === 'annual_leave' ? 'default' : 'secondary'} 
-                   className={`snap-start shrink-0 rounded-xl h-9 px-4 text-xs font-bold flex-1 ${selectedPreEntryMode === 'annual_leave' ? 'bg-indigo-500 text-white' : 'bg-secondary/50 text-foreground hover:bg-secondary'}`}
-                   onClick={() => setSelectedPreEntryMode('annual_leave')}
-                 >
-                   إجازة كاملة
-                 </Button>
-               </div>
-            )}
-
-            {/* Smart Insights for non-active sessions */}
-            {!activeSession && analyzeAttendancePattern(sessions) && (
-              <div className="w-full bg-gradient-to-br from-indigo-500/10 to-purple-500/10 border border-indigo-500/20 rounded-2xl p-4 mt-2 flex gap-3 text-right" dir="rtl">
-                 <div className="bg-indigo-500/20 w-10 h-10 rounded-xl shrink-0 flex flex-col items-center justify-center">
-                    <Brain className="w-5 h-5 text-indigo-500" />
-                 </div>
-                 <div className="flex flex-col flex-1">
-                    <span className="text-[11px] font-extrabold text-indigo-500 uppercase tracking-widest mb-1">الذكاء الاصطناعي</span>
-                    <span className="text-sm font-bold text-foreground">نمط حضورك المعتاد</span>
-                    <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
-                      خلال آخر 30 يوماً، تحضر عادةً الساعة <strong className="text-foreground">{analyzeAttendancePattern(sessions)?.formattedStart}</strong> وتغادر <strong className="text-foreground">{analyzeAttendancePattern(sessions)?.formattedEnd}</strong> بمتوسط <strong className="text-foreground">{analyzeAttendancePattern(sessions)?.avgDurationH} ساعة</strong>.
-                    </p>
-                 </div>
-              </div>
-            )}
-            
-            {/* Action Bar (Only shows during active session) */}
-            {activeSession && (
-              <div className="flex gap-2 w-full mt-2 z-10">
-                <Button 
-                  variant="secondary" 
-                  className={`flex-1 rounded-xl h-10 font-bold shadow-sm border border-border/50 text-xs ${activeSession.activeBreakStartTime ? 'bg-amber-500/20 text-amber-500 hover:bg-amber-500/30' : ''}`}
-                  onClick={toggleBreak}
-                >
-                  <Coffee className="w-3.5 h-3.5 mr-1" />
-                  {activeSession.activeBreakStartTime ? 'إنهاء الاستراحة' : 'استراحة'}
-                </Button>
-                <Button variant="secondary" className="flex-1 rounded-xl h-10 font-bold shadow-sm border border-border/50 bg-secondary/40 text-xs" onClick={() => setDispatcherOpen(true)}>
-                  <Shuffle className="w-3.5 h-3.5 mr-1" /> تبديل
-                </Button>
-                <Button variant="secondary" className="flex-1 rounded-xl h-10 font-bold shadow-sm border border-border/50 bg-secondary/40 text-xs" onClick={openNoteDialog}>
-                  <FileText className="w-3.5 h-3.5 mr-1" /> مذكرات
-                </Button>
-              </div>
-            )}
+        {/* Today's Details Card */}
+        <div className="bg-card rounded-[2rem] p-6 border border-border/50 shadow-sm shrink-0 flex flex-col gap-6" dir="rtl">
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-bold text-foreground">تفاصيل اليوم</span>
+            <Clock className="w-4 h-4 text-muted-foreground" />
           </div>
+          <div className="grid grid-cols-2 gap-y-6 gap-x-4 text-center">
+            <div className="flex flex-col gap-1.5 justify-center group relative">
+               <span className="text-xs text-muted-foreground font-medium flex items-center justify-center gap-1">
+                 تسجيل دخول
+               </span>
+               <span className="text-xl font-bold font-mono tracking-tight">{activeSession ? format(new Date(activeSession.startTime), "HH:mm") : '--:--'}</span>
+            </div>
+            <div className="flex flex-col gap-1.5 justify-center">
+               <span className="text-xs text-muted-foreground font-medium">تسجيل خروج</span>
+               <span className="text-xl font-bold font-mono tracking-tight">{!activeSession || expectedCheckoutStr === '--:--' ? '--:--' : expectedCheckoutStr.replace('ص', '').replace('م', '').trim()}</span>
+            </div>
+            <div className="flex flex-col gap-1.5 justify-center">
+               <span className="text-xs text-muted-foreground font-medium">الإجمالي</span>
+               <span className="text-xl font-bold font-mono tracking-tight">{displayHours} <span className="text-sm font-normal text-muted-foreground">س</span></span>
+            </div>
+            <div className="flex flex-col gap-1.5 justify-center">
+               <span className="text-xs text-muted-foreground font-medium">س إضافي</span>
+               <span className="text-xl font-bold font-mono tracking-tight text-emerald-500">{(overtimeMinutes / 60).toFixed(1)} <span className="text-sm font-normal text-emerald-500/70">س</span></span>
+            </div>
+          </div>
+          {/* Action Bar inside details (Only shows during active session) */}
+          {activeSession && (
+            <div className="flex gap-2 w-full mt-2 border-t pt-4">
+              <Button 
+                variant="secondary" 
+                className={`flex-1 rounded-xl h-10 font-bold shadow-sm border border-border/50 text-xs ${activeSession.activeBreakStartTime ? 'bg-amber-500/20 text-amber-500 hover:bg-amber-500/30' : ''}`}
+                onClick={toggleBreak}
+              >
+                <Coffee className="w-3.5 h-3.5 ml-1" />
+                {activeSession.activeBreakStartTime ? 'إنهاء الاستراحة' : 'استراحة'}
+              </Button>
+              <Button variant="secondary" className="flex-1 rounded-xl h-10 font-bold shadow-sm border border-border/50 bg-secondary/40 text-xs" onClick={() => setDispatcherOpen(true)}>
+                <Shuffle className="w-3.5 h-3.5 ml-1" /> تبديل
+              </Button>
+              <Button variant="secondary" className="flex-1 rounded-xl h-10 font-bold shadow-sm border border-border/50 bg-secondary/40 text-xs" onClick={openNoteDialog}>
+                <FileText className="w-3.5 h-3.5 ml-1" /> مذكرات
+              </Button>
+            </div>
+          )}
+        </div>
+
+        {/* Action Buttons Grid */}
+        <div className="grid grid-cols-2 gap-3 shrink-0" dir="rtl">
+           <button 
+              onClick={() => {
+                 if (activeSession) {
+                    setManualEntryTime(format(new Date(activeSession.startTime), "HH:mm"));
+                    setShowManualEntry(true);
+                 } else if (!isOnFullDayLeave) {
+                    handleStartSession();
+                 }
+              }} 
+              disabled={!activeSession && isOnFullDayLeave} 
+              className={`rounded-2xl p-4 flex flex-col items-center justify-center gap-3 transition-colors text-center h-[110px] shadow-sm group ${(!isOnFullDayLeave || activeSession) ? 'bg-card hover:bg-card/80 border border-border/50' : 'bg-card/30 border border-border/20 opacity-60 cursor-not-allowed'}`}>
+              <div className={`w-10 h-10 rounded-full flex items-center justify-center transition-transform group-hover:scale-110 ${activeSession ? 'bg-teal-500/10 text-teal-500' : 'bg-indigo-500/10 text-indigo-500'}`}>
+                 {activeSession ? <Clock className="w-5 h-5" /> : <LogIn className="w-5 h-5" />}
+              </div>
+              <span className="text-sm font-bold text-foreground">{activeSession ? 'تعديل الدخول' : 'تسجيل دخول'}</span>
+           </button>
+           
+           <button onClick={() => activeSession && handleEndSession()} disabled={!activeSession} className={`rounded-2xl p-4 flex flex-col items-center justify-center gap-3 transition-colors text-center h-[110px] shadow-sm group ${activeSession ? 'bg-card hover:bg-card/80 border border-border/50' : 'bg-card/30 border border-border/20 opacity-60 cursor-not-allowed'}`}>
+              <div className="w-10 h-10 rounded-full bg-orange-500/10 flex items-center justify-center text-orange-500 transition-transform group-hover:scale-110">
+                 <LogOut className="w-5 h-5" />
+              </div>
+              <span className="text-sm font-bold text-foreground">تسجيل خروج</span>
+           </button>
+
+           <button onClick={() => setIsPermissionSheetOpen(true)} disabled={isOnFullDayLeave} className={`rounded-2xl p-4 flex flex-col items-center justify-center gap-3 transition-colors text-center h-[110px] shadow-sm group ${(!isOnFullDayLeave) ? 'bg-card hover:bg-card/80 border border-border/50' : 'bg-card/30 border border-border/20 opacity-60 cursor-not-allowed'}`}>
+              <div className="w-10 h-10 rounded-full bg-purple-500/10 flex items-center justify-center text-purple-500 transition-transform group-hover:scale-110">
+                 <Clock className="w-5 h-5" />
+              </div>
+              <span className="text-sm font-bold text-foreground">إذن/نصف يوم</span>
+           </button>
+
+           <button onClick={() => setIsLeaveSheetOpen(true)} disabled={!!activeSession || isOnFullDayLeave} className={`rounded-2xl p-4 flex flex-col items-center justify-center gap-3 transition-colors text-center h-[110px] shadow-sm group ${(!activeSession && !isOnFullDayLeave) ? 'bg-card hover:bg-card/80 border border-border/50' : 'bg-card/30 border border-border/20 opacity-60 cursor-not-allowed'}`}>
+              <div className="w-10 h-10 rounded-full bg-blue-500/10 flex items-center justify-center text-blue-500 transition-transform group-hover:scale-110">
+                 <Palmtree className="w-5 h-5" />
+              </div>
+              <span className="text-sm font-bold text-foreground">تسجيل إجازة</span>
+           </button>
+        </div>
 
           {/* Floating AI Record Button */}
           {settings.customAIApiKey && (
@@ -749,105 +760,40 @@ export default function HomeView() {
           )}
 
           {!activeSession && (
-            <div className="bg-primary/5 border border-primary/10 rounded-[1.5rem] p-4 text-center shrink-0">
-               <p className="text-xs font-medium text-foreground/80 italic leading-relaxed" dir="rtl">"{dailyQuote}"</p>
-            </div>
-          )}
-
-          {/* Card 2: Check-in / Checkout Expected */}
-          <div className="bg-card/40 backdrop-blur-2xl border border-white/5 rounded-[1.5rem] p-4 flex flex-col gap-4 shadow-xl relative overflow-hidden shrink-0">
-            <div className="flex flex-col gap-1.5 text-[12px] text-foreground/80 z-10" dir="rtl">
-              <div className="flex gap-2">
-                <span className="text-foreground/60 font-medium whitespace-nowrap">تسجيل الدخول:</span>
-                <span className="font-bold text-foreground flex items-center gap-2">
-                  {activeSession ? format(new Date(activeSession.startTime), "hh:mm a", {locale: ar}) : '--:--'}
-                  {activeSession && (
-                     <Button variant="ghost" size="icon" className="w-6 h-6 p-0 opacity-50 hover:opacity-100" onClick={() => setShowManualEntry(true)}>
-                       <Clock className="w-3.5 h-3.5" />
-                     </Button>
-                  )}
-                </span>
+            <div className="flex flex-col gap-3 mb-2 shrink-0">
+              {/* Base Work Hours */}
+              <div className="bg-card rounded-[1.5rem] p-4 border border-border/50 flex items-center justify-between shadow-sm" dir="rtl">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-secondary flex items-center justify-center text-muted-foreground shrink-0 border border-border/50">
+                     <Clock className="w-5 h-5" />
+                  </div>
+                  <div className="flex flex-col text-right">
+                    <span className="text-sm font-bold text-foreground">ساعات العمل الأساسية</span>
+                    <span className="text-[10px] text-muted-foreground mt-0.5">سيتم حساب الإضافي بناءً عليها</span>
+                  </div>
+                </div>
+                
+                <div className="flex items-center gap-3 bg-secondary/30 rounded-xl px-2 py-1.5 border border-border/40">
+                  <button onClick={() => updateSettings({ ...settings, dailyHours: Math.min(24, settings.dailyHours + 1) })} className="w-8 h-8 rounded-lg flex items-center justify-center bg-secondary/50 text-foreground hover:bg-secondary">
+                     <Plus className="w-4 h-4" />
+                  </button>
+                  <span className="font-bold text-sm w-4 text-center">{settings.dailyHours}</span>
+                  <button onClick={() => updateSettings({ ...settings, dailyHours: Math.max(1, settings.dailyHours - 1) })} className="w-8 h-8 rounded-lg flex items-center justify-center bg-secondary/50 text-foreground hover:bg-secondary">
+                     <Minus className="w-4 h-4" />
+                  </button>
+                </div>
               </div>
-              <div className="flex gap-2">
-                <span className="text-foreground/60 font-medium whitespace-nowrap">الانصراف المتوقع:</span>
-                <span className="font-bold text-foreground">{expectedCheckoutStr}</span>
-              </div>
-            </div>
-
-            <div className="flex flex-col gap-1.5 z-10">
-              <div className="h-3.5 w-full bg-secondary/30 rounded-full overflow-hidden shadow-inner flex p-0.5" dir="rtl">
-                {(() => {
-                   const todaySessions = sessions.filter(s => {
-                      const sDate = new Date(s.startTime);
-                      return sDate.getDate() === now.getDate() && sDate.getMonth() === now.getMonth() && sDate.getFullYear() === now.getFullYear() && !s.isArchived;
-                   });
-                   
-                   let permissionMins = 0;
-                   let halfDayMins = 0;
-                   let workMins = 0;
-
-                   todaySessions.forEach(s => {
-                     if (s.dayStatus === 'permission') permissionMins += (s.permissionHours || 0) * 60;
-                     else if (s.dayStatus === 'half_day_leave') halfDayMins += (s.duration || 0);
-                     else {
-                       workMins += (s.duration || 0);
-                     }
-                   });
-
-                   if (activeSession) {
-                     const sDate = new Date(activeSession.startTime);
-                     if (sDate.getDate() === now.getDate() && sDate.getMonth() === now.getMonth() && sDate.getFullYear() === now.getFullYear()) {
-                       // @ts-ignore - Assuming currentSessionMinutes is available in this scope
-                       workMins += currentSessionMinutes;
-                     }
-                   }
-
-                   const permPct = Math.min((permissionMins / targetMins) * 100, 100);
-                   const halfPct = Math.min((halfDayMins / targetMins) * 100, 100);
-                   const workPct = Math.min((workMins / targetMins) * 100, 100);
-
-                   return (
-                     <>
-                        {permPct > 0 && <div className="h-full bg-purple-500/80 rounded-r-full border-l border-background/20" style={{width: `${permPct}%`}} title="تصريح" />}
-                        {halfPct > 0 && <div className="h-full bg-orange-400/80 border-l border-background/20" style={{width: `${halfPct}%`}} title="نصف يوم" />}
-                        {workPct > 0 && (
-                           <div 
-                             className={`h-full transition-all duration-1000 ${isOvertime ? 'bg-amber-400' : 'bg-[#e2aa72] shadow-sm'} ${(permPct === 0 && halfPct === 0) ? 'rounded-r-full' : ''} rounded-l-full relative`}
-                             style={{width: `${workPct}%`}} 
-                             title="عمل"
-                           >
-                              {activeSession && <div className="absolute inset-y-0 left-0 w-8 bg-gradient-to-r from-transparent to-white/20 animate-pulse pointer-events-none" />}
-                           </div>
-                        )}
-                     </>
-                   );
-                })()}
-              </div>
-              <div className="flex justify-between text-[10px] font-bold text-foreground/50 px-1" dir="rtl">
-                <span>الساعات الفعلية</span>
-                <span>ساعات العقد</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Card 3: Overtime Module */}
-          {(isOvertime || settings.modules?.finances) && (
-            <div className="bg-card/40 backdrop-blur-2xl border border-white/5 rounded-[1.5rem] p-4 flex items-center justify-between shadow-xl shrink-0" dir="rtl">
-              <div className="flex gap-3 items-center">
-                 <div className="w-10 h-10 rounded-full bg-emerald-500/10 flex items-center justify-center border border-emerald-500/20 shrink-0">
-                   <Check className="w-5 h-5 text-emerald-400" />
-                 </div>
-                 <div className="flex flex-col justify-center">
-                   <span className="text-foreground/80 font-bold mb-[1px] text-sm">العمل الإضافي (Overtime)</span>
-                   <div className="flex items-baseline gap-1">
-                     <span className="text-xl font-black text-foreground drop-shadow-sm">{(overtimeMinutes/60).toFixed(1)}</span>
-                     <span className="text-[12px] font-medium text-foreground/60">ساعات إضافية</span>
-                   </div>
-                   <span className="text-[10px] font-medium text-foreground/40 mt-0.5">تراكم ساعات • مستحقات الإضافي</span>
-                 </div>
+              
+              {/* Daily Quote */}
+              <div className="bg-primary/5 border border-primary/10 rounded-[1.5rem] p-4 text-center">
+                 <p className="text-xs font-medium text-foreground/80 italic leading-relaxed" dir="rtl">"{dailyQuote}"</p>
               </div>
             </div>
           )}
+
+
+
+
 
           {/* Action Row */}
           <div className="flex gap-2.5 shrink-0" dir="rtl">
@@ -889,7 +835,7 @@ export default function HomeView() {
           </div>
 
           {/* Secondary Quick Actions Strip (Breaks, Permissions, etc.) */}
-          {activeSession ? (
+          {activeSession && (
             <div className="flex gap-2 overflow-x-auto pb-2 pt-2 scrollbar-none snap-x" dir="rtl">
               <Button 
                 variant="secondary"
@@ -921,10 +867,11 @@ export default function HomeView() {
                 </Button>
               )}
             </div>
-          ) : (
-            // Out of session actions
-            !isFreelance && (
-              <div className="flex flex-col gap-2 mt-2">
+          )}
+
+          {/* Out of session actions and universally available actions */}
+          {!isFreelance && (
+            <div className="flex flex-col gap-2 mt-2">
                  <Button 
                    className="w-full bg-secondary/30 hover:bg-secondary/50 rounded-[1.5rem] h-14 shadow-sm border border-white/5 flex gap-2 text-foreground relative overflow-hidden"
                    onClick={() => setAbsenceDialogOpen(true)}
@@ -935,14 +882,13 @@ export default function HomeView() {
                  </Button>
 
                  {/* Smart Leave Predictor Recommendation */}
-                 {(() => {
-                   const EGYPTIAN_HOLIDAYS = ["01-07","01-25","04-25","05-01","06-30","07-23","10-06"];
+                 {!activeSession && (() => {
                    const upcomingDays = Array.from({length: 30}).map((_, i) => {
                      const d = new Date();
                      d.setDate(d.getDate() + i + 1);
                      return d;
                    });
-                   const upcomingHoliday = upcomingDays.find(d => EGYPTIAN_HOLIDAYS.includes(format(d, 'MM-dd')));
+                   const upcomingHoliday = upcomingDays.find(d => isPublicHoliday(d, settings.customHolidays));
                    if (upcomingHoliday && balances.remainingAnnualLeaves > 0) {
                      const holDay = upcomingHoliday.getDay();
                      let suggestion = null;
@@ -988,8 +934,7 @@ export default function HomeView() {
                    return null;
                  })()}
               </div>
-            )
-          )}
+            )}
 
         </div>
       )}
@@ -1090,15 +1035,42 @@ export default function HomeView() {
                      onChange={(e) => setCompensationLeaveSourceId(e.target.value)}
                    >
                      <option value="">-- اختر يوم العمل --</option>
-                     {getAvailableCompensations().map(comp => (
-                       <option key={comp.id} value={comp.id}>
+                     {getAvailableCompensations(absenceDate).map(comp => (
+                       <option key={comp.id} value={comp.id} disabled={comp.isExpired}>
                          {format(new Date(comp.startTime), 'EEEE، dd MMM yyyy', {locale: ar})} 
-                         (متاح {comp.availableDays} يوم)
+                         (متاح {comp.availableDays} يوم){comp.isExpired ? ' - منتهي الصلاحية' : ''}
                        </option>
                      ))}
                    </select>
-                   {getAvailableCompensations().length === 0 && (
-                     <p className="text-xs text-destructive mt-1">عفواً، لا يوجد لديك رصيد أيام بديلة متاح.</p>
+
+                   {getAvailableCompensations(absenceDate).filter(c => c.isExpired).length > 0 && (
+                     <div className="mt-3">
+                       <p className="text-[11px] text-muted-foreground mb-1 font-bold">أيام بديلة منتهية الصلاحية (يمكن إضافة استثناء):</p>
+                       <div className="flex flex-wrap gap-2">
+                         {getAvailableCompensations(absenceDate).filter(c => c.isExpired).map(comp => (
+                           <Button 
+                             key={comp.id} 
+                             variant="outline" 
+                             size="sm"
+                             className="h-7 text-[10px] rounded-full border-dashed border-red-500/50 text-red-500 hover:bg-red-500/10"
+                             onClick={(e) => {
+                               e.preventDefault();
+                               if (window.confirm('هل تريد إضافة استثناء لتفعيل هذا اليوم البديل على الرغم من انتهاء صلاحيته؟')) {
+                                 // Add exception
+                                 updateSession(comp.id, { compensationException: true });
+                                 toast.success('تمت إضافة الاستثناء بنجاح، يمكنك الآن اختياره.');
+                               }
+                             }}
+                           >
+                             {format(new Date(comp.startTime), 'dd MMM', {locale: ar})} (+ استثناء)
+                           </Button>
+                         ))}
+                       </div>
+                     </div>
+                   )}
+
+                   {getAvailableCompensations(absenceDate).length === 0 && (
+                     <p className="text-xs text-destructive mt-1">عفواً، لا توجد أيام بديلة صالحة في هذا التاريخ.</p>
                    )}
                  </div>
                )}
@@ -1123,7 +1095,7 @@ export default function HomeView() {
             <div className="flex gap-2 mt-4 pt-4 border-t border-border">
               <Button 
                 className="flex-1 rounded-xl h-12 font-bold bg-emerald-500 hover:bg-emerald-600 text-white" 
-                disabled={absenceType === 'compensation' && (!compensationLeaveSourceId || getAvailableCompensations().length === 0)}
+                disabled={absenceType === 'compensation' && (!compensationLeaveSourceId || getAvailableCompensations(absenceDate).length === 0)}
                 onClick={() => {
                   if (absenceType === 'compensation' && compensationLeaveSourceId) {
                     const sessionToLog: any = {
@@ -1463,13 +1435,59 @@ export default function HomeView() {
                   >
                     <option value="salary">عمل (راتب / أساسي)</option>
                     <option value="project">مشروع / وظيفة أخرى</option>
-                    <option value="rest_day_work">عمل في يوم راحة / بديلة</option>
+                    <option value="rest_day_work">عمل في يوم راحة (للحصول على بديلة)</option>
+                    <option value="compensation">إجازة بديلة (استهلاك بديلة)</option>
+                    <option value="permission">استئذان (تأخير / مبكر)</option>
                     <option value="half_day_leave">نصف يوم</option>
-                    <option value="annual_leave">إجازة</option>
+                    <option value="annual_leave">إجازة اعتيادية</option>
                     <option value="sick_leave">إجازة مرضية</option>
+                    <option value="casual_leave">إجازة عارضة</option>
                   </select>
                 </div>
 
+                {retroType === 'compensation' && (
+                  <div className="space-y-1 animate-in fade-in pb-2">
+                    <label className="text-xs font-bold text-emerald-500">اختر العمل الإضافي المراد استبداله</label>
+                    <select 
+                      className="w-full rounded-xl border border-emerald-500/50 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-600 font-bold"
+                      value={compensationLeaveSourceId}
+                      onChange={e => setCompensationLeaveSourceId(e.target.value)}
+                    >
+                      <option value="">-- اختر يوم العمل --</option>
+                      {getAvailableCompensations(retroDate).map(comp => (
+                        <option key={comp.id} value={comp.id} disabled={comp.isExpired}>
+                          {format(new Date(comp.startTime), 'EEEE، dd MMM yyyy', {locale: ar})} 
+                          (متاح {comp.availableDays} يوم){comp.isExpired ? ' - منتهي الصلاحية' : ''}
+                        </option>
+                      ))}
+                    </select>
+
+                    {getAvailableCompensations(retroDate).filter(c => c.isExpired).length > 0 && (
+                      <div className="mt-2">
+                        <p className="text-[10px] text-muted-foreground mb-1 font-bold">أيام بديلة منتهية الصلاحية (يمكن إضافة استثناء):</p>
+                        <div className="flex flex-wrap gap-2">
+                          {getAvailableCompensations(retroDate).filter(c => c.isExpired).map(comp => (
+                            <Button 
+                              key={`retro-${comp.id}`} 
+                              variant="outline" 
+                              size="sm"
+                              className="h-6 px-2 text-[10px] rounded-full border-dashed border-red-500/50 text-red-500 hover:bg-red-500/10"
+                              onClick={(e) => {
+                                e.preventDefault();
+                                if (window.confirm('هل تريد إضافة استثناء لتفعيل هذا اليوم البديل على الرغم من انتهاء صلاحيته؟')) {
+                                  updateSession(comp.id, { compensationException: true });
+                                  toast.success('تمت إضافة الاستثناء بنجاح، يمكنك الآن اختياره.');
+                                }
+                              }}
+                            >
+                              {format(new Date(comp.startTime), 'dd MMM', {locale: ar})} (+ استثناء)
+                            </Button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
                 {retroType === 'project' && (
                   <div className="space-y-1 animate-in fade-in">
                     <label className="text-xs font-bold text-foreground">المشروع/الجهة</label>
@@ -1484,16 +1502,16 @@ export default function HomeView() {
                   </div>
                 )}
 
-                {!['annual_leave', 'sick_leave', 'half_day_leave'].includes(retroType) && (
+                {!['annual_leave', 'sick_leave', 'half_day_leave', 'casual_leave', 'permission', 'compensation'].includes(retroType) && (
                   <>
                     <div className="grid grid-cols-2 gap-3">
                       <div className="space-y-1">
                         <label className="text-xs font-bold text-foreground">وقت الحضور</label>
-                        <Input type="time" value={retroStart} onChange={e => setRetroStart(e.target.value)} />
+                        <SmartTimePicker value={retroStart} onChange={setRetroStart} />
                       </div>
                       <div className="space-y-1">
                         <label className="text-xs font-bold text-foreground">وقت الانصراف</label>
-                        <Input type="time" value={retroEnd} onChange={e => setRetroEnd(e.target.value)} />
+                        <SmartTimePicker value={retroEnd} onChange={setRetroEnd} />
                       </div>
                     </div>
                     <div className="space-y-1 pb-2">
@@ -1532,22 +1550,21 @@ export default function HomeView() {
          </div>
       )}
 
-      {/* Overlay: Manual Past Session Entry */}
+      {/* Overlay: Manual Past Session Entry o Edit Active Session Time */}
       {showManualEntry && (
          <div className="absolute inset-0 z-[60] flex items-center justify-center backdrop-blur-sm bg-background/60 p-4" dir="rtl">
            <div className="bg-card border border-border p-6 rounded-[2rem] w-full max-w-sm shadow-2xl flex flex-col gap-4 animate-in slide-in-from-bottom-8">
-              <h3 className="text-xl font-bold mt-2 text-center">تسجيل دخول فائت</h3>
+              <h3 className="text-xl font-bold mt-2 text-center">{activeSession ? 'تعديل وقت الدخول' : 'تسجيل دخول فائت'}</h3>
               <p className="text-sm text-muted-foreground leading-relaxed text-center">
-                لم تقم بتسجيل الدخول في وقتها؟ أدخل الوقت الفعلي أدناه.
+                {activeSession ? 'هل قمت بالدخول في وقت مختلف؟ قم بتعديل الوقت أدناه وسنقوم بإعادة الحسابات تلقائياً.' : 'لم تقم بتسجيل الدخول في وقتها؟ أدخل الوقت الفعلي أدناه.'}
               </p>
               
               <div className="space-y-4">
                 <div className="space-y-2">
                   <label className="text-sm font-medium">وقت البدء الفعلي</label>
-                  <Input 
-                    type="time" 
+                  <SmartTimePicker 
                     value={manualEntryTime}
-                    onChange={(e) => setManualEntryTime(e.target.value)}
+                    onChange={setManualEntryTime}
                     className="h-12 bg-secondary/50 rounded-xl"
                   />
                 </div>
@@ -1628,6 +1645,91 @@ export default function HomeView() {
            </div>
          </div>
       )}
+
+      {/* Modern Sheets for Leaves and Permissions */}
+      <Sheet open={isLeaveSheetOpen} onOpenChange={setIsLeaveSheetOpen}>
+        <SheetContent side="bottom" className="rounded-t-[2rem] max-h-[90vh] p-6 z-[120] border-t border-border/50" dir="rtl">
+          <SheetHeader className="pb-4 text-center">
+             <SheetTitle className="text-2xl font-bold flex flex-col items-center gap-2">
+                تسجيل إجازة
+                <span className="text-sm font-normal text-muted-foreground">اختر نوع الإجازة لليوم</span>
+             </SheetTitle>
+          </SheetHeader>
+          <div className="flex flex-col gap-3 mt-4">
+             <button onClick={() => { logSpecialSession('casual_leave'); setIsLeaveSheetOpen(false); toast.success('تم تسجيل راحة بنجاح'); }} className="w-full flex items-center justify-between p-4 rounded-[1.5rem] bg-secondary/30 hover:bg-secondary/50 transition-colors border border-border/40 group">
+                <span className="font-bold text-foreground text-lg mr-2">راحة</span>
+                <div className="w-14 h-14 rounded-[14px] bg-blue-500/10 flex items-center justify-center text-blue-500 transition-transform group-hover:scale-110">
+                  <Palmtree className="w-7 h-7" />
+                </div>
+             </button>
+             <button onClick={() => { setAbsenceType('compensation'); setAbsenceDialogOpen(true); setIsLeaveSheetOpen(false); }} className="w-full flex items-center justify-between p-4 rounded-[1.5rem] bg-secondary/30 hover:bg-secondary/50 transition-colors border border-border/40 group">
+                <span className="font-bold text-foreground text-lg mr-2">بديلة</span>
+                <div className="w-14 h-14 rounded-[14px] bg-teal-500/10 flex items-center justify-center text-teal-500 transition-transform group-hover:scale-110">
+                  <Calendar className="w-7 h-7" />
+                </div>
+             </button>
+             <button onClick={() => { logSpecialSession('sick_leave'); setIsLeaveSheetOpen(false); toast.success('تم تسجيل إجازة مرضية بنجاح'); }} className="w-full flex items-center justify-between p-4 rounded-[1.5rem] bg-secondary/30 hover:bg-secondary/50 transition-colors border border-border/40 group">
+                <span className="font-bold text-foreground text-lg mr-2">مرضي</span>
+                <div className="w-14 h-14 rounded-[14px] bg-red-500/10 flex items-center justify-center text-red-500 transition-transform group-hover:scale-110">
+                  <Clock className="w-7 h-7" />
+                </div>
+             </button>
+             <button onClick={() => { logSpecialSession('annual_leave'); setIsLeaveSheetOpen(false); toast.success('تم تسجيل إجازة سنوية بنجاح'); }} className="w-full flex items-center justify-between p-4 rounded-[1.5rem] bg-secondary/30 hover:bg-secondary/50 transition-colors border border-border/40 group">
+                <span className="font-bold text-foreground text-lg mr-2">سنوي</span>
+                <div className="w-14 h-14 rounded-[14px] bg-orange-500/10 flex items-center justify-center text-orange-500 transition-transform group-hover:scale-110">
+                  <Zap className="w-7 h-7" />
+                </div>
+             </button>
+             <button onClick={() => setIsLeaveSheetOpen(false)} className="w-full mt-2 h-[60px] rounded-[1.5rem] bg-secondary/40 hover:bg-secondary text-foreground font-bold transition-colors">
+                إلغاء
+             </button>
+          </div>
+        </SheetContent>
+      </Sheet>
+
+      <Sheet open={isPermissionSheetOpen} onOpenChange={setIsPermissionSheetOpen}>
+        <SheetContent side="bottom" className="rounded-t-[2rem] max-h-[90vh] p-6 z-[120] border-t border-border/50" dir="rtl">
+          <SheetHeader className="pb-4 text-center">
+             <SheetTitle className="text-2xl font-bold flex flex-col items-center gap-2">
+                إذن / نصف يوم
+                <span className="text-sm font-normal text-muted-foreground">اختر نوع التصريح للإدخال</span>
+             </SheetTitle>
+          </SheetHeader>
+          <div className="flex flex-col gap-3 mt-4">
+             <button onClick={() => { logSpecialSession('permission', { hours: 1, subtype: 'entry' }); setIsPermissionSheetOpen(false); toast.success('تم تسجيل إذن التأخير بنجاح'); }} className="w-full flex items-center justify-between p-4 rounded-[1.5rem] bg-secondary/30 hover:bg-secondary/50 transition-colors border border-border/40 group">
+                <div className="flex flex-col text-right mr-2">
+                   <span className="font-bold text-foreground text-lg">إذن تأخير (ساعة)</span>
+                   <span className="text-xs text-muted-foreground mt-0.5">يخصم من رصيد الأذونات</span>
+                </div>
+                <div className="w-14 h-14 rounded-[14px] bg-yellow-500/10 flex items-center justify-center text-yellow-500 transition-transform group-hover:scale-110">
+                  <Timer className="w-7 h-7" />
+                </div>
+             </button>
+             <button onClick={() => { logSpecialSession('permission', { hours: 2, subtype: 'exit' }); setIsPermissionSheetOpen(false); toast.success('تم تسجيل إذن الخروج بنجاح'); }} className="w-full flex items-center justify-between p-4 rounded-[1.5rem] bg-secondary/30 hover:bg-secondary/50 transition-colors border border-border/40 group">
+                <div className="flex flex-col text-right mr-2">
+                   <span className="font-bold text-foreground text-lg">إذن خروج (ساعتين)</span>
+                   <span className="text-xs text-muted-foreground mt-0.5">يخصم من رصيد الأذونات</span>
+                </div>
+                <div className="w-14 h-14 rounded-[14px] bg-purple-500/10 flex items-center justify-center text-purple-500 transition-transform group-hover:scale-110">
+                  <LogOut className="w-7 h-7" />
+                </div>
+             </button>
+             <button onClick={() => { logSpecialSession('half_day_leave'); setIsPermissionSheetOpen(false); toast.success('تم تسجيل نصف يوم بنجاح'); }} className="w-full flex items-center justify-between p-4 rounded-[1.5rem] bg-secondary/30 hover:bg-secondary/50 transition-colors border border-border/40 group">
+                <div className="flex flex-col text-right mr-2">
+                   <span className="font-bold text-foreground text-lg">إجازة نصف يوم</span>
+                   <span className="text-xs text-muted-foreground mt-0.5">يخصم كإجازة معتمدة لنصف اليوم</span>
+                </div>
+                <div className="w-14 h-14 rounded-[14px] bg-teal-500/10 flex items-center justify-center text-teal-500 transition-transform group-hover:scale-110">
+                  <Activity className="w-7 h-7" />
+                </div>
+             </button>
+             
+             <button onClick={() => setIsPermissionSheetOpen(false)} className="w-full mt-2 h-[60px] rounded-[1.5rem] bg-secondary/40 hover:bg-secondary text-foreground font-bold transition-colors">
+                إلغاء
+             </button>
+          </div>
+        </SheetContent>
+      </Sheet>
 
     </div>
   );

@@ -9,6 +9,7 @@ export interface WorkSettings {
   monthlyPermissions: number; 
   annualLeaves: number; 
   restDays: number[];
+  compensationValidityDays?: number;
   expectedStartTime?: string;
   expectedEndTime?: string;
   notificationsEnabled?: boolean;
@@ -64,8 +65,10 @@ export interface WorkSession {
   dayStatus: 'work' | 'annual_leave' | 'sick_leave' | 'casual_leave' | 'half_day_leave' | 'late' | 'absent' | 'mission' | 'rest_day_work' | 'permission' | 'compensation';
   isRestDayWork?: boolean;
   restDayCompensation?: '1_day' | '2_days' | '1_day_plus_overtime';
+  compensationException?: boolean;
   overtimeMinutes?: number;
   permissionHours?: number; 
+  permissionSubtype?: 'entry' | 'exit' | 'mid_day';
   linkedCompensationSessionId?: string;
   isArchived?: boolean;
   archivedAt?: string;
