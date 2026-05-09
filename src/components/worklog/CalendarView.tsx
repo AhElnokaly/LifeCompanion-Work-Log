@@ -145,7 +145,7 @@ export default function CalendarView() {
     const annualLeaves = monthSessions.filter(s => ['annual_leave', 'casual_leave'].includes(s.dayStatus as string)).length;
     const permissionsCount = monthSessions.filter(s => ['permission', 'half_day_leave'].includes(s.dayStatus as string)).length;
 
-    const weekDays = [t('t_auto_199'), t('t_auto_200'), t('t_auto_201'), t('t_auto_202'), t('t_auto_203'), t('t_auto_204'), t('t_auto_9')];
+    const weekDays = [t('t_auto_461'), t('t_auto_462'), t('t_auto_463'), t('t_auto_464'), t('t_auto_465'), t('t_auto_466'), t('t_auto_460')];
 
     return (
       <div className="flex flex-col gap-4 mt-6">
@@ -182,7 +182,7 @@ export default function CalendarView() {
           {/* Weekday headers */}
           <div className="grid grid-cols-7 mb-2">
             {weekDays.map((day, i) => (
-              <div key={i} className="text-center text-xs font-bold text-muted-foreground">
+              <div key={i} className="text-center text-[10px] sm:text-xs font-bold text-muted-foreground truncate px-0.5">
                 {day}
               </div>
             ))}

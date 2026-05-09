@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { useWorkLog } from '../../contexts/WorkLogContext';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { Bell, Trophy, CalendarDays, KeySquareIcon, Briefcase } from 'lucide-react';
-import { Button } from '../ui/button';
+import { Button, buttonVariants } from '../ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
 import { format } from 'date-fns';
 
@@ -100,13 +100,11 @@ export default function NotificationCenter() {
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <Button variant="ghost" size="icon" className="relative group hover:bg-secondary/20">
-          <Bell className="h-5 w-5 text-foreground/80 group-hover:text-foreground transition-colors" />
-          {unreadCount > 0 && (
-            <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-red-500 border-2 border-background rounded-full"></span>
-          )}
-        </Button>
+      <PopoverTrigger className={buttonVariants({ variant: 'ghost', size: 'icon'}) + " relative group hover:bg-secondary/20"}>
+        <Bell className="h-5 w-5 text-foreground/80 group-hover:text-foreground transition-colors" />
+        {unreadCount > 0 && (
+          <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-red-500 border-2 border-background rounded-full"></span>
+        )}
       </PopoverTrigger>
       <PopoverContent className="w-80 p-0 rounded-[1.5rem] overflow-hidden border-border/50 shadow-xl" align={lang === 'ar' ? 'start' : 'end'} dir={lang === 'ar' ? 'rtl' : 'ltr'}>
         <div className="bg-muted/50 p-4 border-b border-border/50 flex items-center justify-between">

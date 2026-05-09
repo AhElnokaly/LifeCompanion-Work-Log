@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Button } from '../ui/button';
-import { Play, Square, Clock, Calendar, Coffee, FileText, Check, Bell, Zap, Timer, Shuffle, Brain, Loader2, Send, Activity, Moon, Sun, Sunrise, Sunset, Plus, Minus, LogIn, LogOut, Palmtree, Briefcase } from 'lucide-react';
+import { Play, Square, Clock, Calendar, Coffee, FileText, Check, Bell, Zap, Timer, Shuffle, Brain, Loader2, Send, Activity, Moon, Sun, Sunrise, Sunset, Plus, Minus, LogIn, LogOut, Palmtree, Briefcase, Trophy } from 'lucide-react';
 import { useWorkLog, isPublicHoliday } from '../../contexts/WorkLogContext';
 import { useAICore } from '../../contexts/AICoreContext';
 import { format, differenceInMinutes, addMinutes } from 'date-fns';

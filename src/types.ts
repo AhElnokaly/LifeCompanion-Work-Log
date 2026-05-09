@@ -46,6 +46,21 @@ export interface WorkSettings {
     overtimeCalculationType: 'fixed_rate' | 'multiplier_formula'; // whether it's a fixed amount per hour or multiplier
   };
   savedCharts?: any[];
+  isPro?: boolean;
+}
+
+export interface HealthMetrics {
+  steps?: number;
+  waterCups?: number;
+  coffeeCups?: number;
+  teaCups?: number;
+  ateLunch?: boolean;
+  moodBefore?: number;
+  moodDuring?: number;
+  moodAfter?: number;
+  energyLevel?: number;
+  commuteStartTime?: string;
+  commuteEndTime?: string;
 }
 
 export interface WorkSession {
@@ -72,6 +87,7 @@ export interface WorkSession {
   linkedCompensationSessionId?: string;
   isArchived?: boolean;
   archivedAt?: string;
+  healthMetrics?: HealthMetrics;
 }
 
 export interface Job {

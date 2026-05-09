@@ -16,6 +16,8 @@ import ChartMakerView from './worklog/ChartMakerView';
 import AICore from './aicore/AICore';
 import ThemesModes from './themes/ThemesModes';
 
+import ProVibeView from './worklog/ProVibeView';
+
 export default function Dashboard({ activeTab, setActiveTab }: { activeTab: string, setActiveTab: (tab: string) => void }) {
   const { settings } = useWorkLog();
   const { t, lang } = useLanguage();
@@ -37,6 +39,7 @@ export default function Dashboard({ activeTab, setActiveTab }: { activeTab: stri
       {activeTab === 'chart_maker' && <ChartMakerView />}
       {activeTab === 'aicore' && <AICore />}
       {activeTab === 'themes' && <ThemesModes />}
+      {activeTab === 'provibe' && <ProVibeView />}
       {activeTab === 'more' && (
         <div className={`flex flex-col gap-4 animate-in fade-in duration-300 pb-20 pt-4 px-2 ${lang === 'ar' ? 'rtl' : 'ltr'}`} dir={lang === 'ar' ? 'rtl' : 'ltr'}>
           <h2 className="text-2xl font-bold mb-4">{t('dash.more_options')}</h2>

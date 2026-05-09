@@ -230,6 +230,9 @@ export default function Layout({ children, activeTab, setActiveTab }: LayoutProp
           <MobileNavItem icon={History} label={t('nav.reports')} id="reports" activeTab={activeTab} setActive={setActiveTab} />
           <MobileNavItem icon={Home} label={t('nav.home')} id="home" activeTab={activeTab} setActive={setActiveTab} />
           <MobileNavItem icon={Calendar} label={t('nav.calendar')} id="week" activeTab={activeTab} setActive={setActiveTab} />
+          {settings.isPro && (
+             <MobileNavItem icon={Zap} label="Pro Vibe" id="provibe" activeTab={activeTab} setActive={setActiveTab} />
+          )}
         </div>
       </div>
 
@@ -378,6 +381,7 @@ function DesktopNavLinks({ activeTab, setActiveTab }: { activeTab: string, setAc
         { id: 'reports', label: t('nav.reports'), icon: History },
         { id: 'wallet', label: t('layout.my_wallet'), icon: Wallet },
         { id: 'chart_maker', label: t('layout.chart_maker'), icon: BarChart },
+        { id: 'provibe', label: 'Pro Vibe', icon: Zap },
       ]
     },
     {
