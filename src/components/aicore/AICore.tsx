@@ -7,13 +7,15 @@ import { Input } from '../ui/input';
 import { Brain, Send, Sparkles, TrendingUp, AlertCircle, Activity, Coffee } from 'lucide-react';
 import { ScrollArea } from '../ui/scroll-area';
 import { differenceInDays, startOfWeek, endOfWeek } from 'date-fns';
+import { useLanguage } from "@/contexts/LanguageContext";
 
 export default function AICore() {
+    const { t, lang } = useLanguage();
   const { askAI, isLoading } = useAICore();
   const { sessions, projects, settings } = useWorkLog();
   const [prompt, setPrompt] = useState('');
   const [chatHistory, setChatHistory] = useState<{role: 'user'|'ai', text: string}[]>([
-    { role: 'ai', text: 'مرحباً! أنا المحرك الذكي الخاص بك. يمكنني قراءة سجلات عملك وتحليل بياناتك لتوقع الإرهاق قبل حدوثه وللحفاظ على توازنك. كيف يمكنني مساعدتك؟' }
+    { role: 'ai', text: t('t_auto_1') }
   ]);
 
   // ==========================================
@@ -77,17 +79,17 @@ export default function AICore() {
     // Burnout Heuristic Algorithm
     // ==========================================
     // Determines a simple qualitative risk based on acute and chronic fatigue indicators.
-    let burnoutRisk = 'منخفض';
+    let burnoutRisk = t('t_auto_2');
     
     // Critical Risk (حرج جداً): 
     // Triggered if the user has worked 10+ consecutive days (chronic) OR > 55 hours this week (acute).
     if (daysWorkedInRow >= 10 || currentWeekHours >= 55) {
-      burnoutRisk = 'حرج جداً';
+      burnoutRisk = t('t_auto_3');
     } 
     // High Risk (مرتفع): 
     // Triggered if the user has worked 6+ consecutive days (missed a weekend) OR > 45 hours this week.
     else if (daysWorkedInRow >= 6 || currentWeekHours >= 45) {
-      burnoutRisk = 'مرتفع';
+      burnoutRisk = t('t_auto_4');
     }
 
     // 5. Total Revenue (Financial Metric):
@@ -132,6 +134,7 @@ export default function AICore() {
       2. كُن مستشاراً داعماً للإنتاجية. إذا كان خطر الاحتراق "حرج جداً" أو "مرتفع"، انصح المستخدم بشدة بالراحة.
       3. لا تذكر القيم الفنية مثل JSON أو أسماء المتغيرات، تحدث بشكل طبيعي.
       4. كن موجزاً وركز على سؤال المستخدم مستفيداً من السياق المقدم.
+      5. إذا سألك المستخدم سؤالاً حول استخدام التطبيق أو مشكلة تواجهه ولا ولم تتمكن من إجابته بشكل واضح ومؤكد، أجب فقط بالنص التالي: SUGGEST_WHATSAPP
     `;
     
     const response = await askAI(enhancedPrompt);
@@ -142,30 +145,30 @@ export default function AICore() {
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4" dir="rtl">
       <div>
         <h2 className="text-3xl font-bold tracking-tight flex items-center gap-2">
-          <Brain className="h-8 w-8 text-primary" /> المحرك الذكي (AI Core)
-        </h2>
-        <p className="text-muted-foreground">يحلل أنماطك ويقدم توقعات للاحتراق الوظيفي واقتراحات مخصصة بناءً على سجل عملك.</p>
+          <Brain className="h-8 w-8 text-primary" /> {t('t_auto_5')}
+                          </h2>
+        <p className="text-muted-foreground">{t('t_auto_6')}</p>
       </div>
 
       {/* Burnout Tracker Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <Card className={`p-4 rounded-2xl flex flex-col items-center justify-center border-white/5 border-l-4 ${analytics.burnoutRisk === 'حرج جداً' ? 'bg-red-500/10 border-l-red-500 animate-pulse' : analytics.burnoutRisk === 'مرتفع' ? 'bg-orange-500/10 border-l-orange-500' : 'bg-emerald-500/10 border-l-emerald-500'}`}>
-           <Activity className={`w-6 h-6 mb-2 ${analytics.burnoutRisk === 'حرج جداً' ? 'text-red-500' : analytics.burnoutRisk === 'مرتفع' ? 'text-orange-500' : 'text-emerald-500'}`} />
-           <span className={`text-xl font-bold ${analytics.burnoutRisk === 'حرج جداً' ? 'text-red-500' : analytics.burnoutRisk === 'مرتفع' ? 'text-orange-500' : 'text-emerald-500'}`}>
-             مؤشر التوتر {analytics.burnoutRisk}
+        <Card className={`p-4 rounded-2xl flex flex-col items-center justify-center border-white/5 border-l-4 ${analytics.burnoutRisk === t('t_auto_3') ? 'bg-red-500/10 border-l-red-500 animate-pulse' : analytics.burnoutRisk === t('t_auto_4') ? 'bg-orange-500/10 border-l-orange-500' : 'bg-emerald-500/10 border-l-emerald-500'}`}>
+           <Activity className={`w-6 h-6 mb-2 ${analytics.burnoutRisk === t('t_auto_3') ? 'text-red-500' : analytics.burnoutRisk === t('t_auto_4') ? 'text-orange-500' : 'text-emerald-500'}`} />
+           <span className={`text-xl font-bold ${analytics.burnoutRisk === t('t_auto_3') ? 'text-red-500' : analytics.burnoutRisk === t('t_auto_4') ? 'text-orange-500' : 'text-emerald-500'}`}>
+             {t('t_auto_7')} {analytics.burnoutRisk}
            </span>
         </Card>
         <Card className="p-4 rounded-2xl bg-card border-white/5 flex flex-col items-center justify-center">
             <span className="text-2xl font-bold">{analytics.daysWorkedInRow}</span>
-            <span className="text-xs text-muted-foreground mt-1">أيام عمل متتالية</span>
+            <span className="text-xs text-muted-foreground mt-1">{t('t_auto_8')}</span>
         </Card>
         <Card className="p-4 rounded-2xl bg-card border-white/5 flex flex-col items-center justify-center">
-            <span className="text-2xl font-bold">{Math.floor(analytics.totalOvertimeMins / 60)}س {(analytics.totalOvertimeMins % 60).toFixed(0)}د</span>
-            <span className="text-xs text-muted-foreground mt-1">إجمالي الإضافي</span>
+            <span className="text-2xl font-bold">{Math.floor(analytics.totalOvertimeMins / 60)}{t('t_auto_9')} {(analytics.totalOvertimeMins % 60).toFixed(0)}{t('t_auto_10')}</span>
+            <span className="text-xs text-muted-foreground mt-1">{t('t_auto_11')}</span>
         </Card>
         <Card className="p-4 rounded-2xl bg-card border-white/5 flex flex-col items-center justify-center">
             <span className="text-2xl font-bold">{analytics.currentWeekHours.toFixed(1)}</span>
-            <span className="text-xs text-muted-foreground mt-1">ساعات هذا الأسبوع</span>
+            <span className="text-xs text-muted-foreground mt-1">{t('t_auto_12')}</span>
         </Card>
       </div>
 
@@ -174,8 +177,8 @@ export default function AICore() {
           <Card className="h-[450px] flex flex-col shadow-xl border-primary/20">
             <CardHeader className="bg-secondary/20 pb-3 border-b border-white/5">
               <CardTitle className="text-lg flex items-center gap-2 text-primary">
-                <Sparkles className="h-5 w-5" /> المستشار الآلي للإنتاجية
-              </CardTitle>
+                <Sparkles className="h-5 w-5" /> {t('t_auto_13')}
+                                            </CardTitle>
             </CardHeader>
             <CardContent className="flex-1 overflow-hidden p-0">
               <ScrollArea className="h-full px-4 py-4">
@@ -183,15 +186,28 @@ export default function AICore() {
                   {chatHistory.map((msg, i) => (
                     <div key={i} className={`flex ${msg.role === 'user' ? 'justify-start' : 'justify-end'}`}>
                       <div className={`max-w-[80%] rounded-xl p-3 text-sm leading-relaxed ${msg.role === 'user' ? 'bg-primary text-primary-foreground rounded-tr-none' : 'bg-secondary rounded-tl-none'}`}>
-                        {msg.text}
+                        {msg.text === 'SUGGEST_WHATSAPP' ? (
+                          <div className="flex flex-col gap-2 relative">
+                             <p className="font-bold text-yellow-500 mb-1">{t('t_auto_14')}</p>
+                             <p className="text-muted-foreground text-xs leading-relaxed mb-2">{t('t_auto_15')}</p>
+                             <a 
+                                href={`https://wa.me/201012345678?text=${encodeURIComponent(t('t_auto_16'))}`} 
+                                target="_blank" 
+                                rel="noreferrer"
+                                className="flex items-center justify-center gap-2 bg-[#25D366] text-white p-2 rounded-lg font-bold hover:bg-[#128C7E] transition-colors"
+                             >
+                                {t('t_auto_17')}
+                                                                       </a>
+                          </div>
+                        ) : msg.text}
                       </div>
                     </div>
                   ))}
                   {isLoading && (
                     <div className="flex justify-end">
                       <div className="max-w-[80%] rounded-xl p-3 bg-secondary animate-pulse rounded-tl-none text-sm">
-                        يجري تحليل الأنماط...
-                      </div>
+                        {t('t_auto_18')}
+                                                                    </div>
                     </div>
                   )}
                 </div>
@@ -200,7 +216,7 @@ export default function AICore() {
             <CardFooter className="pt-3 pb-3 px-3 bg-secondary/10 border-t border-white/5">
               <form onSubmit={(e) => { e.preventDefault(); handleSend(); }} className="flex w-full gap-2">
                 <Input 
-                  placeholder="كيف أستعيد طاقتي؟ هل إسكندرية فكرة جيدة؟" 
+                  placeholder={t('t_auto_19')} 
                   value={prompt} 
                   onChange={(e) => setPrompt(e.target.value)}
                   disabled={isLoading}
@@ -218,32 +234,32 @@ export default function AICore() {
           <Card className="border-white/5">
             <CardHeader className="pb-3">
               <CardTitle className="text-base flex items-center gap-2">
-                <AlertCircle className="h-4 w-4 text-primary" /> قراءات فورية للذكاء
-              </CardTitle>
+                <AlertCircle className="h-4 w-4 text-primary" /> {t('t_auto_20')}
+                                            </CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
-              {analytics.burnoutRisk === 'حرج جداً' && (
+              {analytics.burnoutRisk === t('t_auto_3') && (
                  <div className="bg-red-500/10 p-3 rounded-xl text-sm border border-red-500/20">
                    <p className="font-bold text-red-500 mb-1 flex items-center gap-1">
-                     <AlertCircle className="w-4 h-4" /> خطر الاحتراق (Burnout)!
-                   </p>
-                   <p className="text-muted-foreground text-xs leading-relaxed">أنت تعمل منذ {analytics.daysWorkedInRow} أيام متتالية دون راحة أو لساعات تتجاوز المعدل. يُرجى طلب إجازة غداً للتعافي.</p>
+                     <AlertCircle className="w-4 h-4" /> {t('t_auto_21')}
+                                                         </p>
+                   <p className="text-muted-foreground text-xs leading-relaxed">{t('t_auto_22')} {analytics.daysWorkedInRow} {t('t_auto_23')}</p>
                  </div>
               )}
               {analytics.workedRestDays > 0 && (
                 <div className="bg-secondary p-3 rounded-xl text-sm border border-white/5">
                   <p className="font-bold text-yellow-500 mb-1 flex items-center gap-1">
-                    <Coffee className="w-4 h-4" /> أرصدة راحة معلقة!
-                  </p>
-                  <p className="text-muted-foreground text-xs leading-relaxed">يبدو من السجل أنك داومت في العطلة ({analytics.workedRestDays} مرات). هل طالبت ببدل راحة أو ساعات إضافية لتعويضها؟</p>
+                    <Coffee className="w-4 h-4" /> {t('t_auto_24')}
+                                                        </p>
+                  <p className="text-muted-foreground text-xs leading-relaxed">{t('t_auto_25')}{analytics.workedRestDays} {t('t_auto_26')}</p>
                 </div>
               )}
-              {analytics.burnoutRisk === 'منخفض' && analytics.workedRestDays === 0 && (
+              {analytics.burnoutRisk === t('t_auto_2') && analytics.workedRestDays === 0 && (
                 <div className="bg-emerald-500/10 p-3 rounded-xl text-sm border border-emerald-500/20">
                   <p className="font-bold text-emerald-500 mb-1 flex items-center gap-1">
-                    <Sparkles className="w-4 h-4" /> توازن مثالي!
-                  </p>
-                  <p className="text-muted-foreground text-xs leading-relaxed">أنت تدير جدولك باحترافية، وتتمتع بتوازن صحي بين العمل والحياة الشخصية.</p>
+                    <Sparkles className="w-4 h-4" /> {t('t_auto_27')}
+                                                        </p>
+                  <p className="text-muted-foreground text-xs leading-relaxed">{t('t_auto_28')}</p>
                 </div>
               )}
             </CardContent>

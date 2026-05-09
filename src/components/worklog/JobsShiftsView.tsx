@@ -8,8 +8,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { useWorkLog } from '../../contexts/WorkLogContext';
 import { Briefcase, Clock, Plus, Trash2, Edit2, Check } from 'lucide-react';
 import { toast } from 'sonner';
+import { useLanguage } from "@/contexts/LanguageContext";
 
 export default function JobsShiftsView() {
+    const { t, lang } = useLanguage();
   const { jobs, shifts, addJob, addShift, updateJob, updateShift, removeJob, removeShift } = useWorkLog();
 
   // Editing state
@@ -37,14 +39,14 @@ export default function JobsShiftsView() {
          color: jobColor
        });
        setEditingJobId(null);
-       toast.success('تم تعديل جهة العمل');
+       toast.success(t('t_auto_391'));
     } else {
        addJob({
          name: jobName,
          type: jobType as any,
          color: jobColor
        });
-       toast.success('تمت إضافة جهة العمل');
+       toast.success(t('t_auto_392'));
     }
     setJobName('');
     setJobType('salary');
@@ -62,7 +64,7 @@ export default function JobsShiftsView() {
          color: shiftColor
        });
        setEditingShiftId(null);
-       toast.success('تم تعديل الوردية');
+       toast.success(t('t_auto_393'));
     } else {
        addShift({
          name: shiftName,
@@ -71,7 +73,7 @@ export default function JobsShiftsView() {
          frequency: shiftFrequency as any,
          color: shiftColor
        });
-       toast.success('تمت إضافة الوردية');
+       toast.success(t('t_auto_394'));
     }
     setShiftName('');
     setShiftStart('');
@@ -102,9 +104,9 @@ export default function JobsShiftsView() {
       <Card className="p-5 rounded-3xl bg-card border-white/5 space-y-4">
         <div className="flex items-center gap-2 mb-2 border-b border-border/40 pb-3">
           <Clock className="w-5 h-5 text-emerald-500" />
-          <h3 className="font-bold text-lg">إدارة الورديات (Shifts)</h3>
+          <h3 className="font-bold text-lg">{t('t_auto_395')}</h3>
         </div>
-        <p className="text-sm text-muted-foreground">بعد إضافة الورديات هنا، ستظهر لك تلقائياً في الشاشة الرئيسية (شاشة الحضور) عندما يقترب موعدها، أو من القائمة الجانبية.</p>
+        <p className="text-sm text-muted-foreground">{t('t_auto_396')}</p>
 
         {shifts.length > 0 && (
           <div className="flex flex-col gap-2 mb-4">
@@ -118,7 +120,7 @@ export default function JobsShiftsView() {
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
-                  <div className="text-[10px] px-2 py-1 bg-emerald-500/10 text-emerald-500 rounded-md">مُسجلة</div>
+                  <div className="text-[10px] px-2 py-1 bg-emerald-500/10 text-emerald-500 rounded-md">{t('t_auto_397')}</div>
                   <Button variant="ghost" size="icon" className="h-7 w-7 text-indigo-500 hover:bg-indigo-500/10" onClick={() => handleEditShift(shift)}>
                     <Edit2 className="w-4 h-4" />
                   </Button>
@@ -134,16 +136,16 @@ export default function JobsShiftsView() {
         <div className="space-y-4 bg-secondary/10 p-5 rounded-3xl border border-white/5">
           <h4 className="text-sm font-bold flex items-center gap-2">
             {editingShiftId ? <Edit2 className="w-4 h-4 text-emerald-500" /> : <Plus className="w-4 h-4 text-emerald-500" />}
-            {editingShiftId ? 'تعديل الوردية' : 'إضافة وردية جديدة'}
+            {editingShiftId ? t('t_auto_398') : t('t_auto_399')}
           </h4>
           <div className="space-y-3">
             <div className="space-y-1.5 flex-1">
-              <Label className="text-xs text-muted-foreground font-bold">مسمى الوردية</Label>
-              <Input className="h-12 rounded-xl bg-background/50 border-white/10" placeholder="مثال: الوردية الصباحية" value={shiftName} onChange={(e) => setShiftName(e.target.value)} />
+              <Label className="text-xs text-muted-foreground font-bold">{t('t_auto_400')}</Label>
+              <Input className="h-12 rounded-xl bg-background/50 border-white/10" placeholder={t('t_auto_401')} value={shiftName} onChange={(e) => setShiftName(e.target.value)} />
             </div>
             
             <div className="space-y-1.5">
-               <Label className="text-xs text-muted-foreground font-bold">اللون المُميِّز</Label>
+               <Label className="text-xs text-muted-foreground font-bold">{t('t_auto_402')}</Label>
                <div className="flex gap-2 flex-wrap pb-1">
                  {['#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6', '#64748b'].map(color => (
                    <button 
@@ -159,30 +161,30 @@ export default function JobsShiftsView() {
 
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <Label className="text-xs text-muted-foreground font-bold">وقت البدء</Label>
+              <Label className="text-xs text-muted-foreground font-bold">{t('t_auto_403')}</Label>
               <SmartTimePicker className="h-12 rounded-xl bg-background/50 border-white/10 w-full" value={shiftStart} onChange={setShiftStart} />
             </div>
             <div className="space-y-1.5">
-              <Label className="text-xs text-muted-foreground font-bold">وقت الانتهاء</Label>
+              <Label className="text-xs text-muted-foreground font-bold">{t('t_auto_404')}</Label>
               <SmartTimePicker className="h-12 rounded-xl bg-background/50 border-white/10 w-full" value={shiftEnd} onChange={setShiftEnd} />
             </div>
           </div>
 
           <div className="space-y-1.5">
-             <Label className="text-xs text-muted-foreground font-bold">نمط التكرار التلقائي</Label>
+             <Label className="text-xs text-muted-foreground font-bold">{t('t_auto_405')}</Label>
              <Select value={shiftFrequency} onValueChange={setShiftFrequency}>
                <SelectTrigger className="min-w-0 w-full h-12 rounded-xl bg-background/50 border-white/10" dir="rtl">
                  <SelectValue />
                </SelectTrigger>
                <SelectContent dir="rtl" className="min-w-[150px] rounded-xl z-[150]">
-                 <SelectItem value="daily">يومياً (كل الأيام)</SelectItem>
-                 <SelectItem value="weekly">أسبوعياً (أيام العمل فقط)</SelectItem>
-                 <SelectItem value="custom">مخصص (حسب الطلب في التقويم)</SelectItem>
+                 <SelectItem value="daily">{t('t_auto_406')}</SelectItem>
+                 <SelectItem value="weekly">{t('t_auto_407')}</SelectItem>
+                 <SelectItem value="custom">{t('t_auto_408')}</SelectItem>
                </SelectContent>
              </Select>
           </div>
           <Button className="w-full mt-2 h-12 rounded-xl font-bold shadow-lg" onClick={submitShift}>
-             {editingShiftId ? <><Check className="w-4 h-4 mr-2" /> حفظ التعديلات</> : <><Plus className="w-4 h-4 mr-2" /> إضافة للورديات</>}
+             {editingShiftId ? <><Check className="w-4 h-4 mr-2" /> {t('t_auto_409')}</> : <><Plus className="w-4 h-4 mr-2" /> {t('t_auto_410')}</>}
           </Button>
         </div>
       </Card>
@@ -191,7 +193,7 @@ export default function JobsShiftsView() {
       <Card className="p-5 rounded-3xl bg-card border-white/5 space-y-4">
         <div className="flex items-center gap-2 mb-2 border-b border-border/40 pb-3">
           <Briefcase className="w-5 h-5 text-indigo-500" />
-          <h3 className="font-bold text-lg">الوظائف ومشاريع العمل المستقل</h3>
+          <h3 className="font-bold text-lg">{t('t_auto_411')}</h3>
         </div>
 
         {jobs.length > 0 && (
@@ -202,11 +204,11 @@ export default function JobsShiftsView() {
                   <div className="w-4 h-4 rounded-full" style={{backgroundColor: job.color}}></div>
                   <div>
                     <p className="font-bold">{job.name}</p>
-                    <p className="text-xs text-muted-foreground">{job.type === 'freelance' ? 'عمل حر / مستقل' : 'دوام منتظم'}</p>
+                    <p className="text-xs text-muted-foreground">{job.type === 'freelance' ? t('t_auto_412') : t('t_auto_413')}</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
-                  <div className="text-xs px-2 py-1 bg-indigo-500/10 text-indigo-500 rounded-md">جاهز</div>
+                  <div className="text-xs px-2 py-1 bg-indigo-500/10 text-indigo-500 rounded-md">{t('t_auto_414')}</div>
                   <Button variant="ghost" size="icon" className="h-7 w-7 text-indigo-500 hover:bg-indigo-500/10" onClick={() => handleEditJob(job)}>
                     <Edit2 className="w-4 h-4" />
                   </Button>
@@ -220,26 +222,26 @@ export default function JobsShiftsView() {
         )}
 
         <div className="space-y-3 bg-secondary/10 p-4 rounded-2xl">
-          <h4 className="text-sm font-bold text-muted-foreground">{editingJobId ? 'تعديل الوظيفة/العمل' : 'إضافة وظيفة/عمل جديد'}</h4>
+          <h4 className="text-sm font-bold text-muted-foreground">{editingJobId ? t('t_auto_415') : t('t_auto_416')}</h4>
           <div className="space-y-2">
-            <Label>مسمى الوظيفة/الجهة</Label>
-            <Input placeholder="مثال: شركة س، أو عميل ص" value={jobName} onChange={(e) => setJobName(e.target.value)} />
+            <Label>{t('t_auto_417')}</Label>
+            <Input placeholder={t('t_auto_418')} value={jobName} onChange={(e) => setJobName(e.target.value)} />
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-               <Label>نوع العمل</Label>
+               <Label>{t('t_auto_419')}</Label>
                <Select value={jobType} onValueChange={setJobType}>
                  <SelectTrigger className="min-w-0" dir="rtl">
                    <SelectValue />
                  </SelectTrigger>
                  <SelectContent dir="rtl" className="min-w-[150px]">
-                   <SelectItem value="salary">راتب ثابت</SelectItem>
-                   <SelectItem value="freelance">عمل حر (مستقل)</SelectItem>
+                   <SelectItem value="salary">{t('t_auto_420')}</SelectItem>
+                   <SelectItem value="freelance">{t('t_auto_421')}</SelectItem>
                  </SelectContent>
                </Select>
             </div>
             <div className="space-y-2">
-               <Label>اللون التعريفي</Label>
+               <Label>{t('t_auto_422')}</Label>
                <div className="flex gap-2">
                  <Input type="color" className="w-12 h-10 p-1" value={jobColor} onChange={(e) => setJobColor(e.target.value)} />
                  <Input className="flex-1" value={jobColor} readOnly />
@@ -247,7 +249,7 @@ export default function JobsShiftsView() {
             </div>
           </div>
           <Button className="w-full mt-2" onClick={submitJob}>
-             {editingJobId ? <><Edit2 className="w-4 h-4 mr-2" /> حفظ التعديلات</> : <><Plus className="w-4 h-4 mr-2" /> إضافة العمل</>}
+             {editingJobId ? <><Edit2 className="w-4 h-4 mr-2" /> {t('t_auto_409')}</> : <><Plus className="w-4 h-4 mr-2" /> {t('t_auto_423')}</>}
           </Button>
         </div>
       </Card>

@@ -4,8 +4,10 @@ import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { HelpCircle, MessageCircle, Bug, Lightbulb, Phone, Send } from 'lucide-react';
 import { useWorkLog } from '../../contexts/WorkLogContext';
+import { useLanguage } from "@/contexts/LanguageContext";
 
 export default function SupportQAView() {
+    const { t, lang } = useLanguage();
   const [feedback, setFeedback] = useState('');
   const WHATSAPP_NUMBER = '01009969653';
 
@@ -19,20 +21,20 @@ export default function SupportQAView() {
 
   const faqs = [
     {
-      q: 'كيف يمكنني تسجيل حضور في وظيفة معينة أو وردية؟',
-      a: 'من خلال "إدارة بيئة العمل" (للمستخدمين المتقدمين) يمكنك إضافة وظائفك ووردياتك المختلفة. سيقوم التطبيق بفتح نافذة المساعد الذكي عند الضغط على "بدء الجلسة" لتختار بينها.'
+      q: t('t_auto_474'),
+      a: t('t_auto_475')
     },
     {
-      q: 'هل يعمل التطبيق بدون إنترنت؟',
-      a: 'نعم! التطبيق مدعوم بتقنية PWA، يمكنك تثبيته على هاتفك وسيعمل ويحفظ بياناتك محلياً بالكامل.'
+      q: t('t_auto_476'),
+      a: t('t_auto_477')
     },
     {
-      q: 'كيف يمكنني حساب الإجازات والغياب؟',
-      a: 'من الشاشة الرئيسية، واضغط على "تسجيل يوم غياب/إجازة" واختر نوع الإجازة. سيقوم التطبيق بخصمها من رصيد إجازاتك المتواجد في الإعدادات.'
+      q: t('t_auto_478'),
+      a: t('t_auto_479')
     },
     {
-      q: 'ما هو المحرك الذكي؟',
-      a: 'هو مساعد يعتمد على الذكاء الاصطناعي، يقرأ بيانات أيام عملك، ويحسب الساعات الإضافية والأيام المتتالية دون راحة لينبهك عند وجود خطر احتراق وظيفي أو يقدم نصائح للتوازن.'
+      q: t('t_auto_480'),
+      a: t('t_auto_481')
     }
   ];
 
@@ -46,8 +48,8 @@ export default function SupportQAView() {
             <HelpCircle className="w-6 h-6" />
           </div>
           <div>
-            <h2 className="text-2xl font-bold">المساعدة والدعم</h2>
-            <p className="text-muted-foreground text-sm">الإجابة عن استفساراتك والتواصل معنا</p>
+            <h2 className="text-2xl font-bold">{t('t_auto_482')}</h2>
+            <p className="text-muted-foreground text-sm">{t('t_auto_483')}</p>
           </div>
         </div>
       </div>
@@ -56,8 +58,8 @@ export default function SupportQAView() {
         {/* FAQs */}
         <div className="space-y-4">
           <h3 className="font-bold text-lg px-1 text-primary flex items-center gap-2">
-            <Lightbulb className="w-5 h-5" /> الأسئلة الشائعة
-          </h3>
+            <Lightbulb className="w-5 h-5" /> {t('t_auto_484')}
+                                </h3>
           <div className="flex flex-col gap-3">
             {faqs.map((faq, i) => (
               <Card key={i} className="p-4 bg-card border-white/5 rounded-2xl">
@@ -71,18 +73,17 @@ export default function SupportQAView() {
         {/* Contact/Feedback */}
         <div className="space-y-4">
           <h3 className="font-bold text-lg px-1 text-primary flex items-center gap-2">
-            <MessageCircle className="w-5 h-5" /> الشكاوى والمقترحات
-          </h3>
+            <MessageCircle className="w-5 h-5" /> {t('t_auto_80')}
+                                </h3>
           <Card className="p-5 bg-card border-white/5 rounded-2xl flex flex-col gap-4">
             <p className="text-sm text-muted-foreground leading-relaxed">
-              يسعدنا دائماً سماع أفكارك لتطوير التطبيق، أو مساعدتك في حل أي مشكلة قد تواجهك.
-              سيقوم التطبيق بتوجيهك مباشرة لخدمة العملاء عبر WhatsApp.
-            </p>
+              {t('t_auto_485')}
+                                      </p>
             
             <div className="relative">
               <textarea 
                 className="w-full bg-secondary/30 rounded-xl border border-white/10 p-3 text-sm min-h-[120px] focus:outline-none focus:ring-1 focus:ring-primary"
-                placeholder="اكتب اقتراحك أو مشكلتك هنا..."
+                placeholder={t('t_auto_486')}
                 value={feedback}
                 onChange={(e) => setFeedback(e.target.value)}
               />
@@ -90,33 +91,33 @@ export default function SupportQAView() {
             
             <div className="grid grid-cols-2 gap-2 mt-2">
               <Button 
-                onClick={() => sendWhatsApp('تبليغ عن مشكلة')}
+                onClick={() => sendWhatsApp(t('t_auto_487'))}
                 variant="secondary"
                 className="bg-red-500/10 hover:bg-red-500/20 text-red-500 rounded-xl"
               >
-                <Bug className="w-4 h-4 ml-2" /> مشكلة
-              </Button>
+                <Bug className="w-4 h-4 ml-2" /> {t('t_auto_488')}
+                                            </Button>
               <Button 
-                onClick={() => sendWhatsApp('اقتراح تطوير')}
+                onClick={() => sendWhatsApp(t('t_auto_489'))}
                 variant="secondary"
                 className="bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-500 rounded-xl"
               >
-                <Lightbulb className="w-4 h-4 ml-2" /> اقتراح
-              </Button>
+                <Lightbulb className="w-4 h-4 ml-2" /> {t('t_auto_263')}
+                                            </Button>
               <Button 
-                onClick={() => sendWhatsApp('شكوى')}
+                onClick={() => sendWhatsApp(t('t_auto_264'))}
                 variant="secondary"
                 className="bg-orange-500/10 hover:bg-orange-500/20 text-orange-500 rounded-xl"
               >
-                 <Phone className="w-4 h-4 ml-2" /> شكوى
-              </Button>
+                 <Phone className="w-4 h-4 ml-2" /> {t('t_auto_264')}
+                                            </Button>
               <Button 
-                onClick={() => sendWhatsApp('إشادة وتميز')}
+                onClick={() => sendWhatsApp(t('t_auto_490'))}
                 variant="secondary"
                 className="bg-blue-500/10 hover:bg-blue-500/20 text-blue-500 rounded-xl"
               >
-                 <Send className="w-4 h-4 ml-2" /> إشادة
-              </Button>
+                 <Send className="w-4 h-4 ml-2" /> {t('t_auto_265')}
+                                            </Button>
             </div>
           </Card>
 
@@ -128,8 +129,8 @@ export default function SupportQAView() {
               <Phone className="w-5 h-5" />
             </div>
             <div>
-              <p className="font-bold text-sm">التواصل المباشر (WhatsApp)</p>
-              <p className="text-xs text-muted-foreground mt-1">اضغط للتحدث مع فريق الدعم</p>
+              <p className="font-bold text-sm">{t('t_auto_491')}</p>
+              <p className="text-xs text-muted-foreground mt-1">{t('t_auto_492')}</p>
             </div>
           </Card>
         </div>

@@ -7,21 +7,23 @@ import { Button } from '../ui/button';
 import { ScrollArea } from '../ui/scroll-area';
 import { Brain, Send, Bot, Sparkles, ChevronRight } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
-
-const SUGGESTED_QUESTIONS = [
-  "كيف أدخل ورديات العمل المتعددة؟",
-  "كيف أعدل على تفاصيل عملي والورديات؟",
-  "كيف يُحسب العمل الإضافي (Overtime)؟",
-  "هل يمكنني إضافة إجازة أو تصريح بأثر رجعي؟",
-  "هل يمكن للذكاء الاصطناعي تقييم أأدائي لهذا الشهر؟",
-];
+import { useLanguage } from "@/contexts/LanguageContext";
 
 export default function EmbeddedAIChat() {
+    const { t, lang } = useLanguage();
+
+    const SUGGESTED_QUESTIONS = [
+      t('t_auto_29'),
+      t('t_auto_30'),
+      t('t_auto_31'),
+      t('t_auto_32'),
+      t('t_auto_33')
+    ];
   const { askAI } = useAICore();
   const { sessions, settings } = useWorkLog(); // Pass real context
   const [prompt, setPrompt] = useState('');
   const [messages, setMessages] = useState<{ role: 'user' | 'ai', text: string }[]>([
-    { role: 'ai', text: 'أهلاً بك! أنا مساعدك الذكي الخاص بـ LifeCompanion المدمج في واجهتك. كيف يمكنني إفادتك اليوم؟ 🧠' }
+    { role: 'ai', text: t('t_auto_34') }
   ]);
   const [isLoading, setIsLoading] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -44,20 +46,20 @@ export default function EmbeddedAIChat() {
     
     // Offline/Online Interception for FAQ (Static responses to save API and work offline)
     let staticReply = null;
-    if (m.includes('إجاز') || m.includes('اجاز') || m.includes('عطل')) {
-        staticReply = "**كيف أسجل الإجازات؟**\nمن خلال واجهة 'التقويم المتقدم' يمكنك الضغط على أي يوم واختيار (إضافة إجازة) مثل تصريح، نصف يوم، إجازة مرضية، أو إجازة سنوية.";
-    } else if (m.includes('حذف') || m.includes('ارشف') || m.includes('أرشف')) {
-        staticReply = "**كيف أحذف جلسة أو مهمة؟**\nاضغط على الدائرة الجانبية في أعلى السجل الزمني ثم اختر 'أرشفة' أو من الثلاث نقاط للجلسة. يمكنك لاحقاً الذهاب لقسم 'الأرشيف' لاستعادتها أو حذفها نهائياً.";
-    } else if (m.includes('راتب') || m.includes('فلوس') || m.includes('محفظ')) {
-        staticReply = "**كيف يعمل نظام المحفظة؟**\nالمحفظة تقوم بضرب ساعات عملك الأساسية والإضافية في (سعر الساعة) الذي تحدده في الإعدادات، وتضيف إليه البدلات والخصومات لتقييم دخلك.";
-    } else if (m.includes('مخطط') || m.includes('تصميم') || m.includes('رسم')) {
-        staticReply = "**كيف أصمم مخططاً؟**\nاذهب لقسم 'صانع المخططات' من القائمة الجانبية. اختر المعايير المطلوبة ثم اضغط حفظ ليظهر المخطط في المحفظة الخاصة بك.";
-    } else if (m.includes('نسخ') || m.includes('احتياط') || m.includes('بيانات') || m.includes('امن')) {
-        staticReply = "**كيف أحتفظ ببياناتي؟**\nكل بياناتك تُحفظ محلياً في جهازك. يمكنك الذهاب إلى قائمة 'الإعدادات' والضغط على 'تصدير نسخة احتياطية' لحفظها بأمان.";
-    } else if (m.includes('وردي') || m.includes('الوردي') || ((m.includes('كيف') || m.includes('ازاي')) && m.includes('ادخل') && m.includes('عمل'))) {
-        staticReply = "**الورديات والوظائف:**\n\n📌 **كيف أدخل ورديات وأكثر من عمل؟**\nانتقل إلى 'التقويم المتقدم' ثم انقر على زر 'الوظائف والورديات' (أيقونة الحقيبة). هناك يمكنك إضافة ورديات مخصصة (كالصباحية والمسائية) بالإضافة إلى وظائف ومشاريع لا نهائية (سواء براتب ثابت أو مستقل).\n\n📌 **كيف أُعدّل تفاصيل العمل أو الوردية؟**\nبنفس الشاشة السابقة (الوظائف والورديات)، ستجد أيقونة 'تعديل' (قلم) بجوار أي وردية أو وظيفة مُضافة مسبقاً.";
-    } else if (m.includes('عمل إضافي') || m.includes('اوفرتيم') || m.includes('overtime')) {
-        staticReply = "**كيف أحسب العمل الإضافي؟**\nمن واجهة 'الإعدادات'، حدد عدد الساعات القياسي لليوم الخاص بك. أي عمل يتم تسجيله ويتجاوز هذا العدد سيتم احتسابه كعمل إضافي تلقائياً ويُمكنك متابعته من التقويم.";
+    if (m.includes(t('t_auto_35')) || m.includes(t('t_auto_36')) || m.includes(t('t_auto_37'))) {
+        staticReply = t('t_auto_38');
+    } else if (m.includes(t('t_auto_39')) || m.includes(t('t_auto_40')) || m.includes(t('t_auto_41'))) {
+        staticReply = t('t_auto_42');
+    } else if (m.includes(t('t_auto_43')) || m.includes(t('t_auto_44')) || m.includes(t('t_auto_45'))) {
+        staticReply = t('t_auto_46');
+    } else if (m.includes(t('t_auto_47')) || m.includes(t('t_auto_48')) || m.includes(t('t_auto_49'))) {
+        staticReply = t('t_auto_50');
+    } else if (m.includes(t('t_auto_51')) || m.includes(t('t_auto_52')) || m.includes(t('t_auto_53')) || m.includes(t('t_auto_54'))) {
+        staticReply = t('t_auto_55');
+    } else if (m.includes(t('t_auto_56')) || m.includes(t('t_auto_57')) || ((m.includes(t('t_auto_58')) || m.includes(t('t_auto_59'))) && m.includes(t('t_auto_60')) && m.includes(t('t_auto_61')))) {
+        staticReply = t('t_auto_62');
+    } else if (m.includes(t('t_auto_63')) || m.includes(t('t_auto_64')) || m.includes('overtime')) {
+        staticReply = t('t_auto_65');
     }
 
     if (staticReply) {
@@ -72,7 +74,7 @@ export default function EmbeddedAIChat() {
     if (!navigator.onLine) {
         // Fallback for offline when no static match is found
         setTimeout(() => {
-            const reply = "عذراً، لم أتمكن من العثور على إجابة مسجلة لسؤالك (لأنك غير متصل بالإنترنت حالياً وتطبيقنا مصمم للعمل محلياً بذكاء).\n\n💡 **اقتراح:** يمكنك تصفح قسم 'الأسئلة الشائعة (Q&A)' لمعرفة المزيد حول التطبيق، أو الاتصال بالإنترنت ليقوم الذكاء الاصطناعي الخاص بنا بتحليل سؤالك والتفاعل معك!";
+            const reply = t('t_auto_66');
             setMessages(prev => [...prev, { role: 'ai', text: reply }]);
             setIsLoading(false);
         }, 1000);
@@ -88,9 +90,9 @@ export default function EmbeddedAIChat() {
             const response = await askAI(augmentedPrompt);
             setMessages(prev => [...prev, { role: 'ai', text: response }]);
         } catch (error) {
-            let errorMsg = 'حدث خطأ غير متوقع. يرجى التحقق من مفتاح Gemini API وتأكد من وجود اتصال قوي بالإنترنت.';
+            let errorMsg = t('t_auto_67');
             if (error instanceof Error && error.message.includes('API')) {
-               errorMsg = 'مفتاح Gemini API غير صالح أو غير موجود. يرجى الدخول للإعدادات وإضافة مفتاح خاص بك ليعمل الذكاء الاصطناعي.';
+               errorMsg = t('t_auto_68');
             }
             setMessages(prev => [...prev, { role: 'ai', text: errorMsg }]);
         } finally {
@@ -130,8 +132,8 @@ export default function EmbeddedAIChat() {
              <div className="mt-8 animate-in fade-in slide-in-from-bottom-2 duration-500">
                 <h3 className="text-sm font-bold text-muted-foreground flex items-center gap-2 mb-3">
                    <Sparkles className="w-4 h-4 text-indigo-400" />
-                   اقترحنا لك هذه الأسئلة:
-                </h3>
+                   {t('t_auto_69')}
+                                              </h3>
                 <div className="flex flex-col gap-2">
                    {SUGGESTED_QUESTIONS.map((q, i) => (
                       <button
@@ -150,8 +152,8 @@ export default function EmbeddedAIChat() {
           {isLoading && (
             <div className="flex flex-col items-start">
               <div className="max-w-[80%] rounded-xl p-3 bg-secondary animate-pulse rounded-tl-none text-sm flex items-center gap-2">
-                <Bot className="h-4 w-4 animate-spin text-primary" /> يحلل ويفكر...
-              </div>
+                <Bot className="h-4 w-4 animate-spin text-primary" /> {t('t_auto_70')}
+                                            </div>
             </div>
           )}
           <div ref={scrollRef} />
@@ -160,7 +162,7 @@ export default function EmbeddedAIChat() {
       <div className="p-3 bg-card border-t shrink-0 absolute bottom-0 left-0 right-0">
         <form onSubmit={(e) => { e.preventDefault(); handleSend(); }} className="flex w-full gap-2">
           <Input 
-            placeholder="اسأل رفيق الحياة..." 
+            placeholder={t('t_auto_71')} 
             value={prompt} 
             onChange={(e) => setPrompt(e.target.value)}
             disabled={isLoading}

@@ -3,38 +3,40 @@ import { useTheme } from '../../contexts/ThemeContext';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '../ui/card';
 import { Button } from '../ui/button';
 import { Palette, Moon, Sun, Zap, Heart, Calendar, Focus, Info } from 'lucide-react';
+import { useLanguage } from "@/contexts/LanguageContext";
 
 export default function ThemesModes() {
+    const { t, lang } = useLanguage();
   const { theme, setTheme, smartMode, setSmartMode } = useTheme();
 
   const themes = [
-    { id: 'light', name: 'فاتح', icon: Sun, color: 'bg-slate-100' },
-    { id: 'dark', name: 'داكن', icon: Moon, color: 'bg-slate-900' },
-    { id: 'ocean', name: 'محيط', icon: Zap, color: 'bg-blue-500' },
-    { id: 'midnight', name: 'منتصف الليل', icon: Moon, color: 'bg-indigo-950' },
-    { id: 'forest', name: 'غابة', icon: Calendar, color: 'bg-emerald-600' },
-    { id: 'sunset', name: 'غروب', icon: Sun, color: 'bg-orange-500' },
-    { id: 'monochrome', name: 'أحادي', icon: Palette, color: 'bg-gray-800' }
+    { id: 'light', name: t('t_auto_81'), icon: Sun, color: 'bg-slate-100' },
+    { id: 'dark', name: t('t_auto_82'), icon: Moon, color: 'bg-slate-900' },
+    { id: 'ocean', name: t('t_auto_125'), icon: Zap, color: 'bg-blue-500' },
+    { id: 'midnight', name: t('t_auto_126'), icon: Moon, color: 'bg-indigo-950' },
+    { id: 'forest', name: t('t_auto_127'), icon: Calendar, color: 'bg-emerald-600' },
+    { id: 'sunset', name: t('t_auto_128'), icon: Sun, color: 'bg-orange-500' },
+    { id: 'monochrome', name: t('t_auto_129'), icon: Palette, color: 'bg-gray-800' }
   ];
 
   const modes = [
-    { id: 'focus', name: 'وضع التركيز', desc: 'أبيض وأسود بدون مشتتات', icon: Focus },
+    { id: 'focus', name: t('t_auto_130'), desc: t('t_auto_131'), icon: Focus },
   ];
 
   return (
     <div className="space-y-6">
       <div>
         <h2 className="text-3xl font-bold tracking-tight flex items-center gap-2">
-          <Palette className="h-8 w-8 text-primary" /> الثيمات والأوضاع
-        </h2>
-        <p className="text-muted-foreground">تغيير شخصية التطبيق بالكامل حسب مزاجك أو وقتك.</p>
+          <Palette className="h-8 w-8 text-primary" /> {t('t_auto_132')}
+                          </h2>
+        <p className="text-muted-foreground">{t('t_auto_133')}</p>
       </div>
 
       <div className="grid gap-6 md:grid-cols-2">
         <Card>
           <CardHeader>
-            <CardTitle>الثيمات الأساسية</CardTitle>
-            <CardDescription>اختر الألوان التي تناسب ذوقك.</CardDescription>
+            <CardTitle>{t('t_auto_134')}</CardTitle>
+            <CardDescription>{t('t_auto_135')}</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
@@ -60,8 +62,8 @@ export default function ThemesModes() {
 
         <Card>
           <CardHeader>
-            <CardTitle>الأوضاع الذكية (Modes)</CardTitle>
-            <CardDescription>أوضاع تغير تجربة الاستخدام بالكامل.</CardDescription>
+            <CardTitle>{t('t_auto_136')}</CardTitle>
+            <CardDescription>{t('t_auto_137')}</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="space-y-3">

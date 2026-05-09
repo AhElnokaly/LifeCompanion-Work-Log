@@ -1,0 +1,198 @@
+108:"النجاح ليس النهاية، والفشل ليس قاتلاً: الشجاعة للاستمرار هي ما يهم.",
+109:"الطريقة الوحيدة للقيام بعمل عظيم هي أن تحب ما تفعله.",
+110:"لا تنتظر الفرصة، اصنعها.",
+111:"التركيز هو سر الإنتاجية العالية.",
+112:"أنت أقوى مما تعتقد، وأكثر قدرة مما تتخيل."
+156:endSession('انصراف آلي (16 ساعة تجاوز)', { endTime: dummyTime.toISOString() });
+185:if (todaySessions.some(s => s.dayStatus === 'compensation')) return "تستمتع بيوم راحة كـ (بديل)";
+186:return "تستمتع بإجازة سنوية";
+323:processSessionStart(type, entityId, forceYesterday, true, { ...explicitOverrides, startTime: expectedStart.toISOString(), notes: `تأخير (${lateMins} دقيقة) - تم استخدام تصريح` });
+326:processSessionStart(type, entityId, forceYesterday, true, { ...explicitOverrides, startTime: expectedStart.toISOString(), dayStatus: 'late', notes: `خصم تأخير (${lateMins} دقيقة)` });
+330:logSpecialSession('half_day_leave', { note: 'تأخير تلقائي' });
+340:const moodNotes = `[مزاج البداية: ${moodScore}/5] ${existingNotes}`;
+385:const finalNotes = noteText || 'انتهى العمل';
+399:const combinedNotes = `${noteText ? noteText + '\n' : ''}[المزاج النهائي: ${moodScore}/5 | الإنجاز: ${selfScore}/10]`;
+418:toast.error("وقت الانصراف يجب أن يكون بعد وقت الحضور");
+432:toast.error("يرجى اختيار يوم العمل الإضافي المراد استبداله");
+444:notes: noteText || 'أدخلت يدويا من سجل الأيام السابقة'
+470:notes: noteText || 'أدخلت يدويا من سجل الأيام السابقة'
+476:toast.success('تم إضافة السجل بنجاح!');
+511:`قم بتحليل هذا النص: "${aiPrompt}". واستخرج منه البيانات التالية بتنسيق JSON فقط:
+512:- action: (إما "log_past_session" للإضافة المباشرة ليوم عمل، أو "start_new" للبدء الآن، أو "log_leave" لتسجيل إجازة، أو "log_permission" لإذن أو نصف يوم)
+513:- leaveType: (إذا كان إجازة: "annual_leave", "sick_leave", "casual_leave", وإلا اتركه فارغ)
+514:- durationMinutes: (المدة بالدقائق إذا صرح بها للاستئذان أو العمل، وإلا 0)
+515:- breakMinutes: (مدة الاستراحة بالدقائق إن ذكرها، وإلا 0)
+516:- projectKeywords: (كلمة دالة على المشروع إذا ذكر، وإلا فارغ)
+517:- notes: (توليد ملاحظة احترافية بناءً على المدخل)`,
+518:"أنت مساعد استخراج بيانات تقوم بإرجاع JSON صالح فقط ولا شيء غيره.",
+542:logSpecialSession((parsed.leaveType as any) || 'casual_leave', { note: parsed.notes || 'تسجيل ذكي للإجازة' });
+544:logSpecialSession('permission', { hours: (parsed.durationMinutes || 60) / 60, note: parsed.notes || 'تسجيل ذكي للإذن' });
+560:notes: parsed.notes || 'تسجيل ذكي'
+570:toast.success('تم التسجيل بنجاح عبر المحرك الذكي!');
+572:alert(err.message || 'حدث خطأ في فهم طلبك. تأكد من إدخال المفتاح في الإعدادات.');
+594:timeGreeting = 'صباح الخير';
+597:timeGreeting = 'طاب يومك';
+600:timeGreeting = 'مساء الخير';
+603:timeGreeting = 'طابت ليلتك';
+629:{format(now, 'EEEE، d MMMM', { locale: ar })}
+633:<span className="text-2xl opacity-70 font-bold">{format(now, 'a', { locale: ar }).replace('ص', 'ص').replace('م', 'م')}</span>
+646:نتمنى لك يوماً سعيداً بعيداً عن ضغوط العمل
+655:<span className="text-sm font-bold text-foreground">تفاصيل اليوم</span>
+660:<span className="text-[10px] text-muted-foreground font-medium">تسجيل دخول</span>
+664:<span className="text-[10px] text-muted-foreground font-medium">تسجيل خروج</span>
+665:<span className="text-lg font-bold font-mono tracking-tight">{!activeSession || expectedCheckoutStr === '--:--' ? '--:--' : expectedCheckoutStr.replace('ص', '').replace('م', '').trim()}</span>
+668:<span className="text-[10px] text-muted-foreground font-medium">الإجمالي</span>
+669:<span className="text-lg font-bold font-mono tracking-tight">{displayHours}س</span>
+672:<span className="text-[10px] text-muted-foreground font-medium">س إضافي</span>
+685:{activeSession.activeBreakStartTime ? 'إنهاء الاستراحة' : 'استراحة'}
+688:<Shuffle className="w-3.5 h-3.5 ml-1" /> تبديل
+691:<FileText className="w-3.5 h-3.5 ml-1" /> مذكرات
+748:<Brain className="w-5 h-5 text-indigo-500" /> التسجيل الذكي
+750:<p className="text-xs text-muted-foreground font-medium mt-1">تحدث أو اكتب ما قمت به وسيتولى الذكاء تنظيم السجل.</p>
+754:placeholder="مثال: اشتغلت ساعتين وطلعت نص ساعة بريك"
+761:{isAILogging ? <Loader2 className="w-6 h-6 animate-spin" /> : 'تسجيل الآن'}
+778:<span className="text-sm font-bold text-foreground">ساعات العمل الأساسية</span>
+779:<span className="text-[10px] text-muted-foreground mt-0.5">سيتم حساب الإضافي بناءً عليها</span>
+859:تصريح (ساعة)
+869:تصريح (ساعتين)
+901:if (holDay === 2) { suggestion = 'الإثنين القادم'; suggestedDate = new Date(upcomingHoliday); suggestedDate.setDate(suggestedDate.getDate() - 1); }
+903:if (holDay === 3) { suggestion = 'الخميس القادم'; suggestedDate = new Date(upcomingHoliday); suggestedDate.setDate(suggestedDate.getDate() + 1); }
+905:if (holDay === 4) { suggestion = 'الأربعاء القادم'; suggestedDate = new Date(upcomingHoliday); suggestedDate.setDate(suggestedDate.getDate() - 1); }
+915:<p className="text-xs font-bold text-primary">المتنبئ الذكي للإجازات</p>
+917:إذا أخذت إجازة <strong>{suggestion}</strong> ({format(suggestedDate, 'dd/MM')}) ستدمجها مع عطلة {format(upcomingHoliday, 'dd/MM')} وعطلة نهاية الأسبوع!
+927:setNoteText('إجازة مدمجة مع عطلة رسمية (مقترح المدرب الذكي)');
+931:احجزها الآن
+954:<h3 className="text-2xl font-black">تسجيل الحضور</h3>
+955:<p className="text-xs text-muted-foreground mt-1">يرجى تحديد المهمة أو الوردية الحالية للبدء</p>
+961:<h4 className="font-bold text-[10px] text-muted-foreground flex items-center gap-1.5 uppercase tracking-wider"><Clock className="w-3 h-3"/> الورديات المجدولة</h4>
+977:<span className="text-[10px] text-muted-foreground">وردية عمل</span>
+992:<h4 className="font-bold text-[10px] text-muted-foreground flex items-center gap-1.5 uppercase tracking-wider"><FileText className="w-3 h-3"/> الوظائف والمشاريع</h4>
+1019:<span>حضور عام (راتب)</span>
+1026:إلغاء والتراجع
+1041:<h3 className="text-lg font-bold">إدارة الغياب والبدائل</h3>
+1042:<p className="text-[10px] text-muted-foreground">قم بتسجيل الإجازات من الأنواع المختلفة</p>
+1047:<label className="text-sm font-bold">نوع الغياب</label>
+1053:<option value="annual_leave">إجازة اعتيادية/سنوية (يخصم رصيد)</option>
+1054:<option value="casual_leave">إجازة عارضة</option>
+1055:<option value="sick_leave">إجازة مرضية</option>
+1056:<option value="half_day_leave">إجازة نصف يوم</option>
+1057:<option value="compensation">يوم بديل (تعويض عمل الإضافي)</option>
+1062:<label className="text-sm font-bold mt-2">اختر العمل الإضافي المراد استبداله</label>
+1068:<option value="">-- اختر يوم العمل --</option>
+1071:{format(new Date(comp.startTime), 'EEEE، dd MMM yyyy', {locale: ar})}
+1072:(متاح {comp.availableDays} يوم){comp.isExpired ? ' - منتهي الصلاحية' : ''}
+1079:<p className="text-[11px] text-muted-foreground mb-1 font-bold">أيام بديلة منتهية الصلاحية (يمكن إضافة استثناء):</p>
+1089:if (window.confirm('هل تريد إضافة استثناء لتفعيل هذا اليوم البديل على الرغم من انتهاء صلاحيته؟')) {
+1092:toast.success('تمت إضافة الاستثناء بنجاح، يمكنك الآن اختياره.');
+1096:{format(new Date(comp.startTime), 'dd MMM', {locale: ar})} (+ استثناء)
+1104:<p className="text-xs text-destructive mt-1">عفواً، لا توجد أيام بديلة صالحة في هذا التاريخ.</p>
+1109:<label className="text-sm font-bold mt-2">التاريخ</label>
+1117:<label className="text-sm font-bold mt-2">ملاحظات (اختياري)</label>
+1120:placeholder="سبب الإجازة..."
+1141:notes: noteText || 'إجازة كبديل لعمل يوم راحة',
+1156:sendAppNotification('تم تسجيل الموقف بنجاح', { body: 'تم تحديث سجل اليوم في التقويمات.' });
+1161:تأكيد
+1164:إغلاق
+1176:{actionDialog === 'permission' ? `تصريح (${permissionHours} ساعة/ساعات)` : actionDialog === 'pomodoro' ? 'مؤقت التركيز (Pomodoro)' : 'ملاحظة الجلسة'}
+1184:<strong>الذكاء الاصطناعي:</strong> تم تصنيف الإذن تلقائياً كـ <strong className="bg-indigo-500/20 px-1 rounded">{permissionType === 'entry' ? 'تأخير دخول' : 'خروج مبكر'}</strong> بناءً على جدول عملك اليوم.
+1188:<Button className="flex-1 rounded-xl h-10" variant={permissionType === 'entry' ? 'default' : 'secondary'}>دخول متأخر</Button>
+1189:<Button className="flex-1 rounded-xl h-10" variant={permissionType === 'exit' ? 'default' : 'secondary'}>خروج مبكر</Button>
+1201:<Button className="flex-1 h-12 rounded-xl text-lg font-bold" variant="destructive" onClick={togglePomodoro}>إيقاف</Button>
+1203:<Button className="flex-1 h-12 rounded-xl text-lg font-bold bg-primary text-primary-foreground hover:bg-primary/90" onClick={togglePomodoro}>بدء التركيز</Button>
+1210:placeholder="اكتب ملاحظاتك..."
+1219:حفظ
+1223:{actionDialog === 'pomodoro' ? 'إغلاق' : 'إلغاء'}
+1235:<h3 className="text-xl font-bold">{moodDialogState === 'start' ? 'استعد للعمل!' : 'تقييم اليوم'}</h3>
+1237:{moodDialogState === 'start' ? 'كيف تشعر قبل بدء هذه الجلسة؟' : 'كيف تقيم هذه الجلسة؟'}
+1243:<p className="text-sm font-medium mb-4 text-center text-foreground/80">المزاج الحالي</p>
+1263:<p className="text-sm font-medium mb-3 text-foreground/80">مستوى إنجازك اليوم</p>
+1278:{moodDialogState === 'start' ? 'ابدأ العمل بشغف!' : 'حفظ التقييم والمغادرة'}
+1284:تخطي
+1294:<h3 className="text-xl font-bold">وردية ليلية</h3>
+1296:لقد قمت بتسجيل الدخول بعد منتصف الليل. هل هذا الدوام استكمال لعمل الأمس أم بداية يوم جديد؟
+1303:يوم جديد
+1309:دوام الأمس
+1326:<h3 className="text-xl font-bold mt-2 text-center text-orange-500">تجاوز وقت السماح</h3>
+1328:لقد تأخرت بنسبة <strong>{(showHalfDayPrompt as any).lateMins} دقيقة</strong>، ووقت السماح هو {settings.advancedRules?.gracePeriodMinutes} دقيقة.
+1329:كيف تود التعامل مع هذا التأخير؟
+1336:لا تحسب التأخير (سأعوضه لاحقاً أو كإضافي)
+1343:استخدام تصريح تأخير
+1350:احتساب كخصم تأخير
+1356:<h3 className="text-xl font-bold mt-2">تسجيل إجازة نصف يوم؟</h3>
+1358:لقد تأخرت عن موعد بدء العمل المعتاد بأكثر من ساعة. هل تود وتسجيل هذا اليوم كأنه <strong>نصف يوم عمل</strong>؟
+1365:نعم، سجل نصف يوم
+1372:لا، عمل كامل
+1388:<h3 className="text-xl font-bold mt-2 text-center">عمل في يوم راحة</h3>
+1390:كيف تود تعويض هذا اليوم في نظام البدائل؟
+1399:بدل راحة (تعويض بيوم إجازة بديل)
+1406:بديل يوم + إضافة ساعات كعمل إضافي
+1413:تعويض بيومين إجازة
+1433:تأكيد والمتابعة
+1440:إلغاء
+1451:<h3 className="text-xl font-bold mt-2 text-center text-emerald-500">سجل يوم سابق</h3>
+1452:<p className="text-sm text-muted-foreground leading-relaxed text-center mb-2">أضف أعمال، إجازات، أو تصاريح لأي يوم مضى.</p>
+1456:<label className="text-xs font-bold text-foreground">التاريخ</label>
+1461:<label className="text-xs font-bold text-foreground">نوع السجل</label>
+1467:<option value="salary">عمل (راتب / أساسي)</option>
+1468:<option value="project">مشروع / وظيفة أخرى</option>
+1470:<option value="compensation">إجازة بديلة (استهلاك بديلة)</option>
+1471:<option value="permission">استئذان (تأخير / مبكر)</option>
+1472:<option value="half_day_leave">نصف يوم</option>
+1473:<option value="annual_leave">إجازة اعتيادية</option>
+1474:<option value="sick_leave">إجازة مرضية</option>
+1475:<option value="casual_leave">إجازة عارضة</option>
+1481:<label className="text-xs font-bold text-emerald-500">اختر العمل الإضافي المراد استبداله</label>
+1487:<option value="">-- اختر يوم العمل --</option>
+1490:{format(new Date(comp.startTime), 'EEEE، dd MMM yyyy', {locale: ar})}
+1491:(متاح {comp.availableDays} يوم){comp.isExpired ? ' - منتهي الصلاحية' : ''}
+1498:<p className="text-[10px] text-muted-foreground mb-1 font-bold">أيام بديلة منتهية الصلاحية (يمكن إضافة استثناء):</p>
+1508:if (window.confirm('هل تريد إضافة استثناء لتفعيل هذا اليوم البديل على الرغم من انتهاء صلاحيته؟')) {
+1510:toast.success('تمت إضافة الاستثناء بنجاح، يمكنك الآن اختياره.');
+1514:{format(new Date(comp.startTime), 'dd MMM', {locale: ar})} (+ استثناء)
+1524:<label className="text-xs font-bold text-foreground">المشروع/الجهة</label>
+1530:<option value="none">-- اختر عمل --</option>
+1540:<label className="text-xs font-bold text-foreground">وقت الحضور</label>
+1544:<label className="text-xs font-bold text-foreground">وقت الانصراف</label>
+1549:<label className="text-xs font-bold text-foreground inline-flex items-center gap-1"><Coffee className="w-3 h-3"/> الخصومات/الاستراحات (بالدقائق)</label>
+1550:<Input type="number" min="0" value={retroBreak} onChange={e => setRetroBreak(e.target.value)} placeholder="مثال: 30" />
+1556:يوم السجل المختار يعادل يوم راحة أو إجازة رسمية!
+1558:<label className="text-xs font-bold text-orange-500">طبيعة تعويض يوم الراحة/الإجازة</label>
+1564:<option value="1_day">يوم راحة بديل واحد</option>
+1565:<option value="1_day_plus_overtime">يوم راحة بديل + ساعات إضافية</option>
+1566:<option value="2_days">يومي راحة بديلة (2)</option>
+1574:<label className="text-xs font-bold text-foreground">ملاحظات (اختياري)</label>
+1575:<Input placeholder="أضف أي ملحوظة عن اليوم..." value={noteText} onChange={e => setNoteText(e.target.value)} />
+1580:<Button onClick={submitRetroSession} className="flex-1 rounded-xl h-12 bg-emerald-600 hover:bg-emerald-700 text-white font-bold">حفظ السجل</Button>
+1581:<Button variant="ghost" onClick={() => {setRetroDialogOpen(false); setNoteText('');}} className="h-12 rounded-xl text-muted-foreground hover:bg-secondary">إلغاء</Button>
+1591:<h3 className="text-xl font-bold mt-2 text-center">{activeSession ? 'تعديل وقت الدخول' : 'تسجيل دخول فائت'}</h3>
+1593:{activeSession ? 'هل قمت بالدخول في وقت مختلف؟ قم بتعديل الوقت أدناه وسنقوم بإعادة الحسابات تلقائياً.' : 'لم تقم بتسجيل الدخول في وقتها؟ أدخل الوقت الفعلي أدناه.'}
+1598:<label className="text-sm font-medium">وقت البدء الفعلي</label>
+1626:{activeSession ? 'تحديث وقت البدء' : 'تأكيد وبدء'}
+1629:إلغاء
+1641:<h3 className="text-xl font-bold mt-2 text-primary">تسجيل الإضافي</h3>
+1643:لقد عملت وقت إضافي مقداره <span className="font-bold text-foreground">{Math.floor(overtimeAskDialog.baseMins / 60)} ساعة و {overtimeAskDialog.baseMins % 60} دقيقة</span>. كيف تود احتسابه؟
+1654:احتسابه كما هو بالدقيقة
+1665:جبره للأعلى ({Math.ceil(overtimeAskDialog.baseMins / 60)} ساعة)
+1676:اختار التقريب وتجاهل الكسر ({Math.floor(overtimeAskDialog.baseMins / 60)} ساعة)
+1688:تسجيل إجازة
+1689:<span className="text-sm font-normal text-muted-foreground">اختر نوع الإجازة لليوم</span>
+1693:<button onClick={() => { logSpecialSession('casual_leave'); setIsLeaveSheetOpen(false); toast.success('تم تسجيل راحة بنجاح'); }} className="w-full flex items-center justify-between p-4 rounded-[1.5rem] bg-secondary/30 hover:bg-secondary/50 transition-colors border border-border/40 group">
+1694:<span className="font-bold text-foreground text-lg mr-2">راحة</span>
+1700:<span className="font-bold text-foreground text-lg mr-2">بديلة</span>
+1705:<button onClick={() => { logSpecialSession('sick_leave'); setIsLeaveSheetOpen(false); toast.success('تم تسجيل إجازة مرضية بنجاح'); }} className="w-full flex items-center justify-between p-4 rounded-[1.5rem] bg-secondary/30 hover:bg-secondary/50 transition-colors border border-border/40 group">
+1706:<span className="font-bold text-foreground text-lg mr-2">مرضي</span>
+1711:<button onClick={() => { logSpecialSession('annual_leave'); setIsLeaveSheetOpen(false); toast.success('تم تسجيل إجازة سنوية بنجاح'); }} className="w-full flex items-center justify-between p-4 rounded-[1.5rem] bg-secondary/30 hover:bg-secondary/50 transition-colors border border-border/40 group">
+1712:<span className="font-bold text-foreground text-lg mr-2">سنوي</span>
+1718:إلغاء
+1728:إذن / نصف يوم
+1729:<span className="text-sm font-normal text-muted-foreground">اختر نوع التصريح للإدخال</span>
+1733:<button onClick={() => { logSpecialSession('permission', { hours: 1, subtype: 'entry' }); setIsPermissionSheetOpen(false); toast.success('تم تسجيل إذن التأخير بنجاح'); }} className="w-full flex items-center justify-between p-4 rounded-[1.5rem] bg-secondary/30 hover:bg-secondary/50 transition-colors border border-border/40 group">
+1735:<span className="font-bold text-foreground text-lg">إذن تأخير (ساعة)</span>
+1736:<span className="text-xs text-muted-foreground mt-0.5">يخصم من رصيد الأذونات</span>
+1742:<button onClick={() => { logSpecialSession('permission', { hours: 2, subtype: 'exit' }); setIsPermissionSheetOpen(false); toast.success('تم تسجيل إذن الخروج بنجاح'); }} className="w-full flex items-center justify-between p-4 rounded-[1.5rem] bg-secondary/30 hover:bg-secondary/50 transition-colors border border-border/40 group">
+1744:<span className="font-bold text-foreground text-lg">إذن خروج (ساعتين)</span>
+1745:<span className="text-xs text-muted-foreground mt-0.5">يخصم من رصيد الأذونات</span>
+1751:<button onClick={() => { logSpecialSession('half_day_leave'); setIsPermissionSheetOpen(false); toast.success('تم تسجيل نصف يوم بنجاح'); }} className="w-full flex items-center justify-between p-4 rounded-[1.5rem] bg-secondary/30 hover:bg-secondary/50 transition-colors border border-border/40 group">
+1753:<span className="font-bold text-foreground text-lg">إجازة نصف يوم</span>
+1754:<span className="text-xs text-muted-foreground mt-0.5">يخصم كإجازة معتمدة لنصف اليوم</span>
+1762:إلغاء

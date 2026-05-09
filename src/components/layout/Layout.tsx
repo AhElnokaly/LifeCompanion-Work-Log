@@ -2,11 +2,15 @@ import React, { useState, useEffect } from 'react';
 import { useTheme } from '../../contexts/ThemeContext';
 import AppLogo from '../ui/AppLogo';
 import { useWorkLog } from '../../contexts/WorkLogContext';
-import { Moon, Sun, Palette, Brain, Briefcase, Settings, Menu, Home, Calendar, BarChart2, LayoutGrid, MoreHorizontal, History, HelpCircle, MessageCircleQuestion, Wallet, Target, Users, CalendarDays, Download, Bell, Zap, BarChart, ChevronLeft, Share2, Link as LinkIcon, FileDown } from 'lucide-react';
+import { useLanguage } from '../../contexts/LanguageContext';
+import { Moon, Sun, Palette, Brain, Briefcase, Settings, Menu, Home, Calendar, BarChart2, LayoutGrid, MoreHorizontal, History, HelpCircle, MessageCircleQuestion, Wallet, Target, Users, CalendarDays, Download, Bell, Zap, BarChart, ChevronLeft, Share2, Link as LinkIcon, FileDown, Globe } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Sheet, SheetContent, SheetTrigger, SheetHeader, SheetTitle } from '../ui/sheet';
 import PageHelpOverlay from './PageHelpOverlay';
 import EmbeddedAIChat from '../aicore/EmbeddedAIChat';
+import NotificationCenter from './NotificationCenter';
+import { useAuth } from '../../contexts/AuthContext';
+import { toast } from 'sonner';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -15,14 +19,17 @@ interface LayoutProps {
 }
 
 export default function Layout({ children, activeTab, setActiveTab }: LayoutProps) {
+  // ... Component logic above stays the same, we add `t`.
   const { theme, setTheme, smartMode, setSmartMode } = useTheme();
   const { settings, sessions, activeSession } = useWorkLog();
+  const { t, lang, setLang } = useLanguage();
   const [chatOpen, setChatOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [burnoutOverlay, setBurnoutOverlay] = useState(false);
   const [installPromptEvent, setInstallPromptEvent] = useState<any>(null);
+  const { user, signIn, logOut } = useAuth();
 
   useEffect(() => {
     const handler = (e: any) => {
@@ -44,19 +51,26 @@ export default function Layout({ children, activeTab, setActiveTab }: LayoutProp
 
   const handleShareLink = async () => {
      try {
-        const shareUrl = 'https://lifecompanionworklog.netlify.app/';
+        const shareUrl = window.location.href; // Use actual app URL
+        // In iframes, navigator.share often fails or is blocked, fallback safely
         if (navigator.share) {
            await navigator.share({
               title: 'LifeCompanion - Work Log',
-              text: 'جرب تطبيق LifeCompanion رفيقك الذكي لإدارة ساعات العمل!',
+              text: `${t('layout.try_app')} LifeCompanion - ${t('layout.smart_companion')}!`,
               url: shareUrl,
+           }).catch(() => {
+              // Fallback if share cancels or fails
+              navigator.clipboard.writeText(shareUrl)
+                .then(() => toast.success(t('layout.link_copied')))
+                .catch(() => toast.error(t('layout.link_copy_failed')));
            });
         } else {
            await navigator.clipboard.writeText(shareUrl);
-           alert('تم نسخ الرابط بنجاح!');
+           toast.success(t('layout.link_copied'));
         }
      } catch (err) {
-        console.error('Share failed', err);
+        console.error('Error sharing:', err);
+        toast.error(t('layout.share_error'));
      }
   };
 
@@ -106,6 +120,11 @@ export default function Layout({ children, activeTab, setActiveTab }: LayoutProp
           </h1>
         </div>
         <div className="flex gap-1 items-center">
+          <NotificationCenter />
+          <Button variant="ghost" size="icon" onClick={() => setLang(lang === 'ar' ? 'en' : 'ar')}>
+             <Globe className="h-5 w-5 text-muted-foreground mr-1" />
+             <span className="text-xs font-bold leading-none">{lang === 'ar' ? 'EN' : t('t_auto_72')}</span>
+          </Button>
           {installPromptEvent && (
             <Button variant="ghost" size="icon" onClick={installApp} className="animate-pulse">
               <Download className="h-5 w-5 text-blue-500" />
@@ -120,15 +139,21 @@ export default function Layout({ children, activeTab, setActiveTab }: LayoutProp
             </SheetTrigger>
             <SheetContent side="right" className="w-[85vw] max-w-[320px] p-6 z-[100] bg-background/95 backdrop-blur-xl border-l-0 rounded-l-[2rem] flex flex-col" dir="rtl">
               <SheetHeader className="pb-6 border-b border-border/50">
-                <SheetTitle className="text-2xl font-black text-right pt-2 text-foreground">القائمة</SheetTitle>
+                <SheetTitle className="text-2xl font-black text-right pt-2 text-foreground">{t('layout.menu')}</SheetTitle>
               </SheetHeader>
               <div className="flex-1 overflow-y-auto mt-6 no-scrollbar" dir="rtl">
                  <DesktopNavLinks activeTab={activeTab} setActiveTab={(t) => { setActiveTab(t); setMobileMenuOpen(false); }} />
               </div>
               <div className="mt-6 pt-4 border-t border-border/50">
-                  <Button className="w-full h-14 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-base shadow-lg shadow-blue-500/20">
-                     تسجيل الدخول <ChevronLeft className="w-5 h-5 mr-2" />
-                  </Button>
+                  {user ? (
+                    <Button onClick={logOut} variant="outline" className="w-full h-14 rounded-2xl text-red-500 font-bold text-base border-red-500/30 hover:bg-red-500/10">
+                       {t('t_auto_73')}
+                                                          </Button>
+                  ) : (
+                    <Button onClick={signIn} className="w-full h-14 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-base shadow-lg shadow-blue-500/20">
+                       {t('t_auto_74')} <ChevronLeft className="w-5 h-5 mr-2" />
+                    </Button>
+                  )}
               </div>
             </SheetContent>
           </Sheet>
@@ -148,31 +173,47 @@ export default function Layout({ children, activeTab, setActiveTab }: LayoutProp
         </div>
         <div className="flex justify-between px-2">
           <Button variant="outline" size="sm" onClick={() => setHelpOpen(true)} className="flex-1 ml-2 text-emerald-500">
-             <HelpCircle className="w-4 h-4 ml-2" /> مساعدة
-          </Button>
+             <HelpCircle className="w-4 h-4 ml-2" /> {t('t_auto_75')}
+                                </Button>
           <Button variant="outline" size="sm" onClick={() => setChatOpen(true)} className="flex-1 text-blue-500">
-             <MessageCircleQuestion className="w-4 h-4 ml-2" /> اسأل الذكاء
-          </Button>
+             <MessageCircleQuestion className="w-4 h-4 ml-2" /> {t('t_auto_76')}
+                                </Button>
         </div>
         <nav className="flex flex-col gap-2 flex-1">
           <DesktopNavLinks activeTab={activeTab} setActiveTab={setActiveTab} />
           {installPromptEvent && (
             <Button onClick={installApp} className="mt-4 w-full bg-blue-500 hover:bg-blue-600 text-white rounded-xl shadow-lg ring-2 ring-blue-500/20">
-              <Download className="w-4 h-4 mr-2" /> تثبيت التطبيق
-            </Button>
+              <Download className="w-4 h-4 mr-2" /> {t('t_auto_77')}
+                                      </Button>
           )}
         </nav>
         <div className="flex flex-col gap-2 border-t pt-4">
           <ThemeSettings />
-          <div className="mt-4 bg-secondary/30 rounded-xl p-3 flex items-center gap-3">
-             <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center text-primary font-bold">
-               U
+          {user ? (
+             <div className="mt-4 bg-secondary/30 rounded-xl p-3 flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                   {user.photoURL ? (
+                      <img src={user.photoURL} alt="User" className="w-10 h-10 rounded-full object-cover border border-border" />
+                   ) : (
+                      <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center text-primary font-bold">
+                        {user.displayName?.charAt(0) || user.email?.charAt(0) || 'U'}
+                      </div>
+                   )}
+                   <div className="overflow-hidden">
+                     <p className="text-sm font-bold truncate">{user.displayName || t('layout.user')}</p>
+                     <p className="text-[10px] text-muted-foreground truncate">{settings.system === 'freelance' ? t('layout.freelance') : t('layout.fixed_employee')}</p>
+                   </div>
+                </div>
+                <Button variant="ghost" size="icon" onClick={logOut} className="text-red-500 hover:bg-red-500/10 shrink-0" title={t('t_auto_73')}>
+                   <FileDown className="w-4 h-4 rotate-90" />
+                </Button>
              </div>
-             <div>
-               <p className="text-sm font-bold">المستخدم الحالي</p>
-               <p className="text-[10px] text-muted-foreground">{settings.system === 'freelance' ? 'نظام حر' : 'موظف بدوام ثابت'}</p>
+          ) : (
+             <div className="mt-4 bg-secondary/30 rounded-xl p-3 flex flex-col items-center gap-2">
+                <p className="text-xs text-muted-foreground font-bold">{t('layout.sync_disabled')}</p>
+                <Button onClick={signIn} className="w-full text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white">{t('layout.login')}</Button>
              </div>
-          </div>
+          )}
         </div>
       </aside>
 
@@ -186,10 +227,9 @@ export default function Layout({ children, activeTab, setActiveTab }: LayoutProp
       {/* Mobile Bottom Navigation */}
       <div className="md:hidden fixed bottom-0 left-0 right-0 border-t bg-card/90 backdrop-blur pb-safe px-6 py-2 flex justify-between overflow-x-auto no-scrollbar z-50 min-w-0">
         <div className="flex w-full justify-between min-w-max gap-4 px-1">
-          <MobileNavItem icon={BarChart2} label="التقارير" id="reports" activeTab={activeTab} setActive={setActiveTab} />
-          <MobileNavItem icon={CalendarDays} label="السجل" id="history" activeTab={activeTab} setActive={setActiveTab} />
-          <MobileNavItem icon={Home} label="الرئيسية" id="home" activeTab={activeTab} setActive={setActiveTab} />
-          <MobileNavItem icon={Calendar} label="التقويم" id="week" activeTab={activeTab} setActive={setActiveTab} />
+          <MobileNavItem icon={History} label={t('nav.reports')} id="reports" activeTab={activeTab} setActive={setActiveTab} />
+          <MobileNavItem icon={Home} label={t('nav.home')} id="home" activeTab={activeTab} setActive={setActiveTab} />
+          <MobileNavItem icon={Calendar} label={t('nav.calendar')} id="week" activeTab={activeTab} setActive={setActiveTab} />
         </div>
       </div>
 
@@ -201,7 +241,7 @@ export default function Layout({ children, activeTab, setActiveTab }: LayoutProp
           <SheetHeader className="p-4 border-b bg-card">
             <SheetTitle className="flex items-center gap-2">
               <Brain className="h-5 w-5 text-indigo-500" />
-              المساعد الشخصي الذكي
+              {t('layout.smart_assistant')}
             </SheetTitle>
           </SheetHeader>
           <div className="flex-1 overflow-hidden relative">
@@ -221,7 +261,7 @@ export default function Layout({ children, activeTab, setActiveTab }: LayoutProp
                        <Briefcase className="w-8 h-8 text-emerald-500" />
                      </div>
                   </div>
-                  <div>مشاركة LifeCompanion</div>
+                  <div>{t('layout.share')} LifeCompanion</div>
                </SheetTitle>
             </SheetHeader>
             <div className="space-y-4 mt-4" dir="rtl">
@@ -233,8 +273,8 @@ export default function Layout({ children, activeTab, setActiveTab }: LayoutProp
                      <LinkIcon className="w-5 h-5" />
                   </div>
                   <div className="flex flex-col text-right">
-                     <span className="font-bold text-sm">مشاركة كرابط (Link)</span>
-                     <span className="text-xs text-muted-foreground mt-0.5">انسخ الرابط أو شاركه مباشرة عبر التطبيقات</span>
+                     <span className="font-bold text-sm">{t('layout.share_as_link')} (Link)</span>
+                     <span className="text-xs text-muted-foreground mt-0.5">{t('layout.copy_or_share')}</span>
                   </div>
                </button>
                
@@ -246,8 +286,8 @@ export default function Layout({ children, activeTab, setActiveTab }: LayoutProp
                      <FileDown className="w-5 h-5" />
                   </div>
                   <div className="flex flex-col text-right">
-                     <span className="font-bold text-sm">تنزيل التطبيق (APK)</span>
-                     <span className="text-xs text-muted-foreground mt-0.5">تحميل نسخة أندرويد لتثبيتها كـ App</span>
+                     <span className="font-bold text-sm">{t('layout.download_app')} (APK)</span>
+                     <span className="text-xs text-muted-foreground mt-0.5">{t('layout.download_android')} App</span>
                   </div>
                </button>
             </div>
@@ -266,25 +306,25 @@ export default function Layout({ children, activeTab, setActiveTab }: LayoutProp
                </div>
              </div>
              <div>
-               <h2 className="text-2xl font-black mb-2 text-foreground">تحذير: إرهاق جسدي ونفسي</h2>
+               <h2 className="text-2xl font-black mb-2 text-foreground">{t('layout.warning')}: {t('layout.exhaustion')}</h2>
                <p className="text-muted-foreground text-sm leading-relaxed">
-                 لاحظ المساعد الذكي أنك عملت لفترات متواصلة دون استراحة.
-                 مؤشر ضغطك الحالي مرتفع جداً. نرجو منك إغلاق الشاشة لمدة دقيقة وتمرين التنفس.
+                 {t('layout.exhaustion_msg1')}
+                 {t('layout.exhaustion_msg2')}
                </p>
              </div>
              
              <div className="w-full bg-secondary/50 rounded-full h-2 mt-4 overflow-hidden">
                <div className="h-full bg-primary animate-[grow_60s_linear_forwards]" style={{width: '0%'}} />
              </div>
-             <p className="text-xs text-muted-foreground tabular-nums">يرجى الانتظار (60 ثانية)...</p>
+             <p className="text-xs text-muted-foreground tabular-nums">{t('layout.wait')} (60 {t('layout.seconds')})...</p>
              
              <Button 
                variant="ghost" 
                className="mt-6 text-xs opacity-50 hover:opacity-100"
                onClick={() => setBurnoutOverlay(false)}
              >
-               تخطي (لا ينصح به)
-             </Button>
+               {t('t_auto_78')}
+                                       </Button>
           </div>
           <style>{`
             @keyframes grow { to { width: 100%; } }
@@ -311,40 +351,40 @@ function MobileNavItem({ icon: Icon, label, id, activeTab, setActive }: any) {
 
 function DesktopNavLinks({ activeTab, setActiveTab }: { activeTab: string, setActiveTab: (t: string) => void }) {
   const { settings } = useWorkLog();
+  const { t } = useLanguage();
   const isFreelance = settings.system === 'freelance';
   const isAdvanced = settings.usageComplexity === 'advanced';
   const showShiftsModule = settings.modules?.shifts;
 
-  let smartLabel = 'تقييم الأداء';
+  let smartLabel = t('layout.performance_review');
   let smartIcon = Target;
-  if (settings.system === 'freelance') { smartLabel = 'إدارة العملاء'; smartIcon = Users; }
-  else if (settings.system === 'shifts') { smartLabel = 'سجل البدلات'; smartIcon = Target; }
+  if (settings.system === 'freelance') { smartLabel = t('layout.client_mgmt'); smartIcon = Users; }
+  else if (settings.system === 'shifts') { smartLabel = t('layout.compensation_log'); smartIcon = Target; }
 
   const linkGroups = [
     {
-      title: "مساحة العمل",
+      title: t('nav.workspace'),
       links: [
-        { id: 'home', label: 'الرئيسية', icon: Home },
-        { id: 'week', label: 'التقويم الشامل', icon: Calendar },
-        { id: 'alarms', label: 'المنبهات والتركيز', icon: Bell },
+        { id: 'home', label: t('nav.home'), icon: Home },
+        { id: 'week', label: t('nav.calendar'), icon: Calendar },
+        { id: 'alarms', label: t('layout.alarms_focus'), icon: Bell },
         { id: 'smartpage', label: smartLabel, icon: smartIcon },
-        ...(isFreelance || isAdvanced ? [{ id: 'projects', label: 'المشاريع / المهام', icon: LayoutGrid }] : []),
+        ...(isFreelance || isAdvanced ? [{ id: 'projects', label: t('layout.projects_tasks'), icon: LayoutGrid }] : []),
       ]
     },
     {
-      title: "الرصد والبيانات",
+      title: t('layout.monitoring_data'),
       links: [
-        { id: 'history', label: 'السجل', icon: History },
-        { id: 'wallet', label: 'محفظتي', icon: Wallet },
-        { id: 'chart_maker', label: 'صانع المخططات', icon: BarChart },
-        ...(isAdvanced ? [{ id: 'reports', label: 'التقارير', icon: BarChart2 }] : []),
+        { id: 'reports', label: t('nav.reports'), icon: History },
+        { id: 'wallet', label: t('layout.my_wallet'), icon: Wallet },
+        { id: 'chart_maker', label: t('layout.chart_maker'), icon: BarChart },
       ]
     },
     {
-      title: "الإدارة",
+      title: t('layout.management'),
       links: [
-        ...(isAdvanced ? [{ id: 'aicore', label: 'المحرك الذكي', icon: Brain }] : []),
-        { id: 'settings', label: 'الإعدادات', icon: Settings }
+        ...(isAdvanced ? [{ id: 'aicore', label: t('layout.ai_core'), icon: Brain }] : []),
+        { id: 'settings', label: t('nav.settings'), icon: Settings }
       ]
     }
   ];
@@ -377,11 +417,11 @@ function DesktopNavLinks({ activeTab, setActiveTab }: { activeTab: string, setAc
         <Button
           variant="ghost"
           className="justify-start w-full text-emerald-500 hover:text-emerald-600 hover:bg-emerald-500/10 h-10"
-          onClick={() => window.open('https://wa.me/201009969653?text=لدي اقتراح أو شكوى بخصوص تطبيق LifeCompanion', '_blank')}
+          onClick={() => window.open(t('t_auto_79'), '_blank')}
         >
           <HelpCircle className="h-[18px] w-[18px] mr-3" />
-          الشكاوى والمقترحات
-        </Button>
+          {t('t_auto_80')}
+                          </Button>
       </div>
     </div>
   );
@@ -389,18 +429,22 @@ function DesktopNavLinks({ activeTab, setActiveTab }: { activeTab: string, setAc
 
 function ThemeSettings() {
   const { theme, setTheme, smartMode, setSmartMode } = useTheme();
+  const { lang, setLang, t } = useLanguage();
   return (
     <>
-      <p className="text-xs text-muted-foreground px-2 mb-2 rtl:text-right">المظهر</p>
+      <p className="text-xs text-muted-foreground px-2 mb-2 rtl:text-right">{t('layout.appearance_lang')}</p>
       <div className="flex flex-wrap gap-2 px-2">
         <Button variant="outline" size="sm" onClick={() => setTheme('light')} className={theme === 'light' ? 'border-yellow-500 text-yellow-600 bg-yellow-500/10 flex-1' : 'flex-1'}>
-          <Sun className="w-4 h-4 mr-2" /> فاتح
-        </Button>
+          <Sun className="w-4 h-4 mr-2" /> {t('t_auto_81')}
+                          </Button>
         <Button variant="outline" size="sm" onClick={() => setTheme('dark')} className={theme === 'dark' ? 'border-indigo-500 text-indigo-400 bg-indigo-500/10 flex-1' : 'flex-1'}>
-          <Moon className="w-4 h-4 mr-2" /> داكن
+          <Moon className="w-4 h-4 mr-2" /> {t('t_auto_82')}
+                          </Button>
+        <Button variant="outline" size="sm" onClick={() => setLang(lang === 'ar' ? 'en' : 'ar')} className="w-full mt-1">
+          <Globe className="w-4 h-4 mr-2" /> {lang === 'ar' ? 'English' : t('t_auto_83')}
         </Button>
         <Button variant="outline" size="sm" onClick={() => setSmartMode(smartMode === 'focus' ? null : 'focus')} className={smartMode === 'focus' ? 'border-primary text-primary bg-primary/10 w-full mt-1' : 'w-full mt-1'}>
-          <Target className="w-4 h-4 mr-2" /> وضع التركيز
+          <Target className="w-4 h-4 mr-2" /> {t('layout.focus_mode')}
         </Button>
       </div>
     </>

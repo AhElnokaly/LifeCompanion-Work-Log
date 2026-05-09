@@ -1,10 +1,12 @@
+import { ar, enUS } from 'date-fns/locale';
 import React, { useState, useMemo } from 'react';
 import { Card } from '../ui/card';
 import { Button } from '../ui/button';
 import { ChevronRight, ChevronLeft, Calendar as CalendarIcon, List, LayoutGrid, Activity, Clock, Briefcase, Plus, Palette, Trash2, Edit, RefreshCw } from 'lucide-react';
 import { useWorkLog, isPublicHoliday, generateEgyptianHolidays } from '../../contexts/WorkLogContext';
 import { format, differenceInMinutes, addMonths, subMonths, startOfMonth, endOfMonth, eachDayOfInterval, startOfWeek, endOfWeek, isSameMonth, isSameDay, addWeeks, subWeeks, subDays, addDays } from 'date-fns';
-import { ar } from 'date-fns/locale';
+
+import { useLanguage } from '../../contexts/LanguageContext';
 import { ResponsiveContainer, BarChart, Bar, XAxis, Tooltip, Cell, ReferenceLine } from 'recharts';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '../ui/sheet';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '../ui/dropdown-menu';
@@ -20,6 +22,7 @@ import JobsShiftsView from './JobsShiftsView';
 import { detectPermissionType } from '../../lib/smartAttendance';
 
 export default function CalendarView() {
+  const { t, lang } = useLanguage();
   const { sessions, jobs, shifts, shiftAssignments, toggleShiftAssignment, settings, updateSettings, deleteSession, logSpecialSession, addSession } = useWorkLog();
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDay, setSelectedDay] = useState<Date>(new Date());
@@ -59,7 +62,7 @@ export default function CalendarView() {
            const pType = detectPermissionType(selectedDay, settings, shifts, shiftAssignments);
            duration = hours * 60;
            finalType = 'permission';
-           additionalNotes = `إذن ذكي ${pType === 'entry' ? 'دخول متأخر' : 'خروج مبكر'} (${hours} ساعة/ساعات)`;
+           additionalNotes = `إذن ذكي ${pType === 'entry' ? t('cal.late_entry') : t('cal.early_exit')} (${hours} ساعة/ساعات)`;
            hasTime = false;
        } else if (customEntryData.type === 'half_day_leave' || customEntryData.type === 'permission') {
            duration = differenceInMinutes(new Date(endStr), new Date(startStr));
@@ -81,6 +84,17 @@ export default function CalendarView() {
        const duration = differenceInMinutes(new Date(endStr), new Date(startStr));
        const isRestDay = (settings.restDays || []).includes(selectedDay.getDay()) || isPublicHoliday(selectedDay, settings.customHolidays);
        
+       let compType = isRestDay ? '1_day' as any : undefined;
+       let baseOvertime = 0;
+       if (isRestDay) {
+         if (compType === '1_day_plus_overtime') baseOvertime = duration;
+         else if (compType === '2_days') baseOvertime = 0;
+         else baseOvertime = compType === '1_day' ? 0 : duration; 
+       } else {
+         const expectedMins = settings.dailyHours * 60;
+         baseOvertime = duration > expectedMins ? duration - expectedMins : 0;
+       }
+
        addSession({
          id: Date.now().toString(),
          type: customEntryData.jobId !== 'none' ? 'project' : 'salary',
@@ -89,15 +103,16 @@ export default function CalendarView() {
          jobId: customEntryData.jobId === 'none' ? undefined : customEntryData.jobId,
          dayStatus: isRestDay ? 'rest_day_work' : 'work',
          isRestDayWork: isRestDay,
-         restDayCompensation: isRestDay ? '1_day' : undefined,
+         restDayCompensation: compType as any,
          breaks: 0,
          duration: duration,
+         overtimeMinutes: baseOvertime,
          location: 'office',
-         notes: isRestDay ? 'أضيف يدويا (عمل في يوم راحة)' : ''
+         notes: isRestDay ? t('t_auto_198') : ''
        });
     }
     setSheetOpen(false); // Close sheet on save
-    toast.success('تم التسجيل بنجاح');
+    toast.success(t('cal.logged_successfully'));
   };
 
   // Month Navigation
@@ -116,8 +131,8 @@ export default function CalendarView() {
   const goToToday = () => setCurrentDate(new Date());
 
   const renderMonthlyGrid = () => {
-    const start = startOfWeek(startOfMonth(currentDate), { weekStartsOn: 6 }); // Start Saturday
-    const end = endOfWeek(endOfMonth(currentDate), { weekStartsOn: 6 });
+    const start = startOfWeek(startOfMonth(currentDate), { weekStartsOn: 0 }); // Start Sunday
+    const end = endOfWeek(endOfMonth(currentDate), { weekStartsOn: 0 });
     const days = eachDayOfInterval({ start, end });
 
     // Calculate month stats for the badges
@@ -130,21 +145,21 @@ export default function CalendarView() {
     const annualLeaves = monthSessions.filter(s => ['annual_leave', 'casual_leave'].includes(s.dayStatus as string)).length;
     const permissionsCount = monthSessions.filter(s => ['permission', 'half_day_leave'].includes(s.dayStatus as string)).length;
 
-    const weekDays = ['س', 'ح', 'ن', 'ث', 'ر', 'خ', 'ج'];
+    const weekDays = [t('t_auto_199'), t('t_auto_200'), t('t_auto_201'), t('t_auto_202'), t('t_auto_203'), t('t_auto_204'), t('t_auto_9')];
 
     return (
       <div className="flex flex-col gap-4 mt-6">
-        <h2 className="text-3xl font-black text-right px-2">سجل الحضور</h2>
+        <h2 className="text-3xl font-black text-right px-2">{t('cal.attendance_log')}</h2>
         
         {/* Top Badges */}
-        <div className="flex flex-wrap gap-2 justify-center px-2 py-4">
-           {workHours > 0 || true ? <span className="px-3 py-1.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-bold text-xs">{workHours.toFixed(1)} س عمل</span> : null}
-           {overtimeHours > 0 || true ? <span className="px-3 py-1.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-bold text-xs">{overtimeHours.toFixed(1)} س إضافي</span> : null}
-           {restDaysWorked > 0 || true ? <span className="px-3 py-1.5 rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400 font-bold text-xs">{restDaysWorked} راحة</span> : null}
-           {comps > 0 || true ? <span className="px-3 py-1.5 rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400 font-bold text-xs">{comps} بديلة</span> : null}
-           {sickLeaves > 0 || true ? <span className="px-3 py-1.5 rounded-full bg-red-500/10 text-red-600 dark:text-red-400 font-bold text-xs">{sickLeaves} مرضي</span> : null}
-           {annualLeaves > 0 || true ? <span className="px-3 py-1.5 rounded-full bg-orange-500/10 text-orange-600 dark:text-orange-400 font-bold text-xs">{annualLeaves} سنوي</span> : null}
-           {permissionsCount > 0 || true ? <span className="px-3 py-1.5 rounded-full bg-purple-500/10 text-purple-600 dark:text-purple-400 font-bold text-xs">{permissionsCount} الأذونات</span> : null}
+        <div className="flex overflow-x-auto gap-2 px-2 pb-3 scrollbar-none snap-x snap-mandatory w-full max-w-full">
+           {workHours > 0 || true ? <span className="snap-start shrink-0 px-3 py-1.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-bold text-xs whitespace-nowrap">{workHours.toFixed(1)} {t('cal.work_h')}</span> : null}
+           {overtimeHours > 0 || true ? <span className="snap-start shrink-0 px-3 py-1.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-bold text-xs whitespace-nowrap">{overtimeHours.toFixed(1)} {t('cal.overtime_h')}</span> : null}
+           {restDaysWorked > 0 ? <span className="snap-start shrink-0 px-3 py-1.5 rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400 font-bold text-xs whitespace-nowrap">{restDaysWorked} {t('cal.rest')}</span> : null}
+           {comps > 0 ? <span className="snap-start shrink-0 px-3 py-1.5 rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400 font-bold text-xs whitespace-nowrap">{comps} {t('cal.alternative')}</span> : null}
+           {sickLeaves > 0 ? <span className="snap-start shrink-0 px-3 py-1.5 rounded-full bg-red-500/10 text-red-600 dark:text-red-400 font-bold text-xs whitespace-nowrap">{sickLeaves} {t('cal.sick')}</span> : null}
+           {annualLeaves > 0 ? <span className="snap-start shrink-0 px-3 py-1.5 rounded-full bg-orange-500/10 text-orange-600 dark:text-orange-400 font-bold text-xs whitespace-nowrap">{annualLeaves} {t('cal.annual')}</span> : null}
+           {permissionsCount > 0 ? <span className="snap-start shrink-0 px-3 py-1.5 rounded-full bg-purple-500/10 text-purple-600 dark:text-purple-400 font-bold text-xs whitespace-nowrap">{permissionsCount} {t('cal.permissions')}</span> : null}
         </div>
 
         {/* Clean Monthly Grid */}
@@ -156,8 +171,8 @@ export default function CalendarView() {
             </Button>
             <h3 className="text-xl font-bold font-cairo">
                {displayMode === 'gregorian' 
-                 ? format(currentDate, 'MMMM yyyy', { locale: ar }) 
-                 : new Intl.DateTimeFormat('ar-SA-u-ca-islamic', { month: 'long', year: 'numeric' }).format(currentDate)}
+                 ? format(currentDate, 'MMMM yyyy', { locale: lang === 'ar' ? ar : enUS }) 
+                 : new Intl.DateTimeFormat(lang === 'ar' ? 'ar-SA-u-ca-islamic' : 'en-US-u-ca-islamic', { month: 'long', year: 'numeric' }).format(currentDate)}
             </h3>
             <Button variant="ghost" size="icon" onClick={() => setCurrentDate(addMonths(currentDate, 1))} className="h-10 w-10 py-0 rounded-full hover:bg-secondary active:scale-95 transition-transform text-foreground">
               <ChevronLeft className="w-5 h-5" />
@@ -165,16 +180,16 @@ export default function CalendarView() {
           </div>
 
           {/* Weekday headers */}
-          <div className="grid grid-cols-7 mb-4">
+          <div className="grid grid-cols-7 mb-2">
             {weekDays.map((day, i) => (
-              <div key={i} className="text-center text-sm font-bold text-muted-foreground">
+              <div key={i} className="text-center text-xs font-bold text-muted-foreground">
                 {day}
               </div>
             ))}
           </div>
 
           {/* Calendar Days */}
-          <div className="grid grid-cols-7 gap-2 text-center mt-2">
+          <div className="grid grid-cols-7 gap-1 text-center mt-1">
             {days.map((day) => {
               const isCurrentMonth = isSameMonth(day, currentDate);
               const isToday = isSameDay(day, new Date());
@@ -185,46 +200,62 @@ export default function CalendarView() {
               const hasLeave = daySessions.some(s => ['annual_leave', 'sick_leave', 'half_day_leave', 'casual_leave'].includes(s.dayStatus as string));
               const hasPermission = daySessions.some(s => s.dayStatus === 'permission');
               
+              const isHol = isPublicHoliday(day, settings.customHolidays);
+              const isRestD = (settings.restDays || []).includes(day.getDay());
+
+              let primaryThemeClass = 'bg-[#2A5949]';
+              let isHolidayWork = false;
+              if (hasWork) {
+                 const firstWork = daySessions.find(s => !s.dayStatus || s.dayStatus === 'work' || s.dayStatus === 'rest_day_work');
+                 if (firstWork) {
+                    const h = new Date(firstWork.startTime).getHours();
+                    if (h >= 5 && h < 12) primaryThemeClass = 'bg-amber-500';
+                    else if (h >= 12 && h < 17) primaryThemeClass = 'bg-blue-500';
+                    else if (h >= 17 && h < 20) primaryThemeClass = 'bg-purple-500';
+                    else primaryThemeClass = 'bg-slate-700';
+                    
+                    if (firstWork.dayStatus === 'rest_day_work' || isHol || isRestD) {
+                       isHolidayWork = true;
+                    }
+                 }
+              }
+
               // Handle Hijri display logic
               let hDayNum = 1;
               if (displayMode === 'hijri') {
                  try {
-                   const hijriFormatter = new Intl.DateTimeFormat('en-u-ca-islamic', { month: 'numeric', day: 'numeric' });
+                   const hijriFormatter = new Intl.DateTimeFormat(lang === 'ar' ? 'ar-SA-u-ca-islamic' : 'en-US-u-ca-islamic', { month: 'numeric', day: 'numeric' });
                    const hParts = hijriFormatter.formatToParts(day);
                    hDayNum = parseInt(hParts.find(p => p.type === 'day')?.value || '1');
                  } catch(e) {}
               }
 
-              const isHol = isPublicHoliday(day, settings.customHolidays);
-              const isRestD = (settings.restDays || []).includes(day.getDay());
-
               return (
                 <div 
                   key={day.toISOString()} 
-                  className={`min-h-[64px] flex flex-col p-1 sm:p-2 items-center justify-between relative cursor-pointer rounded-2xl transition-all border ${!isCurrentMonth ? 'opacity-30 pointer-events-none grayscale' : ''}
-                    ${isSelected ? 'border-primary ring-2 ring-primary/50 bg-primary/5 shadow-md scale-[1.02] z-20' : 'border-transparent hover:border-border/60'}
-                    ${isToday && !isSelected ? 'bg-secondary/40 border-secondary' : ''}
-                    ${isHol || isRestD ? 'bg-rose-500/5 hover:bg-rose-500/10' : 'hover:bg-secondary/20'}
+                  className={`min-h-[48px] flex flex-col p-1 sm:p-1.5 items-center justify-start relative cursor-pointer rounded-xl transition-all ${!isCurrentMonth ? 'opacity-30 pointer-events-none grayscale' : ''}
+                    ${isToday && !isSelected ? 'font-bold' : ''}
+                    ${isHolidayWork && !isSelected ? 'border border-dashed border-red-400/50 hover:border-red-400' : 'border border-transparent'}
                   `}
                   onClick={() => {
                      setSelectedDay(day);
                      setSheetOpen(true);
                   }}
                 >
-                  <span className={`text-[13px] sm:text-[15px] font-bold w-7 h-7 flex items-center justify-center rounded-full
-                    ${isSelected ? 'bg-primary text-primary-foreground' : 
-                      (isHol || isRestD) ? 'text-rose-500' :
-                      isToday ? 'text-primary' : 'text-foreground/90'}
+                  <span className={`text-[12px] sm:text-[14px] font-bold w-8 h-8 flex items-center justify-center rounded-full z-10 transition-colors
+                    ${isSelected ? `${primaryThemeClass} text-white shadow-sm ring-2 ring-primary/20 ring-offset-1 ring-offset-background` : 
+                      (isHol || isRestD) ? 'text-rose-500 hover:bg-rose-500/10' :
+                      isToday ? 'bg-secondary text-primary' : 'text-foreground/90 hover:bg-secondary/40'}
                   `}>
                     {displayMode === 'gregorian' ? format(day, 'd') : hDayNum}
                   </span>
                   
                   {/* Indicator Section */}
-                  <div className="flex flex-wrap gap-1 mt-auto w-full justify-center">
-                     {hasWork && <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-sm border border-background" />}
-                     {hasLeave && <div className="w-2.5 h-2.5 rounded-full bg-amber-500 shadow-sm border border-background" />}
-                     {hasPermission && <div className="w-2.5 h-2.5 rounded-full bg-purple-500 shadow-sm border border-background" />}
-                     {daySessions.length > 3 && <div className="w-2.5 h-2.5 rounded-full bg-blue-500 shadow-sm border border-background" />}
+                  <div className="flex gap-1 mt-1 justify-center relative z-0">
+                     {hasWork && <div className={`w-1 h-1 rounded-full ${primaryThemeClass}`} />}
+                     {hasLeave && <div className="w-1 h-1 rounded-full bg-amber-500" />}
+                     {hasPermission && <div className="w-1 h-1 rounded-full bg-purple-500" />}
+                     {daySessions.length > 3 && <div className="w-1 h-1 rounded-full bg-blue-500" />}
                   </div>
                 </div>
               );
@@ -245,7 +276,7 @@ export default function CalendarView() {
     
     daysInWeek.forEach(day => {
       const dayStr = format(day, 'yyyy-MM-dd');
-      const dayName = format(day, 'EEE', { locale: ar });
+      const dayName = format(day, 'EEE', { locale: lang === 'ar' ? ar : enUS });
       dailyDataMap.set(dayStr, { 
         day: dayName, 
         date: dayStr,
@@ -294,18 +325,18 @@ export default function CalendarView() {
         {/* Main Stats Card */}
         <div className="grid grid-cols-2 gap-3 mb-2">
           <Card className="p-6 bg-primary/10 border-primary/20 shadow-lg rounded-3xl relative overflow-hidden flex flex-col justify-center items-center text-center">
-            <p className="text-sm text-primary mb-1 font-bold">ساعات العمل</p>
+            <p className="text-sm text-primary mb-1 font-bold">{t('cal.working_hours')}</p>
             <div className="flex items-baseline gap-1">
               <span className="text-4xl font-black text-primary">{actualTotalHours.toFixed(1)}</span>
-              <span className="text-primary/70 font-medium text-xs">/ {goalHours}س</span>
+              <span className="text-primary/70 font-medium text-xs">/ {goalHours}{t('t_auto_9')}</span>
             </div>
           </Card>
           
           <Card className="p-6 bg-yellow-500/10 border-yellow-500/20 shadow-lg rounded-3xl relative overflow-hidden flex flex-col justify-center items-center text-center">
-            <p className="text-sm text-yellow-500 mb-1 font-bold">إضافي الأسبوع</p>
+            <p className="text-sm text-yellow-500 mb-1 font-bold">{t('cal.weekly_overtime')}</p>
             <div className="flex items-baseline gap-1">
               <span className="text-4xl font-black text-yellow-500">{totalOvertime.toFixed(1)}</span>
-              <span className="text-yellow-500/70 font-medium text-xs">ساعة</span>
+              <span className="text-yellow-500/70 font-medium text-xs">{t('cal.hour')}</span>
             </div>
           </Card>
         </div>
@@ -320,8 +351,8 @@ export default function CalendarView() {
                    itemStyle={{color: 'var(--foreground)'}}
                    cursor={{fill: 'rgba(255,255,255,0.05)'}}
                  />
-                 <ReferenceLine y={settings.dailyHours} stroke="#ec4899" strokeDasharray="3 3" opacity={0.5} label={{ position: 'top', value: 'الهدف اليومي', fill: '#ec4899', fontSize: 10 }} />
-                 <ReferenceLine y={settings.dailyHours + (settings.notificationPreferences?.overtimeWarningMinutes ? settings.notificationPreferences.overtimeWarningMinutes / 60 : 0.5)} stroke="#eab308" strokeDasharray="3 3" opacity={0.5} label={{ position: 'top', value: 'تحذير إضافي', fill: '#eab308', fontSize: 10 }} />
+                 <ReferenceLine y={settings.dailyHours} stroke="#ec4899" strokeDasharray="3 3" opacity={0.5} label={{ position: 'top', value: t('cal.daily_target'), fill: '#ec4899', fontSize: 10 }} />
+                 <ReferenceLine y={settings.dailyHours + (settings.notificationPreferences?.overtimeWarningMinutes ? settings.notificationPreferences.overtimeWarningMinutes / 60 : 0.5)} stroke="#eab308" strokeDasharray="3 3" opacity={0.5} label={{ position: 'top', value: t('cal.overtime_warning'), fill: '#eab308', fontSize: 10 }} />
                  <Bar dataKey="hours" radius={[4, 4, 0, 0]}>
                    {dailyData.map((entry, index) => (
                      <Cell key={`cell-${index}`} fill={entry.isWeekend ? '#ca8a04' : '#6366f1'} opacity={entry.hours === 0 ? 0.3 : 1} />
@@ -332,8 +363,8 @@ export default function CalendarView() {
           </div>
           
           <div className="mt-6 text-center text-sm font-medium">
-            مقارنة بالأسبوع الماضي: <span className={diffHours >= 0 ? "text-emerald-400" : "text-red-400"}>
-              {diffHours > 0 ? '+' : ''}{diffHours.toFixed(1)} ساعة ({diffPercent > 0 ? '+' : ''}{diffPercent.toFixed(0)}%)
+            {t('t_auto_205')} <span className={diffHours >= 0 ? "text-emerald-400" : "text-red-400"}>
+              {diffHours > 0 ? '+' : ''}{diffHours.toFixed(1)} {t('t_auto_206')}{diffPercent > 0 ? '+' : ''}{diffPercent.toFixed(0)}%)
             </span>
           </div>
         </Card>
@@ -342,12 +373,12 @@ export default function CalendarView() {
           <Card className="p-4 rounded-2xl bg-card border-white/5 flex flex-col items-center text-center justify-center">
               <Activity className="w-6 h-6 mb-2 text-primary" />
               <span className="text-xl font-bold">103%</span>
-              <span className="text-xs text-muted-foreground">كفاءة الإنتاجية</span>
+              <span className="text-xs text-muted-foreground">{t('cal.productivity_efficiency')}</span>
           </Card>
           <Card className="p-4 rounded-2xl bg-card border-white/5 flex flex-col items-center text-center justify-center">
               <Clock className="w-6 h-6 mb-2 text-yellow-500" />
-              <span className="text-xl font-bold">{Math.round(actualTotalHours * 0.8)}س</span>
-              <span className="text-xs text-muted-foreground">وقت التركيز العميق</span>
+              <span className="text-xl font-bold">{Math.round(actualTotalHours * 0.8)}{t('t_auto_9')}</span>
+              <span className="text-xs text-muted-foreground">{t('cal.deep_focus_time')}</span>
           </Card>
         </div>
       </div>
@@ -372,101 +403,101 @@ export default function CalendarView() {
              onClick={() => setCustomEntryData(d => ({...d, type: 'salary'}))}
              className={`flex-1 py-3 text-sm font-bold transition-all rounded-xl z-10 ${customEntryData.type === 'salary' ? 'bg-emerald-700 text-white shadow-md' : 'text-foreground/70 hover:text-foreground'}`}
            >
-             يوم عمل
-           </button>
+             {t('cal.work_day')}
+                               </button>
            <button 
              onClick={() => setCustomEntryData(d => ({...d, type: 'annual_leave'}))}
              className={`flex-1 py-3 text-sm font-bold transition-all rounded-xl z-10 ${['annual_leave', 'sick_leave', 'casual_leave', 'compensation'].includes(customEntryData.type) ? 'bg-stone-300 dark:bg-stone-600 text-stone-900 dark:text-white shadow-md' : 'text-foreground/70 hover:text-foreground'}`}
            >
-             في إجازة
-           </button>
+             {t('cal.on_leave')}
+                               </button>
            <button 
              onClick={() => setCustomEntryData(d => ({...d, type: 'permission_1h'}))}
              className={`flex-1 py-3 text-sm font-bold transition-all rounded-xl z-10 ${['half_day_leave', 'permission', 'permission_1h', 'permission_2h'].includes(customEntryData.type) ? 'bg-stone-300 dark:bg-stone-600 text-stone-900 dark:text-white shadow-md' : 'text-foreground/70 hover:text-foreground'}`}
            >
              <Clock className="inline w-4 h-4 mr-1" />
-             إذن/نصف يوم
-           </button>
+             {t('t_auto_207')}
+                               </button>
         </div>
 
         {/* Dynamic form based on type */}
         <div className="flex flex-col gap-4">
           {['annual_leave', 'sick_leave', 'casual_leave', 'compensation'].includes(customEntryData.type) && (
              <div className="space-y-2">
-               <Label className="text-muted-foreground font-bold">نوع الإجازة</Label>
+               <Label className="text-muted-foreground font-bold">{t('cal.leave_type')}</Label>
                <div className="flex flex-wrap gap-2">
                  <Button 
                    variant={customEntryData.type === 'annual_leave' ? 'default' : 'secondary'}
                    className={`rounded-xl h-12 flex-1 font-bold ${customEntryData.type === 'annual_leave' ? 'bg-orange-600 hover:bg-orange-700 text-white' : ''}`}
                    onClick={() => setCustomEntryData({...customEntryData, type: 'annual_leave'})}
                  >
-                   اعتيادية
-                 </Button>
+                   {t('cal.casual')}
+                                                 </Button>
                  <Button 
                    variant={customEntryData.type === 'sick_leave' ? 'default' : 'secondary'}
                    className={`rounded-xl h-12 flex-1 font-bold ${customEntryData.type === 'sick_leave' ? 'bg-red-600 hover:bg-red-700 text-white' : ''}`}
                    onClick={() => setCustomEntryData({...customEntryData, type: 'sick_leave'})}
                  >
-                   مرضية
-                 </Button>
+                   {t('t_auto_208')}
+                                                 </Button>
                  <Button 
                    variant={customEntryData.type === 'casual_leave' ? 'default' : 'secondary'}
                    className={`rounded-xl h-12 flex-1 font-bold ${customEntryData.type === 'casual_leave' ? 'bg-amber-600 hover:bg-amber-700 text-white' : ''}`}
                    onClick={() => setCustomEntryData({...customEntryData, type: 'casual_leave'})}
                  >
-                   عارضة
-                 </Button>
+                   {t('cal.unpaid')}
+                                                 </Button>
                  <Button 
                    variant={customEntryData.type === 'compensation' ? 'default' : 'secondary'}
                    className={`rounded-xl h-12 flex-1 font-bold ${customEntryData.type === 'compensation' ? 'bg-emerald-600 hover:bg-emerald-700 text-white' : ''}`}
                    onClick={() => setCustomEntryData({...customEntryData, type: 'compensation'})}
                  >
-                   إجازة بديلة
-                 </Button>
+                   {t('cal.alternative_leave')}
+                                                 </Button>
                </div>
              </div>
           )}
 
           {['half_day_leave', 'permission', 'permission_1h', 'permission_2h'].includes(customEntryData.type) && (
              <div className="space-y-2">
-               <Label className="text-muted-foreground font-bold">نوع الإذن</Label>
+               <Label className="text-muted-foreground font-bold">{t('cal.permission_type')}</Label>
                <div className="flex flex-wrap gap-2">
                  <Button 
                    variant={customEntryData.type === 'permission_1h' ? 'default' : 'secondary'}
                    className={`rounded-xl h-10 flex-1 font-bold ${customEntryData.type === 'permission_1h' ? 'bg-purple-600 hover:bg-purple-700 text-white' : ''}`}
                    onClick={() => setCustomEntryData({...customEntryData, type: 'permission_1h'})}
                  >
-                   إذن ذكي (1 ساعة)
-                 </Button>
+                   {t('t_auto_209')}
+                                                 </Button>
                  <Button 
                    variant={customEntryData.type === 'permission_2h' ? 'default' : 'secondary'}
                    className={`rounded-xl h-10 flex-1 font-bold ${customEntryData.type === 'permission_2h' ? 'bg-purple-600 hover:bg-purple-700 text-white' : ''}`}
                    onClick={() => setCustomEntryData({...customEntryData, type: 'permission_2h'})}
                  >
-                   إذن ذكي (ساعتين)
-                 </Button>
+                   {t('t_auto_210')}
+                                                 </Button>
                  <Button 
                    variant={customEntryData.type === 'half_day_leave' ? 'default' : 'secondary'}
                    className={`rounded-xl h-10 flex-1 font-bold ${customEntryData.type === 'half_day_leave' ? 'bg-blue-600 hover:bg-blue-700 text-white' : ''}`}
                    onClick={() => setCustomEntryData({...customEntryData, type: 'half_day_leave'})}
                  >
-                   نصف يوم عمل
-                 </Button>
+                   {t('cal.half_day_work')}
+                                                 </Button>
                </div>
              </div>
           )}
 
           {customEntryData.type === 'salary' && settings.system === 'freelance' && (
              <div className="space-y-2">
-               <Label className="text-muted-foreground font-bold flex items-center gap-1"><Briefcase className="w-4 h-4"/> العميل / المشروع</Label>
+               <Label className="text-muted-foreground font-bold flex items-center gap-1"><Briefcase className="w-4 h-4"/> {t('t_auto_211')}</Label>
                <div className="flex flex-wrap gap-2">
                  <Button 
                    variant={customEntryData.jobId === 'none' ? 'default' : 'secondary'}
                    className={`rounded-xl h-10 font-bold ${customEntryData.jobId === 'none' ? 'bg-primary text-primary-foreground' : ''}`}
                    onClick={() => setCustomEntryData({...customEntryData, jobId: 'none'})}
                  >
-                   بدون عميل (مرتب)
-                 </Button>
+                   {t('t_auto_212')}
+                                                 </Button>
                  {jobs.map(j => (
                    <Button 
                      key={j.id}
@@ -486,7 +517,7 @@ export default function CalendarView() {
           {(!['annual_leave', 'sick_leave', 'casual_leave', 'permission_1h', 'permission_2h', 'compensation'].includes(customEntryData.type)) && (
             <>
               <div className="space-y-2">
-                <Label className="text-muted-foreground font-bold flex items-center gap-1"><Clock className="w-4 h-4"/>تسجيل دخول</Label>
+                <Label className="text-muted-foreground font-bold flex items-center gap-1"><Clock className="w-4 h-4"/>{t('cal.login')}</Label>
                 <SmartTimePicker 
                   value={customEntryData.startTime} 
                   onChange={val => setCustomEntryData({...customEntryData, startTime: val})}
@@ -494,7 +525,7 @@ export default function CalendarView() {
                 />
               </div>
               <div className="space-y-2">
-                <Label className="text-muted-foreground font-bold flex items-center gap-1"><Clock className="w-4 h-4"/>تسجيل خروج</Label>
+                <Label className="text-muted-foreground font-bold flex items-center gap-1"><Clock className="w-4 h-4"/>{t('cal.logout')}</Label>
                 <SmartTimePicker 
                   value={customEntryData.endTime} 
                   onChange={val => setCustomEntryData({...customEntryData, endTime: val})}
@@ -508,31 +539,31 @@ export default function CalendarView() {
             className="w-full h-14 rounded-2xl bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-lg mt-2 shadow-sm"
             onClick={handleCustomEntry}
           >
-             تسجيل
-          </Button>
+             {t('cal.log')}
+                              </Button>
         </div>
 
         {/* Separator / existing sessions */}
         {daySessions.length > 0 && (
            <div className="mt-4 pt-4 border-t border-border/50 space-y-4">
               <div className="flex justify-between items-center text-sm font-bold text-muted-foreground">
-                 <span>سجلات هذا اليوم</span>
+                 <span>{t('cal.records_today')}</span>
                  <div className="flex gap-4">
-                   <span>الإجمالي: <span className="text-emerald-500">{totalHours} س</span></span>
-                   <span>إضافي: <span className="text-orange-500">{overtimeHours} س</span></span>
+                   <span>{t('t_auto_213')} <span className="text-emerald-500">{totalHours} {t('t_auto_9')}</span></span>
+                   <span>{t('t_auto_214')} <span className="text-orange-500">{overtimeHours} {t('t_auto_9')}</span></span>
                  </div>
               </div>
               
               <div className="flex flex-col gap-2">
                  {daySessions.map(sess => {
-                    let typeLabel = 'يوم عمل';
-                    if (sess.dayStatus === 'annual_leave') typeLabel = 'إجازة اعتيادية';
-                    if (sess.dayStatus === 'sick_leave') typeLabel = 'إجازة مرضية';
-                    if (sess.dayStatus === 'casual_leave') typeLabel = 'إجازة عارضة';
-                    if (sess.dayStatus === 'compensation') typeLabel = 'إجازة بديلة';
-                    if (sess.dayStatus === 'half_day_leave') typeLabel = 'نصف يوم';
-                    if (sess.dayStatus === 'permission') typeLabel = 'إذن';
-                    if (sess.type === 'project') typeLabel = 'مشروع/عميل';
+                    let typeLabel = t('cal.work_day');
+                    if (sess.dayStatus === 'annual_leave') typeLabel = t('cal.annual');
+                    if (sess.dayStatus === 'sick_leave') typeLabel = t('cal.sick');
+                    if (sess.dayStatus === 'casual_leave') typeLabel = t('cal.casual');
+                    if (sess.dayStatus === 'compensation') typeLabel = t('cal.alternative_leave');
+                    if (sess.dayStatus === 'half_day_leave') typeLabel = t('cal.half_day');
+                    if (sess.dayStatus === 'permission') typeLabel = t('cal.permission');
+                    if (sess.type === 'project') typeLabel = t('t_auto_215');
 
                     return (
                        <div key={sess.id} className="flex justify-between items-center bg-card border border-border/50 p-3 rounded-xl shadow-sm">
@@ -541,7 +572,7 @@ export default function CalendarView() {
                              {sess.endTime ? (
                                <span className="text-xs text-muted-foreground font-mono">{format(new Date(sess.startTime), 'HH:mm')} - {format(new Date(sess.endTime), 'HH:mm')}</span>
                              ) : (
-                               <span className="text-xs text-muted-foreground">طوال اليوم</span>
+                               <span className="text-xs text-muted-foreground">{t('cal.all_day')}</span>
                              )}
                           </div>
                           <Button variant="ghost" size="icon" className="text-red-500 hover:bg-red-500/10 h-8 w-8" onClick={() => deleteSession(sess.id, true)}>
@@ -573,9 +604,9 @@ export default function CalendarView() {
           <div>
             <h3 className="text-xl font-black text-right flex items-center gap-2">
                <CalendarIcon className="w-5 h-5 text-indigo-500" />
-               الإجازات الرسمية والأعياد ({currentYear})
+               {t('t_auto_216')}{currentYear})
             </h3>
-            <p className="text-sm text-muted-foreground mt-1">تتبع أوقات العمل في العطلات الرسمية</p>
+            <p className="text-sm text-muted-foreground mt-1">{t('cal.track_holidays')}</p>
           </div>
           
           <div className="flex bg-secondary/30 p-1.5 rounded-[1.2rem] items-center w-full sm:w-auto">
@@ -592,12 +623,12 @@ export default function CalendarView() {
                        updateSettings({ ...settings, customHolidays: newHolidays });
                        toast.success(`تم استيراد ${added.length} إجازات رسمية بنجاح`);
                    } else {
-                       toast.info('تم تسجيل جميع الإجازات مسبقاً');
+                       toast.info(t('cal.all_holidays_logged'));
                    }
                 }}
              >
-                <RefreshCw className="w-4 h-4 ml-1.5" /> استيراد عطلات مصر
-             </Button>
+                <RefreshCw className="w-4 h-4 ml-1.5" /> {t('cal.import_custom')}
+                                     </Button>
           </div>
         </div>
 
@@ -605,16 +636,16 @@ export default function CalendarView() {
           <table className="w-full text-right text-sm">
             <thead>
               <tr className="bg-secondary/40 text-muted-foreground">
-                <th className="p-3 font-bold w-1/4">التاريخ</th>
-                <th className="p-3 font-bold w-1/3">المناسبة</th>
-                <th className="p-3 font-bold w-1/4">الحالة</th>
-                <th className="p-3 font-bold w-1/6 text-center">إجراءات</th>
+                <th className="p-3 font-bold w-1/4">{t('cal.date')}</th>
+                <th className="p-3 font-bold w-1/3">{t('cal.occasion')}</th>
+                <th className="p-3 font-bold w-1/4">{t('cal.status')}</th>
+                <th className="p-3 font-bold w-1/6 text-center">{t('cal.actions')}</th>
               </tr>
             </thead>
             <tbody>
               {currentYearHols.length === 0 ? (
                 <tr>
-                   <td colSpan={4} className="p-8 text-center text-muted-foreground font-medium">لا توجد إجازات مسجلة لهذا العام.</td>
+                   <td colSpan={4} className="p-8 text-center text-muted-foreground font-medium">{t('t_auto_217')}</td>
                 </tr>
               ) : currentYearHols.map((h, i) => {
                 // Check if worked
@@ -625,16 +656,16 @@ export default function CalendarView() {
                 return (
                   <tr key={i} className="border-b border-border/50 hover:bg-secondary/20 transition-colors">
                     <td className="p-3 font-mono text-xs">{h.date}</td>
-                    <td className="p-3 font-bold">{h.name}</td>
+                    <td className="p-3 font-bold">{t(h.name)}</td>
                     <td className="p-3 text-xs">
                       {workedHours > 0 ? (
                         <span className="bg-emerald-500/10 text-emerald-500 font-bold px-2 py-1 rounded-full text-[10px]">
-                          تم العمل ({workedHours.toFixed(1)} س) - تحتسب بديلة
-                        </span>
+                          {t('t_auto_218')}{workedHours.toFixed(1)} {t('t_auto_219')}
+                                                            </span>
                       ) : isPast ? (
-                         <span className="bg-blue-500/10 text-blue-500 font-bold px-2 py-1 rounded-full text-[10px]">إجازة عادية</span>
+                         <span className="bg-blue-500/10 text-blue-500 font-bold px-2 py-1 rounded-full text-[10px]">{t('cal.normal_leave')}</span>
                       ) : (
-                         <span className="bg-secondary/40 text-muted-foreground font-bold px-2 py-1 rounded-full text-[10px]">قادمة</span>
+                         <span className="bg-secondary/40 text-muted-foreground font-bold px-2 py-1 rounded-full text-[10px]">{t('cal.upcoming')}</span>
                       )}
                     </td>
                     <td className="p-3 text-center">
@@ -659,7 +690,7 @@ export default function CalendarView() {
                 className="flex-shrink border-border/50 bg-secondary/20 text-sm h-9 w-full sm:w-fit custom-holiday-date" 
               />
               <Input 
-                placeholder="اسم الإجازة (مثال: عطلة أجنبية، مناسبة شخصية)" 
+                placeholder={t('t_auto_220')} 
                 className="flex-1 border-border/50 bg-secondary/20 text-sm h-9 custom-holiday-name" 
               />
               <Button 
@@ -675,12 +706,12 @@ export default function CalendarView() {
                       dateInput.value = '';
                       nameInput.value = '';
                     } else {
-                      toast.error('يرجى إدخال التاريخ والاسم');
+                      toast.error(t('cal.enter_date_name'));
                     }
                 }}
               >
-                <Plus className="w-4 h-4 ml-1" /> إضافة عطلة مخصصة
-              </Button>
+                <Plus className="w-4 h-4 ml-1" /> {t('cal.add_custom_holiday')}
+                                      </Button>
           </div>
         </div>
       </div>
@@ -710,11 +741,11 @@ export default function CalendarView() {
             {viewType === 'shifts' ? <Briefcase className="w-6 h-6" /> : <CalendarIcon className="w-6 h-6" />}
           </div>
           <div className="flex flex-col">
-            <h2 className="text-2xl font-black tracking-tight">{viewType === 'shifts' ? 'جدولة الورديات' : 'التقويم المتقدم'}</h2>
+            <h2 className="text-2xl font-black tracking-tight">{viewType === 'shifts' ? t('cal.schedule_shifts') : t('cal.advanced_calendar')}</h2>
             <div className="text-muted-foreground text-sm flex items-center gap-2 mt-0.5 font-medium">
-              {viewType === 'monthly' && format(currentDate, 'MMMM yyyy', { locale: ar })}
+              {viewType === 'monthly' && format(currentDate, 'MMMM yyyy', { locale: lang === 'ar' ? ar : enUS })}
               {viewType === 'weekly' && `الأسبوع: ${format(startOfWeek(currentDate, {weekStartsOn:6}), 'd MMM')} - ${format(endOfWeek(currentDate, {weekStartsOn:6}), 'd MMM')}`}
-              {viewType === 'shifts' && 'إعداد الورديات والوظائف'}
+              {viewType === 'shifts' && t('cal.setup_shifts_jobs')}
             </div>
           </div>
         </div>
@@ -728,21 +759,21 @@ export default function CalendarView() {
                    onClick={() => setDisplayMode('gregorian')}
                    className={`flex-1 sm:px-6 py-2 rounded-xl text-[13px] sm:text-sm transition-all duration-200 ${displayMode === 'gregorian' ? 'bg-background font-bold text-indigo-500 shadow-sm' : 'text-muted-foreground hover:text-foreground font-medium'}`}
                 >
-                   ميلادي
-                </button>
+                   {t('cal.gregorian')}
+                                              </button>
                 <button 
                    onClick={() => setDisplayMode('hijri')}
                    className={`flex-1 sm:px-6 py-2 rounded-xl text-[13px] sm:text-sm transition-all duration-200 ${displayMode === 'hijri' ? 'bg-background font-bold text-indigo-500 shadow-sm' : 'text-muted-foreground hover:text-foreground font-medium'}`}
                 >
-                   هجري
-                </button>
+                   {t('cal.hijri')}
+                                              </button>
              </div>
           )}
 
           {viewType !== 'shifts' && (
-             <Button variant="outline" size="sm" onClick={() => setConverterOpen(true)} className="h-10 sm:h-auto rounded-2xl sm:rounded-xl font-bold bg-secondary/30 hover:bg-secondary/60 flex-shrink-0 px-4 border-transparent shadow-none" title="محول التاريخ">
+             <Button variant="outline" size="sm" onClick={() => setConverterOpen(true)} className="h-10 sm:h-auto rounded-2xl sm:rounded-xl font-bold bg-secondary/30 hover:bg-secondary/60 flex-shrink-0 px-4 border-transparent shadow-none" title={t('cal.date_converter')}>
                <RefreshCw className="w-4 h-4 ml-1.5" />
-               <span className="inline-block">محول التاريخ</span>
+               <span className="inline-block">{t('cal.date_converter')}</span>
              </Button>
           )}
 
@@ -756,32 +787,32 @@ export default function CalendarView() {
               className={`flex-1 min-w-[70px] h-10 text-[13px] sm:text-sm rounded-xl transition-all ${viewType === 'monthly' && !isPaintingMode ? 'font-bold bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
               onClick={() => { setViewType('monthly'); setIsPaintingMode(false); }}
             >
-              <LayoutGrid className="w-4 h-4 mr-1.5" /> شهري
-            </Button>
+              <LayoutGrid className="w-4 h-4 mr-1.5" /> {t('cal.monthly')}
+                                      </Button>
             <Button 
               variant={viewType === 'weekly' ? 'secondary' : 'ghost'} 
               size="sm" 
               className={`flex-1 min-w-[70px] h-10 text-[13px] sm:text-sm rounded-xl transition-all ${viewType === 'weekly' ? 'font-bold bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
               onClick={() => { setViewType('weekly'); setIsPaintingMode(false); }}
             >
-              <List className="w-4 h-4 mr-1.5" /> أسبوعي
-            </Button>
+              <List className="w-4 h-4 mr-1.5" /> {t('cal.weekly')}
+                                      </Button>
             <Button 
               variant={isPaintingMode ? 'default' : 'ghost'} 
               size="sm" 
               className={`flex-1 min-w-[70px] h-10 text-[13px] sm:text-sm rounded-xl transition-all ${isPaintingMode ? 'font-bold shadow-md bg-indigo-500 hover:bg-indigo-600 text-white' : 'text-muted-foreground hover:text-foreground'}`}
               onClick={() => { setViewType('monthly'); setIsPaintingMode(true); }}
             >
-              <Palette className="w-4 h-4 mr-1.5" /> جدولة
-            </Button>
+              <Palette className="w-4 h-4 mr-1.5" /> {t('cal.scheduling')}
+                                      </Button>
             <Button 
               variant={viewType === 'shifts' ? 'secondary' : 'ghost'} 
               size="sm" 
               className={`flex-1 min-w-[70px] h-10 text-[13px] sm:text-sm rounded-xl transition-all ${viewType === 'shifts' ? 'font-bold bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
               onClick={() => { setViewType('shifts'); setIsPaintingMode(false); }}
             >
-              <Briefcase className="w-4 h-4 mr-1.5" /> وظائف
-            </Button>
+              <Briefcase className="w-4 h-4 mr-1.5" /> {t('cal.jobs')}
+                                      </Button>
           </div>
 
           {/* Navigation */}
@@ -791,8 +822,8 @@ export default function CalendarView() {
                 <ChevronRight className="w-5 h-5" />
               </Button>
               <Button variant="ghost" onClick={goToToday} className="h-9 text-xs font-bold rounded-xl hover:bg-secondary/50">
-                اليوم
-              </Button>
+                {t('cal.today')}
+                                            </Button>
               <Button variant="ghost" size="icon" onClick={prevPeriod} className="h-9 w-9 rounded-xl hover:bg-secondary/50">
                 <ChevronLeft className="w-5 h-5" />
               </Button>
@@ -805,7 +836,7 @@ export default function CalendarView() {
       <div className="flex-1 overflow-y-auto px-2">
         {isPaintingMode && (
           <div className="flex flex-wrap gap-2 p-4 mt-2 bg-card/80 backdrop-blur-xl border border-indigo-500/30 rounded-2xl justify-center animate-in slide-in-from-top-4 shadow-md">
-            <p className="w-full text-center text-xs font-bold text-muted-foreground mb-1">اختر وردية واضغط على الأيام لجدولتها</p>
+            <p className="w-full text-center text-xs font-bold text-muted-foreground mb-1">{t('cal.select_shift_click_days')}</p>
             {shifts.map(shift => (
               <Button
                 key={shift.id}
@@ -819,7 +850,7 @@ export default function CalendarView() {
                 {shift.name} ({shift.startTime})
               </Button>
             ))}
-            {shifts.length === 0 && <span className="text-xs text-amber-500">يرجى إضافة ورديات من الإعدادات أولاً.</span>}
+            {shifts.length === 0 && <span className="text-xs text-amber-500">{t('t_auto_221')}</span>}
           </div>
         )}
         {renderCurrentView()}
@@ -830,12 +861,12 @@ export default function CalendarView() {
         <SheetContent side="bottom" className="rounded-t-[2rem] max-h-[95vh] overflow-y-auto z-[100] p-4 pb-20">
            <SheetHeader className="pb-2">
              <SheetTitle className="text-2xl font-black text-right mb-1">
-                تعديل السجل
-             </SheetTitle>
+                {t('cal.edit_log')}
+                                       </SheetTitle>
              <div className="text-xs text-muted-foreground font-bold text-right flex gap-1 items-center justify-end">
-                <span>{new Intl.DateTimeFormat('ar-SA-u-ca-islamic', { day: 'numeric', month: 'long', year: 'numeric' }).format(selectedDay)}</span>
+                <span>{new Intl.DateTimeFormat(lang === 'ar' ? 'ar-SA-u-ca-islamic' : 'en-US-u-ca-islamic', { day: 'numeric', month: 'long', year: 'numeric' }).format(selectedDay)}</span>
                 <span className="w-1 h-1 rounded-full bg-border inline-block" />
-                <span>{format(selectedDay, 'EEEE، d MMMM yyyy', { locale: ar })}</span>
+                <span>{format(selectedDay, t('t_auto_222'), { locale: lang === 'ar' ? ar : enUS })}</span>
                 <CalendarIcon className="w-3 h-3 text-primary ml-1" />
              </div>
            </SheetHeader>
@@ -846,15 +877,15 @@ export default function CalendarView() {
       <Sheet open={converterOpen} onOpenChange={setConverterOpen}>
          <SheetContent side="bottom" className="rounded-t-[2rem] max-h-[85vh] z-[110] p-6 text-center shadow-2xl">
             <SheetHeader className="pb-6">
-               <SheetTitle className="text-2xl font-black text-primary">محول التاريخ الاحترافي</SheetTitle>
+               <SheetTitle className="text-2xl font-black text-primary">{t('cal.pro_date_converter')}</SheetTitle>
                <p className="text-sm text-muted-foreground font-medium mt-2 leading-relaxed">
-                  أدخل التاريخ الميلادي لمعرفة التاريخ الهجري المطابق له، بشكل فوري وسريع.
-               </p>
+                  {t('t_auto_223')}
+                                         </p>
             </SheetHeader>
             <div className="flex flex-col gap-6" >
                <div className="bg-secondary/30 p-4 rounded-3xl border border-white/5 relative overflow-hidden">
                   <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/10 blur-3xl rounded-full" />
-                  <label className="text-xs font-bold text-foreground/70 mb-3 block text-right pr-2">التاريخ الميلادي</label>
+                  <label className="text-xs font-bold text-foreground/70 mb-3 block text-right pr-2">{t('cal.gregorian_date')}</label>
                   <Input 
                     type="date" 
                     className="h-14 font-black text-lg bg-card/80 border-white/10 rounded-2xl drop-shadow-sm px-4" 
@@ -871,15 +902,15 @@ export default function CalendarView() {
 
                <div className="bg-primary/5 p-4 rounded-3xl border border-primary/20 relative overflow-hidden">
                    <div className="absolute top-0 left-0 w-32 h-32 bg-primary/20 blur-3xl rounded-full" />
-                   <label className="text-xs font-bold text-primary/80 mb-3 block text-right pr-2">التاريخ الهجري</label>
+                   <label className="text-xs font-bold text-primary/80 mb-3 block text-right pr-2">{t('cal.hijri_date')}</label>
                    <div className="h-14 font-black flex items-center justify-center text-xl text-primary bg-card/60 backdrop-blur-md border border-primary/10 rounded-2xl shadow-inner">
-                      {converterDate ? new Intl.DateTimeFormat('ar-SA-u-ca-islamic', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }).format(new Date(converterDate)) : '--'}
+                      {converterDate ? new Intl.DateTimeFormat(lang === 'ar' ? 'ar-SA-u-ca-islamic' : 'en-US-u-ca-islamic', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }).format(new Date(converterDate)) : '--'}
                    </div>
                </div>
             </div>
             <Button variant="ghost" className="w-full h-12 mt-8 rounded-2xl font-bold bg-secondary/50 hover:bg-secondary text-foreground" onClick={() => setConverterOpen(false)}>
-               إغلاق
-            </Button>
+               {t('cal.close')}
+                                  </Button>
          </SheetContent>
       </Sheet>
 

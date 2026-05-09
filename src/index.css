@@ -125,6 +125,12 @@
     @apply bg-background text-foreground transition-colors duration-300;
     font-family: 'Tajawal', 'Cairo', sans-serif;
   }
+  .en-mode {
+    font-family: 'Inter', 'Tajawal', 'Cairo', sans-serif;
+  }
+  .ar-mode {
+    font-family: 'Tajawal', 'Cairo', sans-serif;
+  }
   /* Focus Mode Override */
   .mode-focus header, 
   .mode-focus nav, 

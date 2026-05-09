@@ -2,10 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { Card } from '../ui/card';
 import { CalendarDays, Hand, X, MousePointer2 } from 'lucide-react';
 import { useWorkLog } from '../../contexts/WorkLogContext';
+import { useLanguage } from "@/contexts/LanguageContext";
 
 export default function ShiftRosterView() {
+    const { t, lang } = useLanguage();
   const { shifts } = useWorkLog();
-  const weekDays = ['السبت', 'الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة'];
+  const weekDays = [t('t_auto_460'), t('t_auto_461'), t('t_auto_462'), t('t_auto_463'), t('t_auto_464'), t('t_auto_465'), t('t_auto_466')];
 
   // Load roster from local storage
   const [roster, setRoster] = useState<Record<string, string[]>>(() => {
@@ -48,8 +50,8 @@ export default function ShiftRosterView() {
             <CalendarDays className="w-6 h-6" />
           </div>
           <div>
-            <h2 className="text-2xl font-bold">عربة الورادي (Roster)</h2>
-            <p className="text-muted-foreground text-sm">توزيع نوبات العمل</p>
+            <h2 className="text-2xl font-bold">{t('t_auto_467')}</h2>
+            <p className="text-muted-foreground text-sm">{t('t_auto_468')}</p>
           </div>
         </div>
       </header>
@@ -57,9 +59,9 @@ export default function ShiftRosterView() {
       <div className="bg-secondary/20 p-4 rounded-3xl border border-white/5">
         <h4 className="font-bold text-sm mb-1 flex items-center gap-2">
           <MousePointer2 className="w-4 h-4 text-violet-500" />
-          1. اختر وردية من البنك لتوزيعها:
-        </h4>
-        <p className="text-[10px] text-muted-foreground mb-3">اضغط على الوردية ثم اضغط على أيام الأسبوع لإضافتها.</p>
+          {t('t_auto_469')}
+                          </h4>
+        <p className="text-[10px] text-muted-foreground mb-3">{t('t_auto_470')}</p>
         <div className="flex gap-2 flex-wrap">
           {shifts.map(s => (
              <div 
@@ -72,7 +74,7 @@ export default function ShiftRosterView() {
              </div>
           ))}
           {shifts.length === 0 && (
-            <p className="text-xs text-muted-foreground w-full py-2">لا توجد ورديات مُعرّفة. يمكنك إضافتها من قائمة الجدولة أو الإعدادات.</p>
+            <p className="text-xs text-muted-foreground w-full py-2">{t('t_auto_471')}</p>
           )}
         </div>
       </div>
@@ -90,7 +92,7 @@ export default function ShiftRosterView() {
                  {(!roster[day] || roster[day].length === 0) && (
                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                      <span className="text-[9px] md:text-[10px] text-muted-foreground text-center opacity-50 px-2">
-                       {selectedShift ? 'اضغط هنا للإضافة' : 'فارغ'}
+                       {selectedShift ? t('t_auto_472') : t('t_auto_473')}
                      </span>
                    </div>
                  )}

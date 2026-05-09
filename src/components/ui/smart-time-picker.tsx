@@ -3,6 +3,7 @@ import { Button } from './button';
 import { Clock } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { format } from 'date-fns';
+import { useLanguage } from "@/contexts/LanguageContext";
 
 interface SmartTimePickerProps {
   value: string; // HH:mm
@@ -12,6 +13,7 @@ interface SmartTimePickerProps {
 }
 
 export function SmartTimePicker({ value, onChange, className, label }: SmartTimePickerProps) {
+    const { t, lang } = useLanguage();
   const inputRef = useRef<HTMLInputElement>(null);
 
   const handleContainerClick = () => {
@@ -54,7 +56,7 @@ export function SmartTimePicker({ value, onChange, className, label }: SmartTime
             <span className="font-mono text-xl text-indigo-500 font-bold bg-background px-2 py-0.5 rounded-lg shadow-sm border border-border/50">{value}</span>
           </div>
         ) : (
-           <span className="pointer-events-none">{label || 'اختر الوقت'}</span>
+           <span className="pointer-events-none">{label || t('t_auto_138')}</span>
         )}
         <Clock className="h-5 w-5 text-indigo-500/70 pointer-events-none" />
       </Button>

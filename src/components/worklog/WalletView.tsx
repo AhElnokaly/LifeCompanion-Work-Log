@@ -8,8 +8,10 @@ import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '../ui/dialog';
 import { ResponsiveContainer, BarChart, Bar, LineChart, Line, AreaChart, Area, PieChart, Pie, Cell, XAxis, Tooltip, CartesianGrid } from 'recharts';
+import { useLanguage } from "@/contexts/LanguageContext";
 
 export default function WalletView() {
+    const { t, lang } = useLanguage();
   const { sessions, projects, settings, updateSettings } = useWorkLog();
   const now = new Date();
   
@@ -123,8 +125,8 @@ export default function WalletView() {
             <Wallet className="w-6 h-6" />
           </div>
           <div>
-            <h2 className="text-2xl font-bold">محفظتي (Mahfazty)</h2>
-            <p className="text-muted-foreground text-sm">التقييم المالي لساعات العمل</p>
+            <h2 className="text-2xl font-bold">{t('t_auto_493')}</h2>
+            <p className="text-muted-foreground text-sm">{t('t_auto_494')}</p>
           </div>
         </div>
       </div>
@@ -151,11 +153,11 @@ export default function WalletView() {
 
          <div className="relative z-10 flex flex-col gap-6">
             <div className="flex justify-between items-center">
-               <span className="opacity-80 text-sm font-medium">أرباح الشهر المتوقعة</span>
+               <span className="opacity-80 text-sm font-medium">{t('t_auto_495')}</span>
                <div className="flex gap-2">
                  <button onClick={() => setGoalModalOpen(true)} className="text-xs bg-black/20 hover:bg-black/30 transition px-3 py-1 rounded-full flex items-center gap-1 backdrop-blur-md">
                     <Target className="w-3 h-3" />
-                    الهدف: {targetGoal.toLocaleString()}
+                    {t('t_auto_496')} {targetGoal.toLocaleString()}
                  </button>
                  <span className="text-xs bg-white/20 px-2 py-1 rounded-full">{format(now, 'MMMM yyyy', {locale: ar})}</span>
                </div>
@@ -163,14 +165,14 @@ export default function WalletView() {
             
             <div className="flex items-end gap-2">
                <span className="text-5xl font-black">{totalEstimatedRevenue.toLocaleString()}</span>
-               <span className="text-lg font-bold opacity-80 mb-1">ج.م</span>
+               <span className="text-lg font-bold opacity-80 mb-1">{t('t_auto_497')}</span>
             </div>
             
             <div className="flex items-center justify-between mt-2 text-xs">
-               <span className="opacity-80">حصيلة ساعات العمل في المشاريع الحرّة</span>
+               <span className="opacity-80">{t('t_auto_498')}</span>
                <div className="bg-white/20 px-2 py-1 rounded-md font-bold text-white flex items-center gap-1 backdrop-blur-sm">
-                  {progressPercent.toFixed(0)}% من الهدف
-               </div>
+                  {progressPercent.toFixed(0)}{t('t_auto_499')}
+                                         </div>
             </div>
          </div>
       </div>
@@ -181,10 +183,10 @@ export default function WalletView() {
                <DollarSign className="w-5 h-5 text-primary" />
             </div>
             <div className="flex-1">
-               <h3 className="font-bold text-sm">أنت موظف بنظام الدوام</h3>
+               <h3 className="font-bold text-sm">{t('t_auto_500')}</h3>
                <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
-                 التطبيق يحسب هنا فقط أرباح المشاريع الجانبية والمستقلة التي حددت لها (سعر الساعة). الأجر الثابت لا يظهر هنا.
-               </p>
+                 {t('t_auto_501')}
+                                         </p>
             </div>
          </Card>
       )}
@@ -193,12 +195,12 @@ export default function WalletView() {
         <div className="flex items-center justify-between px-1">
           <h3 className="font-bold text-lg flex items-center gap-2">
               <Briefcase className="w-5 h-5 text-emerald-500" /> 
-              تفصيل الإيرادات
-          </h3>
+              {t('t_auto_502')}
+                                </h3>
           <Button variant="outline" size="sm" className="h-8 rounded-xl font-bold bg-card" onClick={handleExportInvoice}>
             <FileText className="w-4 h-4 ml-1.5 text-emerald-500" />
-            تصدير فاتورة (PDF)
-          </Button>
+            {t('t_auto_503')}
+                                </Button>
         </div>
         
         <div className="flex flex-col gap-3">
@@ -208,19 +210,19 @@ export default function WalletView() {
                     <div className="flex flex-col gap-1">
                        <span className="font-bold text-sm">{proj.name}</span>
                        <span className="text-[10px] text-muted-foreground">
-                          {proj.duration.toFixed(1)} ساعة عمل هذا الشهر
-                       </span>
+                          {proj.duration.toFixed(1)} {t('t_auto_504')}
+                                                     </span>
                     </div>
                     <div className="flex items-center gap-3">
-                       <span className="font-bold text-emerald-500">{proj.revenue.toLocaleString()} ج</span>
+                       <span className="font-bold text-emerald-500">{proj.revenue.toLocaleString()} {t('t_auto_204')}</span>
                        <ChevronLeft className="w-4 h-4 text-muted-foreground opacity-50" />
                     </div>
                  </Card>
               ))
            ) : (
               <div className="text-center py-10 text-muted-foreground bg-secondary/5 rounded-3xl border border-white/5 border-dashed">
-                 لم تقم بتسجيل أي ساعات عمل حر (Freelance) لها تقييم مالي هذا الشهر.
-              </div>
+                 {t('t_auto_505')}
+                                            </div>
            )}
         </div>
       </div>
@@ -228,12 +230,12 @@ export default function WalletView() {
       <Dialog open={goalModalOpen} onOpenChange={setGoalModalOpen}>
         <DialogContent className="sm:max-w-md w-[90vw] rounded-[2rem]" dir="rtl">
           <DialogHeader>
-            <DialogTitle>تحديد الهدف المالي</DialogTitle>
+            <DialogTitle>{t('t_auto_506')}</DialogTitle>
           </DialogHeader>
           <div className="py-4 flex flex-col gap-4">
             <p className="text-sm text-muted-foreground">
-              ضع لنفسك هدفاً مالياً (بالجنيه) تسعى للوصول إليه بنهاية هذا الشهر من أعمالك المستقلة، لنقوم بإظهار مستوى تقدمك نحوه!
-            </p>
+              {t('t_auto_507')}
+                                      </p>
             <div className="flex items-center gap-2">
                <Input 
                  type="number" 
@@ -241,12 +243,12 @@ export default function WalletView() {
                  value={tempGoal} 
                  onChange={(e) => setTempGoal(e.target.value)} 
                />
-               <span className="font-bold text-muted-foreground">ج.م</span>
+               <span className="font-bold text-muted-foreground">{t('t_auto_497')}</span>
             </div>
           </div>
           <DialogFooter className="flex-row gap-2">
-            <Button variant="ghost" onClick={() => setGoalModalOpen(false)} className="flex-1 rounded-xl">إلغاء</Button>
-            <Button onClick={handleSaveGoal} className="flex-1 rounded-xl font-bold bg-emerald-600 hover:bg-emerald-700 text-white">حفظ الهدف</Button>
+            <Button variant="ghost" onClick={() => setGoalModalOpen(false)} className="flex-1 rounded-xl">{t('t_auto_305')}</Button>
+            <Button onClick={handleSaveGoal} className="flex-1 rounded-xl font-bold bg-emerald-600 hover:bg-emerald-700 text-white">{t('t_auto_508')}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -255,8 +257,8 @@ export default function WalletView() {
         <div className="flex items-center justify-between px-1">
           <h3 className="font-bold text-lg flex items-center gap-2">
               <BarChart2 className="w-5 h-5 text-indigo-500" /> 
-              المخططات المحفوظة
-          </h3>
+              {t('t_auto_509')}
+                                </h3>
         </div>
         
         <div className="flex flex-col gap-3">
@@ -266,7 +268,7 @@ export default function WalletView() {
                     <div className="flex flex-col gap-1">
                        <span className="font-bold text-sm">{chart.name}</span>
                        <span className="text-[10px] text-muted-foreground flex gap-1">
-                          نوع: {chart.chartType} • معيار: {chart.metric} • تجميع: {chart.groupBy} • فترة: {chart.timeRange}
+                          {t('t_auto_510')} {chart.chartType} {t('t_auto_511')} {chart.metric} {t('t_auto_512')} {chart.groupBy} {t('t_auto_513')} {chart.timeRange}
                        </span>
                     </div>
                     <Button variant="ghost" size="icon" onClick={() => {
@@ -279,8 +281,8 @@ export default function WalletView() {
               ))
            ) : (
               <div className="text-center py-6 text-muted-foreground bg-secondary/5 rounded-3xl border border-white/5 border-dashed">
-                 لا توجد مخططات محفوظة حالياً.
-              </div>
+                 {t('t_auto_514')}
+                                            </div>
            )}
         </div>
       </div>

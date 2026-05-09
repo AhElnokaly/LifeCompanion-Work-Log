@@ -5,8 +5,10 @@ import { Input } from '../ui/input';
 import { useWorkLog } from '../../contexts/WorkLogContext';
 import { Search, Plus, MoreVertical, Play, Bell, FileText, Download } from 'lucide-react';
 import { Progress } from '../ui/progress';
+import { useLanguage } from "@/contexts/LanguageContext";
 
 export default function ProjectsView() {
+    const { t, lang } = useLanguage();
   const { projects } = useWorkLog();
   const [invoicingId, setInvoicingId] = useState<string | null>(null);
 
@@ -21,7 +23,7 @@ export default function ProjectsView() {
   return (
     <div className="flex flex-col gap-6 animate-in fade-in slide-in-from-bottom-4 duration-500" dir="rtl">
       <header className="flex items-center justify-between">
-        <h2 className="text-2xl font-bold">المشاريع</h2>
+        <h2 className="text-2xl font-bold">{t('t_auto_438')}</h2>
         <Button variant="ghost" size="icon" className="rounded-full">
           <Bell className="w-5 h-5" />
         </Button>
@@ -30,15 +32,15 @@ export default function ProjectsView() {
       <div className="relative">
         <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
         <Input 
-          placeholder="البحث في المشاريع..." 
+          placeholder={t('t_auto_439')} 
           className="pr-10 h-12 rounded-2xl bg-secondary/30 border-none focus-visible:ring-1 focus-visible:ring-primary"
         />
       </div>
 
       <div className="flex gap-2">
-        <Button className="rounded-2xl px-6 bg-yellow-600/20 text-yellow-500 hover:bg-yellow-600/30">النشطة</Button>
-        <Button variant="ghost" className="rounded-2xl px-6">الكل</Button>
-        <Button variant="ghost" className="rounded-2xl px-6">المكتملة</Button>
+        <Button className="rounded-2xl px-6 bg-yellow-600/20 text-yellow-500 hover:bg-yellow-600/30">{t('t_auto_440')}</Button>
+        <Button variant="ghost" className="rounded-2xl px-6">{t('t_auto_441')}</Button>
+        <Button variant="ghost" className="rounded-2xl px-6">{t('t_auto_442')}</Button>
       </div>
 
       <div className="flex flex-col gap-4 relative pb-20">
@@ -64,15 +66,15 @@ export default function ProjectsView() {
 
             <div className="grid grid-cols-3 gap-2 mb-4 p-3 bg-secondary/20 rounded-2xl">
                <div>
-                 <p className="text-[10px] text-muted-foreground mb-1 uppercase tracking-wider">السعر</p>
-                 <p className="text-sm font-medium border-l border-white/5 pl-2">${p.hourlyRate}/س</p>
+                 <p className="text-[10px] text-muted-foreground mb-1 uppercase tracking-wider">{t('t_auto_443')}</p>
+                 <p className="text-sm font-medium border-l border-white/5 pl-2">${p.hourlyRate}{t('t_auto_444')}</p>
                </div>
                <div>
-                 <p className="text-[10px] text-muted-foreground mb-1 uppercase tracking-wider">الساعات</p>
+                 <p className="text-[10px] text-muted-foreground mb-1 uppercase tracking-wider">{t('t_auto_445')}</p>
                  <p className="text-sm font-medium border-l border-white/5 pl-2">{p.totalHours}</p>
                </div>
                <div className="text-left">
-                  <p className="text-[10px] text-muted-foreground mb-1 uppercase tracking-wider">المستحق</p>
+                  <p className="text-[10px] text-muted-foreground mb-1 uppercase tracking-wider">{t('t_auto_446')}</p>
                   <p className="text-sm font-bold text-emerald-400">${(p.hourlyRate * p.totalHours).toFixed(2)}</p>
                </div>
             </div>
@@ -88,27 +90,27 @@ export default function ProjectsView() {
                 {invoicingId === p.id ? (
                   <>
                     <Download className="w-4 h-4 animate-bounce text-emerald-400" />
-                    <span className="text-emerald-400">جاري التصدير...</span>
+                    <span className="text-emerald-400">{t('t_auto_447')}</span>
                   </>
                 ) : (
                   <>
                     <FileText className="w-4 h-4 text-muted-foreground" />
-                    <span>فاتورة ذكية</span>
+                    <span>{t('t_auto_448')}</span>
                   </>
                 )}
               </Button>
               <Button size="sm" className="rounded-xl h-10 bg-yellow-600/20 text-yellow-500 hover:bg-yellow-600/30 flex-1 gap-2">
                 <Play className="w-4 h-4" />
-                بدء المؤقت
-              </Button>
+                {t('t_auto_449')}
+                                      </Button>
             </div>
           </Card>
         ))}
 
         {projects.length === 0 && (
           <div className="text-center py-10 opacity-70">
-            <p className="font-medium">لا توجد مشاريع حتى الآن</p>
-            <p className="text-sm text-muted-foreground mt-1">ابدأ بإضافة مشروع مستقل</p>
+            <p className="font-medium">{t('t_auto_450')}</p>
+            <p className="text-sm text-muted-foreground mt-1">{t('t_auto_451')}</p>
           </div>
         )}
 

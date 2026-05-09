@@ -1,0 +1,21 @@
+[
+  "/app/applet/src/components/aicore/AICore.tsx",
+  "/app/applet/src/components/aicore/EmbeddedAIChat.tsx",
+  "/app/applet/src/components/layout/PageHelpOverlay.tsx",
+  "/app/applet/src/components/layout/SmartFAB.tsx",
+  "/app/applet/src/components/themes/ThemesModes.tsx",
+  "/app/applet/src/components/ui/smart-time-picker.tsx",
+  "/app/applet/src/components/worklog/AlarmsView.tsx",
+  "/app/applet/src/components/worklog/AppraisalView.tsx",
+  "/app/applet/src/components/worklog/ArchiveView.tsx",
+  "/app/applet/src/components/worklog/ChartMakerView.tsx",
+  "/app/applet/src/components/worklog/FeedbackView.tsx",
+  "/app/applet/src/components/worklog/FreelanceCRMView.tsx",
+  "/app/applet/src/components/worklog/JobsShiftsView.tsx",
+  "/app/applet/src/components/worklog/OnboardingView.tsx",
+  "/app/applet/src/components/worklog/ProjectsView.tsx",
+  "/app/applet/src/components/worklog/ShiftRosterView.tsx",
+  "/app/applet/src/components/worklog/SupportQAView.tsx",
+  "/app/applet/src/components/worklog/WalletView.tsx",
+  "/app/applet/src/components/worklog/WeatherWidget.tsx"
+]

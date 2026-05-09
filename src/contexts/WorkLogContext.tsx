@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { WorkSession, Project, WorkSettings, Job, ScheduledShift } from '../types';
+import type { WorkSession, Job, ScheduledShift, MoodLog, AlarmConfig, PaymentLog, WorkSettings, Project } from '../types';
 import { db } from '../lib/db';
+import { useLiveQuery } from 'dexie-react-hooks';
 import { sendAppNotification } from '../lib/notifications';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
@@ -93,6 +94,19 @@ interface WorkLogContextType {
   };
   logSpecialSession: (type: 'annual_leave' | 'half_day_leave' | 'permission' | 'compensation' | 'sick_leave' | 'casual_leave', data?: any) => void;
   deleteAllData: () => Promise<void>;
+  
+  // Pomodoro
+  pomodoroTimeLeft: number;
+  pomodoroIsActive: boolean;
+  pomodoroMode: 'work' | 'break';
+  togglePomodoro: () => void;
+  resetPomodoro: (mode: 'work' | 'break') => void;
+
+  // Alarms
+  alarms: AlarmConfig[];
+  addAlarm: (alarm: Omit<AlarmConfig, 'id'>) => void;
+  toggleAlarm: (id: string, enabled?: boolean) => void;
+  deleteAlarm: (id: string) => void;
 }
 
 const defaultSettings: WorkSettings = {
@@ -120,6 +134,58 @@ export const WorkLogProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const [shiftAssignments, setShiftAssignments] = useState<Record<string, string>>({});
   const [activeSession, setActiveSession] = useState<WorkSession | null>(null);
   const [settings, setSettings] = useState<WorkSettings>({ ...defaultSettings, onboardingCompleted: false });
+
+  // Pomodoro State
+  const [pomodoroTimeLeft, setPomodoroTimeLeft] = useState(25 * 60);
+  const [pomodoroIsActive, setPomodoroIsActive] = useState(false);
+  const [pomodoroMode, setPomodoroMode] = useState<'work' | 'break'>('work');
+
+  // Alarms from Dexie
+  const alarms = useLiveQuery(() => db.alarms.toArray(), []) || [];
+
+  useEffect(() => {
+    let interval: any = null;
+    if (pomodoroIsActive && pomodoroTimeLeft > 0) {
+      interval = setInterval(() => {
+        setPomodoroTimeLeft(prev => prev - 1);
+      }, 1000);
+    } else if (pomodoroIsActive && pomodoroTimeLeft === 0) {
+      setPomodoroIsActive(false);
+      if (pomodoroMode === 'work') {
+        setPomodoroMode('break');
+        setPomodoroTimeLeft(5 * 60);
+        sendAppNotification('تقنية بومودورو', { body: 'انتهى وقت العمل، خذ راحة 5 دقائق!', tag: 'pomodoro', icon: '/vite.svg' });
+      } else {
+        setPomodoroMode('work');
+        setPomodoroTimeLeft(25 * 60);
+        sendAppNotification('تقنية بومودورو', { body: 'انتهت الراحة، حان وقت العمل!', tag: 'pomodoro', icon: '/vite.svg' });
+      }
+    }
+    return () => clearInterval(interval);
+  }, [pomodoroIsActive, pomodoroTimeLeft, pomodoroMode]);
+
+  const togglePomodoro = () => setPomodoroIsActive(!pomodoroIsActive);
+  const resetPomodoro = (mode: 'work' | 'break') => {
+    setPomodoroMode(mode);
+    setPomodoroTimeLeft(mode === 'work' ? 25 * 60 : 5 * 60);
+    setPomodoroIsActive(false);
+  };
+
+  const addAlarm = async (alarm: Omit<AlarmConfig, 'id'>) => {
+    const id = crypto.randomUUID();
+    await db.alarms.add({ ...alarm, id });
+  };
+
+  const toggleAlarm = async (id: string, enabled?: boolean) => {
+    const alarm = await db.alarms.get(id);
+    if (alarm) {
+      await db.alarms.update(id, { enabled: enabled !== undefined ? enabled : !alarm.enabled });
+    }
+  };
+
+  const deleteAlarm = async (id: string) => {
+    await db.alarms.delete(id);
+  };
 
   // Load from local storage on mount
   useEffect(() => {
@@ -184,17 +250,19 @@ export const WorkLogProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const startSession = (type: WorkSession['type'], entityId?: string, overrideData?: Partial<WorkSession>) => {
     if (activeSession) return;
     
-    const startTime = new Date();
+    const startTimeStr = overrideData?.startTime || new Date().toISOString();
+    const startTime = new Date(startTimeStr);
+
     // Check if rest day or public holiday
     const dayOfWeek = startTime.getDay(); // 0 = Sun, 1 = Mon ... 6 = Sat
-    const isRestDayWork = settings.restDays.includes(dayOfWeek) || isPublicHoliday(startTime, settings.customHolidays);
+    const isRestDayWork = overrideData?.isRestDayWork !== undefined ? overrideData.isRestDayWork : (settings.restDays.includes(dayOfWeek) || isPublicHoliday(startTime, settings.customHolidays));
 
     const newSession: WorkSession = {
       id: Date.now().toString(),
       type,
       jobId: type !== 'freelance' ? entityId : undefined,
       projectId: type === 'freelance' ? entityId : undefined,
-      startTime: startTime.toISOString(),
+      startTime: startTimeStr,
       breaks: 0,
       location: 'office',
       notes: '',
@@ -532,7 +600,9 @@ export const WorkLogProvider: React.FC<{ children: React.ReactNode }> = ({ child
     <WorkLogContext.Provider value={{ 
       sessions: activeSessions, archivedSessions, projects, jobs, shifts, shiftAssignments, activeSession, settings, 
       updateSettings, startSession, endSession, addSession, updateSession, updateActiveSession, deleteSession, restoreSession, addProject, addJob, updateJob, addShift, updateShift, removeJob, removeShift, toggleShiftAssignment,
-      toggleBreak, getBalances, logSpecialSession, deleteAllData 
+      toggleBreak, getBalances, logSpecialSession, deleteAllData,
+      pomodoroTimeLeft, pomodoroIsActive, pomodoroMode, togglePomodoro, resetPomodoro,
+      alarms, addAlarm, toggleAlarm, deleteAlarm
     }}>
       {children}
     </WorkLogContext.Provider>

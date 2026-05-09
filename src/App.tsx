@@ -8,14 +8,17 @@ import { ThemeProvider } from './contexts/ThemeContext';
 import { WorkLogProvider, useWorkLog } from './contexts/WorkLogContext';
 import { AICoreProvider } from './contexts/AICoreContext';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { LanguageProvider } from './contexts/LanguageContext';
 import Layout from './components/layout/Layout';
 import Dashboard from './components/Dashboard';
 import OnboardingView from './components/worklog/OnboardingView';
 import { Toaster } from './components/ui/sonner';
 import { Button } from './components/ui/button';
 import { Loader2 } from 'lucide-react';
+import { useLanguage } from "@/contexts/LanguageContext";
 
 function AppContent() {
+  const { t, lang } = useLanguage();
   const [activeTab, setActiveTab] = useState('home');
   const { settings, activeSession, startSession } = useWorkLog();
   const { user, loading, isOfflineMode, signIn, continueOffline } = useAuth();
@@ -43,11 +46,11 @@ function AppContent() {
      return (
        <div className="min-h-screen flex flex-col items-center justify-center bg-background p-6" dir="rtl">
          <div className="bg-card border border-border p-8 rounded-[2rem] shadow-xl flex flex-col items-center max-w-sm w-full text-center">
-            <h1 className="text-3xl font-black mb-2 text-primary">رفيق الحياة</h1>
-            <p className="text-muted-foreground mb-8 text-sm">سجل دخولك الآن لربط بياناتك السحابية، أو استمر بوضع الأوفلاين للبدء فوراً.</p>
+            <h1 className="text-3xl font-black mb-2 text-primary">{t('t_auto_532')}</h1>
+            <p className="text-muted-foreground mb-8 text-sm">{t('t_auto_533')}</p>
             <div className="w-full flex flex-col gap-3">
-               <Button onClick={signIn} className="w-full rounded-xl h-14 text-lg font-bold">تسجيل الدخول (Google)</Button>
-               <Button onClick={continueOffline} variant="outline" className="w-full rounded-xl h-14 text-lg font-bold border-border/50 bg-secondary/30 hover:bg-secondary/60">الدخول بدون إنترنت (أوفلاين)</Button>
+               <Button onClick={signIn} className="w-full rounded-xl h-14 text-lg font-bold">{t('t_auto_534')}</Button>
+               <Button onClick={continueOffline} variant="outline" className="w-full rounded-xl h-14 text-lg font-bold border-border/50 bg-secondary/30 hover:bg-secondary/60">{t('t_auto_535')}</Button>
             </div>
          </div>
        </div>
@@ -68,14 +71,16 @@ function AppContent() {
 export default function App() {
   return (
     <AuthProvider>
-      <ThemeProvider>
-        <WorkLogProvider>
-          <AICoreProvider>
-            <AppContent />
-            <Toaster position="top-center" dir="rtl" />
-          </AICoreProvider>
-        </WorkLogProvider>
-      </ThemeProvider>
+      <LanguageProvider>
+        <ThemeProvider>
+          <WorkLogProvider>
+            <AICoreProvider>
+              <AppContent />
+              <Toaster position="top-center" dir="rtl" />
+            </AICoreProvider>
+          </WorkLogProvider>
+        </ThemeProvider>
+      </LanguageProvider>
     </AuthProvider>
   );
 }

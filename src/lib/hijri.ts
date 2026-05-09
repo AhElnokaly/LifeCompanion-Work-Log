@@ -5,12 +5,17 @@ export interface HijriDate {
   monthName: string;
 }
 
-const HIJRI_MONTHS = [
+const HIJRI_MONTHS_AR = [
   'محرم', 'صفر', 'ربيع الأول', 'ربيع الثاني', 'جمادى الأولى', 
   'جمادى الثانية', 'رجب', 'شعبان', 'رمضان', 'شوال', 'ذو القعدة', 'ذو الحجة'
 ];
 
-export function gregorianToHijri(date: Date): HijriDate {
+const HIJRI_MONTHS_EN = [
+  'Muharram', 'Safar', 'Rabiʿ al-Awwal', 'Rabiʿ al-Thani', 'Jumada al-Awwal',
+  'Jumada al-Thani', 'Rajab', 'Shaʿban', 'Ramadan', 'Shawwal', 'Dhu al-Qaʿdah', 'Dhu al-Hijjah'
+];
+
+export function gregorianToHijri(date: Date, lang: string = 'ar'): HijriDate {
   // Khwarizmi algorithm implementation for offline conversion (simplified)
   const gYear = date.getFullYear();
   const gMonth = date.getMonth() + 1;
@@ -30,10 +35,12 @@ export function gregorianToHijri(date: Date): HijriDate {
   const hDay = l3 - Math.floor((709 * hMonth) / 24);
   const hYear = 30 * n + j - 30;
   
+  const monthName = lang === 'en' ? HIJRI_MONTHS_EN[Math.max(0, hMonth - 1)] : HIJRI_MONTHS_AR[Math.max(0, hMonth - 1)];
+
   return { 
     year: hYear, 
     month: hMonth, 
     day: hDay, 
-    monthName: HIJRI_MONTHS[Math.max(0, hMonth - 1)] 
+    monthName 
   };
 }

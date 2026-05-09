@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Button } from '../ui/button';
-import { Play, Square, Clock, Calendar, Coffee, FileText, Check, Bell, Zap, Timer, Shuffle, Brain, Loader2, Send, Activity, Moon, Sun, Sunrise, Sunset, Plus, Minus, LogIn, LogOut, Palmtree } from 'lucide-react';
+import { Play, Square, Clock, Calendar, Coffee, FileText, Check, Bell, Zap, Timer, Shuffle, Brain, Loader2, Send, Activity, Moon, Sun, Sunrise, Sunset, Plus, Minus, LogIn, LogOut, Palmtree, Briefcase } from 'lucide-react';
 import { useWorkLog, isPublicHoliday } from '../../contexts/WorkLogContext';
 import { useAICore } from '../../contexts/AICoreContext';
 import { format, differenceInMinutes, addMinutes } from 'date-fns';
@@ -11,9 +11,16 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '../u
 import { WorkSession } from '../../types';
 import { toast } from 'sonner';
 import { detectPermissionType, generateSmartInsights, AttendanceInsight } from '../../lib/smartAttendance';
+import { formatMinutesToHHMM } from '../../lib/utils';
+import WeatherWidget from './WeatherWidget';
+import { useLanguage } from '../../contexts/LanguageContext';
 
 export default function HomeView() {
-  const { activeSession, sessions, jobs, shifts, shiftAssignments, startSession, addSession, endSession, settings, updateSettings, getBalances, logSpecialSession, updateSession, updateActiveSession, toggleBreak } = useWorkLog();
+  const { 
+    activeSession, sessions, jobs, shifts, shiftAssignments, startSession, addSession, endSession, settings, updateSettings, getBalances, logSpecialSession, updateSession, updateActiveSession, toggleBreak,
+    pomodoroTimeLeft, pomodoroIsActive, pomodoroMode, togglePomodoro, resetPomodoro
+  } = useWorkLog();
+  const { t, lang } = useLanguage();
   const { askAI } = useAICore();
   const [now, setNow] = useState(new Date());
 
@@ -30,16 +37,12 @@ export default function HomeView() {
   const [isAILogging, setIsAILogging] = useState(false);
   
   // Mood form state
-  const [moodScore, setMoodScore] = useState<number>(3); // 1-5
-  const [selfScore, setSelfScore] = useState<number>(5); // 1-10
-  const [clientScore, setClientScore] = useState<number>(5); // 1-10
+  const [moodScore, setMoodScore] = useState<number>(3);
+  const [selfScore, setSelfScore] = useState<number>(5);
+  const [clientScore, setClientScore] = useState<number>(5);
   const [permissionHours, setPermissionHours] = useState<number>(1);
   const [permissionType, setPermissionType] = useState<'entry' | 'exit'>('entry');
   const [noteText, setNoteText] = useState('');
-
-  // Pomodoro state
-  const [pomodoroTimeLeft, setPomodoroTimeLeft] = useState<number>(0);
-  const [isPomodoroActive, setIsPomodoroActive] = useState(false);
 
   // Added absence management state
   const [absenceDialogOpen, setAbsenceDialogOpen] = useState(false);
@@ -60,10 +63,19 @@ export default function HomeView() {
   const [retroDate, setRetroDate] = useState(format(new Date(now.getTime() - 86400000), 'yyyy-MM-dd'));
   const [retroStart, setRetroStart] = useState('09:00');
   const [retroEnd, setRetroEnd] = useState('17:00');
-  const [retroType, setRetroType] = useState<'salary' | 'freelance' | 'project' | 'annual_leave' | 'sick_leave' | 'half_day_leave' | 'casual_leave' | 'permission' | 'compensation' | 'rest_day_work'>('salary');
+  const [retroType, setRetroType] = useState<'salary' | 'freelance' | 'project' | 'annual_leave' | 'sick_leave' | 'half_day_leave' | 'casual_leave' | 'permission' | 'compensation'>('salary');
   const [retroJobId, setRetroJobId] = useState<string>('none');
   const [retroBreak, setRetroBreak] = useState('0');
   const [retroCompType, setRetroCompType] = useState<'1_day' | '1_day_plus_overtime' | '2_days'>('1_day');
+  const [retroIsRest, setRetroIsRest] = useState(false);
+
+  useEffect(() => {
+     if (retroDialogOpen && retroDate) {
+        const d = new Date(retroDate);
+        const isRest = (settings.restDays || []).includes(d.getDay()) || isPublicHoliday(d, settings.customHolidays);
+        setRetroIsRest(isRest);
+     }
+  }, [retroDate, retroDialogOpen, settings.restDays, settings.customHolidays]);
 
   const activeInsight = useMemo(() => {
      const insights = generateSmartInsights(sessions, settings, jobs, shifts, shiftAssignments);
@@ -93,11 +105,11 @@ export default function HomeView() {
 
   // Quotes
   const motivationalQuotes = [
-    "النجاح ليس النهاية، والفشل ليس قاتلاً: الشجاعة للاستمرار هي ما يهم.",
-    "الطريقة الوحيدة للقيام بعمل عظيم هي أن تحب ما تفعله.",
-    "لا تنتظر الفرصة، اصنعها.",
-    "التركيز هو سر الإنتاجية العالية.",
-    "أنت أقوى مما تعتقد، وأكثر قدرة مما تتخيل."
+    t('t_auto_279'),
+    t('t_auto_280'),
+    t('t_auto_281'),
+    t('t_auto_282'),
+    t('t_auto_283')
   ];
   const dailyQuote = useMemo(() => motivationalQuotes[now.getDate() % motivationalQuotes.length], [now.getDate()]);
 
@@ -113,30 +125,7 @@ export default function HomeView() {
      }
   };
 
-
-  useEffect(() => {
-    let interval: any;
-    if (isPomodoroActive && pomodoroTimeLeft > 0) {
-      interval = setInterval(() => {
-        setPomodoroTimeLeft((prev) => prev - 1);
-      }, 1000);
-    } else if (isPomodoroActive && pomodoroTimeLeft <= 0) {
-      setIsPomodoroActive(false);
-      import('../../lib/notifications').then(({ sendAppNotification, playAlarm }) => {
-         if (settings.notificationsEnabled) {
-            sendAppNotification('انتهت جلسة التركيز', { body: 'أحسنت! خذ استراحة قصيرة لتجديد نشاطك.' });
-            if (settings.notificationPreferences?.pomodoro) {
-               playAlarm(settings.notificationPreferences?.alarmSound || 'digital');
-            }
-         }
-      });
-    }
-    return () => clearInterval(interval);
-  }, [isPomodoroActive, pomodoroTimeLeft, settings.notificationsEnabled]);
-
   const openPomodoroDialog = () => {
-    setPomodoroTimeLeft((settings.notificationPreferences?.pomodoroMinutes || 25) * 60);
-    setIsPomodoroActive(false);
     setActionDialog('pomodoro');
   };
 
@@ -164,7 +153,7 @@ export default function HomeView() {
       const dummyTime = new Date(activeSession.startTime);
       // Auto-cap it at the expected end time or daily hours + 1 to denote an honest mistake
       dummyTime.setMinutes(dummyTime.getMinutes() + (settings.dailyHours * 60 + 60)); 
-      endSession('انصراف آلي (16 ساعة تجاوز)', { endTime: dummyTime.toISOString() });
+      endSession(t('home.auto_checkout'), { endTime: dummyTime.toISOString() });
     }
   }, [activeSession, currentSessionMinutes, endSession, settings.dailyHours]);
 
@@ -193,8 +182,8 @@ export default function HomeView() {
   };
 
   const getLeaveText = () => {
-    if (todaySessions.some(s => s.dayStatus === 'compensation')) return "تستمتع بيوم راحة كـ (بديل)";
-    return "تستمتع بإجازة سنوية";
+    if (todaySessions.some(s => s.dayStatus === 'compensation')) return "${t('home.enjoy_rest')}";
+    return "${t('home.enjoy_annual')}";
   };
 
   const handleStartSession = () => {
@@ -331,14 +320,14 @@ export default function HomeView() {
            processSessionStart(type, entityId, forceYesterday, true, { ...explicitOverrides, startTime: expectedStart.toISOString() });
         } else if (accept === 'use_permission') {
            // Starts normal work, but deducts a permission
-           processSessionStart(type, entityId, forceYesterday, true, { ...explicitOverrides, startTime: expectedStart.toISOString(), notes: `تأخير (${lateMins} دقيقة) - تم استخدام تصريح` });
+           processSessionStart(type, entityId, forceYesterday, true, { ...explicitOverrides, startTime: expectedStart.toISOString(), notes: `${t('home.late_permission_used').replace('{mins}', lateMins.toString())}` });
         } else if (accept === 'count_full') {
            // Normal late log
-           processSessionStart(type, entityId, forceYesterday, true, { ...explicitOverrides, startTime: expectedStart.toISOString(), dayStatus: 'late', notes: `خصم تأخير (${lateMins} دقيقة)` });
+           processSessionStart(type, entityId, forceYesterday, true, { ...explicitOverrides, startTime: expectedStart.toISOString(), dayStatus: 'late', notes: `${t('home.late_deduction').replace('{mins}', lateMins.toString())}` });
         }
      } else {
         if (accept === true) {
-          logSpecialSession('half_day_leave', { note: 'تأخير تلقائي' });
+          logSpecialSession('half_day_leave', { note: t('home.auto_late') });
         } else {
           processSessionStart(type, entityId, forceYesterday, true, explicitOverrides);
         }
@@ -348,7 +337,7 @@ export default function HomeView() {
   const submitMoodStart = () => {
     if (pendingStartData) {
       const existingNotes = (pendingStartData as any).overrideData?.notes || '';
-      const moodNotes = `[مزاج البداية: ${moodScore}/5] ${existingNotes}`;
+      const moodNotes = `${t('home.start_mood').replace('{score}', moodScore.toString())} ${existingNotes}`;
       
       startSession(
          pendingStartData.type, 
@@ -393,7 +382,7 @@ export default function HomeView() {
   };
 
   const proceedEndSession = (overtimeOverride?: number) => {
-    const finalNotes = noteText || 'انتهى العمل';
+    const finalNotes = noteText || t('home.work_ended');
     const manualData = overtimeOverride !== undefined ? { overtimeMinutes: overtimeOverride } : undefined;
     
     if (settings.modules?.healthMood) {
@@ -407,7 +396,7 @@ export default function HomeView() {
   };
 
   const submitMoodEnd = () => {
-    const combinedNotes = `${noteText ? noteText + '\n' : ''}[المزاج النهائي: ${moodScore}/5 | الإنجاز: ${selfScore}/10]`;
+    const combinedNotes = `${noteText ? noteText + '\n' : ''}${t('home.end_mood').replace('{score}', moodScore.toString()).replace('{self}', selfScore.toString())}`;
     const manualData = pendingStartData?.overrideData || undefined;
     endSession(combinedNotes, manualData as any);
     setMoodDialogState(null);
@@ -426,7 +415,7 @@ export default function HomeView() {
     
     // Check validity
     if (endTimeDate < startTimeDate && !['annual_leave', 'sick_leave', 'half_day_leave', 'casual_leave', 'permission', 'compensation'].includes(retroType)) {
-      toast.error("وقت الانصراف يجب أن يكون بعد وقت الحضور");
+      toast.error(t('home.checkout_after_checkin'));
       return;
     }
 
@@ -436,11 +425,11 @@ export default function HomeView() {
     const breaks = parseInt(retroBreak) || 0;
     duration = Math.max(0, duration - breaks);
 
-    const isRestDayWork = retroType === 'rest_day_work';
+    const isRestDayWork = retroIsRest && retroType === 'salary';
 
     if (['annual_leave', 'sick_leave', 'half_day_leave', 'casual_leave', 'permission', 'compensation'].includes(retroType)) {
        if (retroType === 'compensation' && !compensationLeaveSourceId) {
-          toast.error("يرجى اختيار يوم العمل الإضافي المراد استبداله");
+          toast.error(t('home.choose_overtime_day'));
           return;
        }
        addSession({
@@ -452,28 +441,39 @@ export default function HomeView() {
          dayStatus: retroType as any,
          linkedCompensationSessionId: retroType === 'compensation' ? compensationLeaveSourceId : undefined,
          location: 'remote',
-         notes: noteText || 'أدخلت يدويا من سجل الأيام السابقة'
+         notes: noteText || t('home.manual_entry')
        } as any);
     } else {
+       let baseOvertime = 0;
+       if (isRestDayWork) {
+         if (retroCompType === '1_day_plus_overtime') baseOvertime = duration;
+         else if (retroCompType === '2_days') baseOvertime = 0;
+         else baseOvertime = retroCompType === '1_day' ? 0 : duration; 
+       } else {
+         const expectedMins = settings.dailyHours * 60;
+         baseOvertime = duration > expectedMins ? duration - expectedMins : 0;
+       }
+
        addSession({
          id: Date.now().toString(),
          startTime: startIso,
          endTime: endIso,
-         type: retroType === 'rest_day_work' ? 'salary' : (retroType as any),
+         type: retroType as any,
          jobId: retroJobId !== 'none' ? retroJobId : undefined,
          duration,
+         overtimeMinutes: baseOvertime,
          breaks,
          dayStatus: 'work',
          isRestDayWork,
          restDayCompensation: isRestDayWork ? retroCompType : undefined,
          location: 'office',
-         notes: noteText || 'أدخلت يدويا من سجل الأيام السابقة'
+         notes: noteText || t('home.manual_entry')
        } as any);
     }
 
     setRetroDialogOpen(false);
     setNoteText('');
-    alert('تم إضافة السجل بنجاح!');
+    toast.success(t('home.log_added'));
   };
 
   const submitPermission = () => {
@@ -515,7 +515,7 @@ export default function HomeView() {
         - breakMinutes: (مدة الاستراحة بالدقائق إن ذكرها، وإلا 0)
         - projectKeywords: (كلمة دالة على المشروع إذا ذكر، وإلا فارغ)
         - notes: (توليد ملاحظة احترافية بناءً على المدخل)`,
-        "أنت مساعد استخراج بيانات تقوم بإرجاع JSON صالح فقط ولا شيء غيره.",
+        t('t_auto_284'),
         {
           type: "object",
           properties: {
@@ -539,9 +539,9 @@ export default function HomeView() {
       }
 
       if (parsed.action === 'log_leave') {
-         logSpecialSession((parsed.leaveType as any) || 'casual_leave', { note: parsed.notes || 'تسجيل ذكي للإجازة' });
+         logSpecialSession((parsed.leaveType as any) || 'casual_leave', { note: parsed.notes || t('home.smart_leave') });
       } else if (parsed.action === 'log_permission') {
-         logSpecialSession('permission', { hours: (parsed.durationMinutes || 60) / 60, note: parsed.notes || 'تسجيل ذكي للإذن' });
+         logSpecialSession('permission', { hours: (parsed.durationMinutes || 60) / 60, note: parsed.notes || t('home.smart_permission') });
       } else if (parsed.action === 'log_past_session' && parsed.durationMinutes > 0) {
          // Create a past session right now
          const end = new Date();
@@ -557,7 +557,7 @@ export default function HomeView() {
            jobId: matchedJobId,
            location: 'office',
            dayStatus: 'work',
-           notes: parsed.notes || 'تسجيل ذكي'
+           notes: parsed.notes || t('t_auto_285')
          };
          
          addSession(dummySession);
@@ -567,9 +567,9 @@ export default function HomeView() {
       }
 
       setAiPrompt('');
-      toast.success('تم التسجيل بنجاح عبر المحرك الذكي!');
+      toast.success(t('home.smart_log_success'));
     } catch (err: any) {
-      alert(err.message || 'حدث خطأ في فهم طلبك. تأكد من إدخال المفتاح في الإعدادات.');
+      alert(err.message || t('home.understanding_error'));
     } finally {
       setIsAILogging(false);
     }
@@ -591,104 +591,135 @@ export default function HomeView() {
   let timeGreeting = '';
   let timeGradient = '';
   if (hour >= 5 && hour < 12) {
-    timeGreeting = 'صباح الخير';
+    timeGreeting = t('home.good_morning');
     timeGradient = 'from-amber-400 to-orange-500'; 
   } else if (hour >= 12 && hour < 17) {
-    timeGreeting = 'طاب يومك';
+    timeGreeting = t('home.good_day');
     timeGradient = 'from-sky-400 to-blue-600'; 
   } else if (hour >= 17 && hour < 20) {
-    timeGreeting = 'مساء الخير';
+    timeGreeting = t('home.good_evening');
     timeGradient = 'from-rose-400 to-purple-600'; 
   } else {
-    timeGreeting = 'طابت ليلتك';
+    timeGreeting = t('home.good_night');
     timeGradient = 'from-indigo-800 to-slate-900'; 
+  }
+
+  let shiftStartHour = null;
+  let shiftEndHour = null;
+  if (settings.expectedStartTime) {
+     shiftStartHour = parseInt(settings.expectedStartTime.split(':')[0]);
+     shiftEndHour = Math.floor((shiftStartHour + settings.dailyHours) % 24);
   }
 
   return (
     <div className="flex flex-col h-full animate-in fade-in zoom-in-95 duration-700 max-w-sm w-full mx-auto pb-4" dir="ltr">
       
       {/* Date / Title Row */}
-      <div className={`bg-gradient-to-br ${timeGradient} rounded-[2rem] p-6 text-white text-center shadow-lg relative overflow-hidden shrink-0 mt-2 mx-1`} dir="rtl">
+      <div className={`bg-gradient-to-br ${timeGradient} rounded-[2rem] p-5 text-white text-center shadow-lg relative overflow-hidden shrink-0 mt-2 mx-1`} dir="rtl">
         <div className="absolute top-0 right-0 -mr-8 -mt-8 w-32 h-32 rounded-full border-[16px] border-white/10 opacity-50"></div>
         <div className="relative z-10 flex flex-col items-center">
-           <div className="flex items-center justify-center gap-2 mb-2">
+           <div className="flex items-center justify-center gap-2 mb-1.5">
+             <span className="text-sm font-medium text-white/90">{timeGreeting}</span>
              {hour >= 5 && hour < 12 ? <Sunrise className="w-5 h-5 text-white/90" /> : 
               hour >= 12 && hour < 17 ? <Sun className="w-5 h-5 text-white/90" /> : 
               hour >= 17 && hour < 20 ? <Sunset className="w-5 h-5 text-white/90" /> : 
               <Moon className="w-5 h-5 text-white/90" />}
-             <span className="text-sm font-medium text-white/90">{timeGreeting}</span>
            </div>
-           <h2 className="text-2xl font-bold mb-1">
-             {format(now, 'EEEE، d MMMM', { locale: ar })}
+           <h2 className="text-lg font-bold mb-1 opacity-90">
+             {format(now, t('t_auto_286'), { locale: ar })}
            </h2>
-           <p className="text-sm text-white/80 mt-1">سجل حضورك اليوم بدقة وأناقة.</p>
+           <div className="text-6xl font-black tracking-tighter mb-2 drop-shadow-md flex items-baseline gap-1" dir="ltr">
+             {format(now, 'hh:mm')}
+             <span className="text-2xl opacity-70 font-bold">{format(now, 'a', { locale: ar }).replace(t('t_auto_287'), t('t_auto_287')).replace(t('t_auto_288'), t('t_auto_288'))}</span>
+           </div>
+           <WeatherWidget variant="inline" shiftStartHour={shiftStartHour} shiftEndHour={shiftEndHour} />
         </div>
       </div>
 
+      {/* Mini Balances Row */}
+      <div className="flex justify-center flex-wrap gap-2 px-4 mt-3 scale-95" dir={lang === 'ar' ? 'rtl' : 'ltr'}>
+         {(() => {
+            const comps = getAvailableCompensations().reduce((acc, c) => acc + c.availableDays, 0);
+            const ann = getBalances().remainingAnnualLeaves;
+            return (
+              <>
+                {ann > 0 && (
+                  <div className="flex items-center gap-1.5 px-3 py-1.5 bg-card border border-border/50 rounded-full shadow-sm text-[10px] font-bold text-muted-foreground">
+                    <Calendar className="w-3.5 h-3.5 text-blue-500" />
+                    <span>{ann} {t('cal.annual')}</span>
+                  </div>
+                )}
+                {comps > 0 && (
+                  <div className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-500/10 border border-emerald-500/20 rounded-full text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
+                    <Trophy className="w-3.5 h-3.5" />
+                    <span>{comps} {t('notif.comps_days_left')}</span>
+                  </div>
+                )}
+              </>
+            );
+         })()}
+      </div>
+
       {isOnFullDayLeave ? (
-         <div className="flex flex-col items-center justify-center bg-card/40 backdrop-blur-2xl border border-white/5 rounded-[2rem] p-8 shadow-2xl my-auto text-center mx-1 flex-1 mt-4" dir="rtl">
+         <div className="flex flex-col items-center justify-center bg-card/40 backdrop-blur-2xl border border-white/5 rounded-[2rem] p-8 shadow-2xl my-auto text-center mx-1 flex-1 mt-3" dir="rtl">
             {getLeaveIcon()}
-            <span className="text-lg font-bold tracking-wide">
+            <span className="text-lg font-bold tracking-wide mt-2">
               {getLeaveText()}
             </span>
             <p className="text-xs text-muted-foreground mt-2 opacity-60 leading-relaxed">
-              نتمنى لك يوماً سعيداً بعيداً عن ضغوط العمل
+              {t('home.happy_day')}
             </p>
          </div>
       ) : (
-        <div className="flex flex-col gap-3 mx-1 flex-1 min-h-0 relative z-10 pb-16 mt-4">
+        <div className="flex flex-col gap-3 mx-1 flex-1 min-h-0 relative z-10 pb-16 mt-3">
         
-
-
         {/* Today's Details Card */}
-        <div className="bg-card rounded-[2rem] p-6 border border-border/50 shadow-sm shrink-0 flex flex-col gap-6" dir="rtl">
-          <div className="flex items-center gap-2">
-            <span className="text-sm font-bold text-foreground">تفاصيل اليوم</span>
+        <div className="bg-card rounded-[1.5rem] p-4 border border-border/50 shadow-sm shrink-0 flex flex-col gap-4" dir="rtl">
+          <div className="flex items-center gap-2 mb-1">
+            <span className="text-sm font-bold text-foreground">{t('home.details_day')}</span>
             <Clock className="w-4 h-4 text-muted-foreground" />
           </div>
-          <div className="grid grid-cols-2 gap-y-6 gap-x-4 text-center">
-            <div className="flex flex-col gap-1.5 justify-center group relative">
-               <span className="text-xs text-muted-foreground font-medium flex items-center justify-center gap-1">
-                 تسجيل دخول
-               </span>
-               <span className="text-xl font-bold font-mono tracking-tight">{activeSession ? format(new Date(activeSession.startTime), "HH:mm") : '--:--'}</span>
+          <div className="grid grid-cols-4 gap-2 text-center divide-x divide-x-reverse divide-border/20">
+            <div className="flex flex-col gap-1 justify-center px-1">
+               <span className="text-[10px] text-muted-foreground font-medium">{t('home.entry')}</span>
+               <span className="text-lg font-bold font-mono tracking-tight">{activeSession ? format(new Date(activeSession.startTime), "HH:mm") : '--:--'}</span>
             </div>
-            <div className="flex flex-col gap-1.5 justify-center">
-               <span className="text-xs text-muted-foreground font-medium">تسجيل خروج</span>
-               <span className="text-xl font-bold font-mono tracking-tight">{!activeSession || expectedCheckoutStr === '--:--' ? '--:--' : expectedCheckoutStr.replace('ص', '').replace('م', '').trim()}</span>
+            <div className="flex flex-col gap-1 justify-center px-1">
+               <span className="text-[10px] text-muted-foreground font-medium">{t('home.exit')}</span>
+               <span className="text-lg font-bold font-mono tracking-tight">{!activeSession || expectedCheckoutStr === '--:--' ? '--:--' : expectedCheckoutStr.replace(t('t_auto_287'), '').replace(t('t_auto_288'), '').trim()}</span>
             </div>
-            <div className="flex flex-col gap-1.5 justify-center">
-               <span className="text-xs text-muted-foreground font-medium">الإجمالي</span>
-               <span className="text-xl font-bold font-mono tracking-tight">{displayHours} <span className="text-sm font-normal text-muted-foreground">س</span></span>
+            <div className="flex flex-col gap-1 justify-center px-1">
+               <span className="text-[10px] text-muted-foreground font-medium">{t('home.total')}</span>
+               <span className="text-lg font-bold font-mono tracking-tight">{displayHours}{t('t_auto_9')}</span>
             </div>
-            <div className="flex flex-col gap-1.5 justify-center">
-               <span className="text-xs text-muted-foreground font-medium">س إضافي</span>
-               <span className="text-xl font-bold font-mono tracking-tight text-emerald-500">{(overtimeMinutes / 60).toFixed(1)} <span className="text-sm font-normal text-emerald-500/70">س</span></span>
+            <div className="flex flex-col gap-1 justify-center px-1">
+               <span className="text-[10px] text-muted-foreground font-medium">{t('home.overtime')}</span>
+               <span className="text-lg font-bold font-mono tracking-tight text-emerald-500">{formatMinutesToHHMM(overtimeMinutes)}</span>
             </div>
           </div>
           {/* Action Bar inside details (Only shows during active session) */}
           {activeSession && (
-            <div className="flex gap-2 w-full mt-2 border-t pt-4">
+            <div className="flex gap-2 w-full mt-1 border-t pt-3">
               <Button 
                 variant="secondary" 
-                className={`flex-1 rounded-xl h-10 font-bold shadow-sm border border-border/50 text-xs ${activeSession.activeBreakStartTime ? 'bg-amber-500/20 text-amber-500 hover:bg-amber-500/30' : ''}`}
+                className={`flex-1 rounded-xl h-9 font-bold shadow-sm border border-border/50 text-xs ${activeSession.activeBreakStartTime ? 'bg-amber-500/20 text-amber-500 hover:bg-amber-500/30' : ''}`}
                 onClick={toggleBreak}
               >
                 <Coffee className="w-3.5 h-3.5 ml-1" />
-                {activeSession.activeBreakStartTime ? 'إنهاء الاستراحة' : 'استراحة'}
+                {activeSession.activeBreakStartTime ? t('t_auto_289') : t('t_auto_290')}
               </Button>
-              <Button variant="secondary" className="flex-1 rounded-xl h-10 font-bold shadow-sm border border-border/50 bg-secondary/40 text-xs" onClick={() => setDispatcherOpen(true)}>
-                <Shuffle className="w-3.5 h-3.5 ml-1" /> تبديل
+              <Button variant="secondary" className="flex-1 rounded-xl h-9 font-bold shadow-sm border border-border/50 bg-secondary/40 text-xs" onClick={() => setDispatcherOpen(true)}>
+                <Shuffle className="w-3.5 h-3.5 ml-1" /> {t('home.switch')}
               </Button>
-              <Button variant="secondary" className="flex-1 rounded-xl h-10 font-bold shadow-sm border border-border/50 bg-secondary/40 text-xs" onClick={openNoteDialog}>
-                <FileText className="w-3.5 h-3.5 ml-1" /> مذكرات
+              <Button variant="secondary" className="flex-1 rounded-xl h-9 font-bold shadow-sm border border-border/50 bg-secondary/40 text-xs" onClick={openNoteDialog}>
+                <FileText className="w-3.5 h-3.5 ml-1" /> {t('home.notes')}
               </Button>
             </div>
           )}
         </div>
 
         {/* Action Buttons Grid */}
-        <div className="grid grid-cols-2 gap-3 shrink-0" dir="rtl">
+        <div className="grid grid-cols-2 gap-2 shrink-0" dir="rtl">
            <button 
               onClick={() => {
                  if (activeSession) {
@@ -699,32 +730,32 @@ export default function HomeView() {
                  }
               }} 
               disabled={!activeSession && isOnFullDayLeave} 
-              className={`rounded-2xl p-4 flex flex-col items-center justify-center gap-3 transition-colors text-center h-[110px] shadow-sm group ${(!isOnFullDayLeave || activeSession) ? 'bg-card hover:bg-card/80 border border-border/50' : 'bg-card/30 border border-border/20 opacity-60 cursor-not-allowed'}`}>
-              <div className={`w-10 h-10 rounded-full flex items-center justify-center transition-transform group-hover:scale-110 ${activeSession ? 'bg-teal-500/10 text-teal-500' : 'bg-indigo-500/10 text-indigo-500'}`}>
+              className={`rounded-2xl p-3 flex items-center justify-center gap-3 transition-colors text-right h-[70px] shadow-sm group ${(!isOnFullDayLeave || activeSession) ? 'bg-card hover:bg-card/80 border border-border/50' : 'bg-card/30 border border-border/20 opacity-60 cursor-not-allowed'}`}>
+              <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 transition-transform group-hover:scale-110 ${activeSession ? 'bg-teal-500/10 text-teal-500' : 'bg-indigo-500/10 text-indigo-500'}`}>
                  {activeSession ? <Clock className="w-5 h-5" /> : <LogIn className="w-5 h-5" />}
               </div>
-              <span className="text-sm font-bold text-foreground">{activeSession ? 'تعديل الدخول' : 'تسجيل دخول'}</span>
+              <span className="text-sm font-bold text-foreground leading-tight flex-1">{activeSession ? t('home.switch') : t('home.entry')}</span>
            </button>
            
-           <button onClick={() => activeSession && handleEndSession()} disabled={!activeSession} className={`rounded-2xl p-4 flex flex-col items-center justify-center gap-3 transition-colors text-center h-[110px] shadow-sm group ${activeSession ? 'bg-card hover:bg-card/80 border border-border/50' : 'bg-card/30 border border-border/20 opacity-60 cursor-not-allowed'}`}>
-              <div className="w-10 h-10 rounded-full bg-orange-500/10 flex items-center justify-center text-orange-500 transition-transform group-hover:scale-110">
+           <button onClick={() => activeSession && handleEndSession()} disabled={!activeSession} className={`rounded-2xl p-3 flex items-center justify-center gap-3 transition-colors text-right h-[70px] shadow-sm group ${activeSession ? 'bg-card hover:bg-card/80 border border-border/50' : 'bg-card/30 border border-border/20 opacity-60 cursor-not-allowed'}`}>
+              <div className="w-10 h-10 rounded-full bg-orange-500/10 flex items-center justify-center shrink-0 text-orange-500 transition-transform group-hover:scale-110">
                  <LogOut className="w-5 h-5" />
               </div>
-              <span className="text-sm font-bold text-foreground">تسجيل خروج</span>
+              <span className="text-sm font-bold text-foreground leading-tight flex-1">{t('home.exit')}</span>
            </button>
 
-           <button onClick={() => setIsPermissionSheetOpen(true)} disabled={isOnFullDayLeave} className={`rounded-2xl p-4 flex flex-col items-center justify-center gap-3 transition-colors text-center h-[110px] shadow-sm group ${(!isOnFullDayLeave) ? 'bg-card hover:bg-card/80 border border-border/50' : 'bg-card/30 border border-border/20 opacity-60 cursor-not-allowed'}`}>
-              <div className="w-10 h-10 rounded-full bg-purple-500/10 flex items-center justify-center text-purple-500 transition-transform group-hover:scale-110">
+           <button onClick={() => setIsPermissionSheetOpen(true)} disabled={isOnFullDayLeave} className={`rounded-2xl p-3 flex items-center justify-center gap-3 transition-colors text-right h-[70px] shadow-sm group ${(!isOnFullDayLeave) ? 'bg-card hover:bg-card/80 border border-border/50' : 'bg-card/30 border border-border/20 opacity-60 cursor-not-allowed'}`}>
+              <div className="w-10 h-10 rounded-full bg-purple-500/10 flex items-center justify-center shrink-0 text-purple-500 transition-transform group-hover:scale-110">
                  <Clock className="w-5 h-5" />
               </div>
-              <span className="text-sm font-bold text-foreground">إذن/نصف يوم</span>
+              <span className="text-sm font-bold text-foreground leading-tight flex-1">{t('home.permission')}</span>
            </button>
 
-           <button onClick={() => setIsLeaveSheetOpen(true)} disabled={!!activeSession || isOnFullDayLeave} className={`rounded-2xl p-4 flex flex-col items-center justify-center gap-3 transition-colors text-center h-[110px] shadow-sm group ${(!activeSession && !isOnFullDayLeave) ? 'bg-card hover:bg-card/80 border border-border/50' : 'bg-card/30 border border-border/20 opacity-60 cursor-not-allowed'}`}>
-              <div className="w-10 h-10 rounded-full bg-blue-500/10 flex items-center justify-center text-blue-500 transition-transform group-hover:scale-110">
+           <button onClick={() => setIsLeaveSheetOpen(true)} disabled={!!activeSession || isOnFullDayLeave} className={`rounded-2xl p-3 flex items-center justify-center gap-3 transition-colors text-right h-[70px] shadow-sm group ${(!activeSession && !isOnFullDayLeave) ? 'bg-card hover:bg-card/80 border border-border/50' : 'bg-card/30 border border-border/20 opacity-60 cursor-not-allowed'}`}>
+              <div className="w-10 h-10 rounded-full bg-blue-500/10 flex items-center justify-center shrink-0 text-blue-500 transition-transform group-hover:scale-110">
                  <Palmtree className="w-5 h-5" />
               </div>
-              <span className="text-sm font-bold text-foreground">تسجيل إجازة</span>
+              <span className="text-sm font-bold text-foreground leading-tight flex-1">{t('home.leave')}</span>
            </button>
         </div>
 
@@ -738,20 +769,20 @@ export default function HomeView() {
                  <SheetContent side="bottom" className="rounded-t-[2rem] z-[110] p-6 text-center shadow-2xl">
                    <SheetHeader className="pb-4">
                      <SheetTitle className="text-xl font-bold flex items-center justify-center gap-2">
-                       <Brain className="w-5 h-5 text-indigo-500" /> التسجيل الذكي
+                       <Brain className="w-5 h-5 text-indigo-500" /> {t('home.smart_log')}
                      </SheetTitle>
-                     <p className="text-xs text-muted-foreground font-medium mt-1">تحدث أو اكتب ما قمت به وسيتولى الذكاء تنظيم السجل.</p>
+                     <p className="text-xs text-muted-foreground font-medium mt-1">{t('home.smart_log_desc')}</p>
                    </SheetHeader>
                    <div className="flex flex-col gap-4 mt-2" dir="rtl">
                       <Input 
-                        placeholder="مثال: اشتغلت ساعتين وطلعت نص ساعة بريك"
+                        placeholder={t('home.smart_log_placeholder')}
                         value={aiPrompt}
                         onChange={e => setAiPrompt(e.target.value)}
                         className="text-sm h-14 rounded-xl border-border/50 bg-background/50 font-medium"
                         onKeyDown={e => e.key === 'Enter' && processAILog()}
                       />
                       <Button onClick={processAILog} disabled={!aiPrompt || isAILogging} className="w-full h-14 rounded-xl text-lg font-bold bg-indigo-500 hover:bg-indigo-600 text-white shadow-lg">
-                         {isAILogging ? <Loader2 className="w-6 h-6 animate-spin" /> : 'تسجيل الآن'}
+                         {isAILogging ? <Loader2 className="w-6 h-6 animate-spin" /> : t('home.smart_log_btn')}
                       </Button>
                    </div>
                  </SheetContent>
@@ -768,8 +799,8 @@ export default function HomeView() {
                      <Clock className="w-5 h-5" />
                   </div>
                   <div className="flex flex-col text-right">
-                    <span className="text-sm font-bold text-foreground">ساعات العمل الأساسية</span>
-                    <span className="text-[10px] text-muted-foreground mt-0.5">سيتم حساب الإضافي بناءً عليها</span>
+                    <span className="text-sm font-bold text-foreground">{t('home.base_hours')}</span>
+                    <span className="text-[10px] text-muted-foreground mt-0.5">{t('home.base_hours_desc')}</span>
                   </div>
                 </div>
                 
@@ -791,10 +822,6 @@ export default function HomeView() {
             </div>
           )}
 
-
-
-
-
           {/* Action Row */}
           <div className="flex gap-2.5 shrink-0" dir="rtl">
             <button 
@@ -810,7 +837,7 @@ export default function HomeView() {
               <div className="w-8 h-8 rounded-full bg-orange-500/10 text-orange-500 flex items-center justify-center border border-orange-500/20">
                  <Zap className="w-4 h-4 fill-current opacity-80" />
               </div>
-              <span className="text-[11px] font-bold text-foreground/90 leading-tight">مهمة/مشروع</span>
+              <span className="text-[11px] font-bold text-foreground/90 leading-tight">{t('home.task_project')}</span>
             </button>
             
             <button 
@@ -820,7 +847,7 @@ export default function HomeView() {
               <div className="w-8 h-8 rounded-full bg-indigo-500/10 text-indigo-500 flex items-center justify-center border border-indigo-500/20">
                  <Timer className="w-4 h-4 opacity-80" />
               </div>
-              <span className="text-[11px] font-bold text-foreground/90 leading-tight">تتبع تركيز</span>
+              <span className="text-[11px] font-bold text-foreground/90 leading-tight">{t('home.focus_tracking')}</span>
             </button>
 
             <button 
@@ -830,7 +857,7 @@ export default function HomeView() {
               <div className="w-8 h-8 rounded-full bg-emerald-500/10 text-emerald-500 flex items-center justify-center border border-emerald-500/20">
                  <Calendar className="w-4 h-4 opacity-80" />
               </div>
-              <span className="text-[11px] font-bold text-foreground/90 leading-tight">أيام سابقة</span>
+              <span className="text-[11px] font-bold text-foreground/90 leading-tight">{t('home.previous_days')}</span>
             </button>
           </div>
 
@@ -843,7 +870,7 @@ export default function HomeView() {
                 onClick={toggleBreak}
               >
                 <Coffee className="w-4 h-4" />
-                {activeSession.activeBreakStartTime ? 'إنهاء الاستراحة' : 'بدء استراحة'}
+                {activeSession.activeBreakStartTime ? t('home.end_break') : t('home.start_break')}
               </Button>
               
               {!isFreelance && balances.remainingPermissionsHours >= 1 && (
@@ -853,8 +880,8 @@ export default function HomeView() {
                   onClick={() => openPermissionDialog(1)}
                 >
                   <Clock className="w-4 h-4" />
-                  تصريح (ساعة)
-                </Button>
+                  {t('t_auto_291')}
+                                                      </Button>
               )}
               {!isFreelance && balances.remainingPermissionsHours >= 2 && (
                 <Button 
@@ -863,8 +890,8 @@ export default function HomeView() {
                   onClick={() => openPermissionDialog(2)}
                 >
                   <Clock className="w-4 h-4" />
-                  تصريح (ساعتين)
-                </Button>
+                  {t('t_auto_292')}
+                                                      </Button>
               )}
             </div>
           )}
@@ -877,7 +904,7 @@ export default function HomeView() {
                    onClick={() => setAbsenceDialogOpen(true)}
                  >
                    <Calendar className="w-5 h-5 text-emerald-400" />
-                   إدارة الغياب والبدائل
+                   {t('home.manage_leaves')}
                    <div className="absolute right-0 top-0 bottom-0 w-1 bg-emerald-500" />
                  </Button>
 
@@ -895,11 +922,11 @@ export default function HomeView() {
                      let suggestedDate = null;
                      
                      // If holiday is Tuesday (2), suggest Monday (1)
-                     if (holDay === 2) { suggestion = 'الإثنين القادم'; suggestedDate = new Date(upcomingHoliday); suggestedDate.setDate(suggestedDate.getDate() - 1); }
+                     if (holDay === 2) { suggestion = t('t_auto_293'); suggestedDate = new Date(upcomingHoliday); suggestedDate.setDate(suggestedDate.getDate() - 1); }
                      // If holiday is Wednesday (3), suggest Thursday (4)
-                     if (holDay === 3) { suggestion = 'الخميس القادم'; suggestedDate = new Date(upcomingHoliday); suggestedDate.setDate(suggestedDate.getDate() + 1); }
+                     if (holDay === 3) { suggestion = t('t_auto_294'); suggestedDate = new Date(upcomingHoliday); suggestedDate.setDate(suggestedDate.getDate() + 1); }
                      // If holiday is Thursday (4), suggest Sunday (0) to get 4 days (Fri, Sat, Sun, Mon - no wait, Thu off means Wed+Thu+Fri+Sat = 4 days!)
-                     if (holDay === 4) { suggestion = 'الأربعاء القادم'; suggestedDate = new Date(upcomingHoliday); suggestedDate.setDate(suggestedDate.getDate() - 1); }
+                     if (holDay === 4) { suggestion = t('t_auto_295'); suggestedDate = new Date(upcomingHoliday); suggestedDate.setDate(suggestedDate.getDate() - 1); }
 
                      if (suggestion && suggestedDate) {
                        return (
@@ -909,10 +936,10 @@ export default function HomeView() {
                                <Brain className="w-4 h-4 text-primary" />
                              </div>
                              <div>
-                               <p className="text-xs font-bold text-primary">المتنبئ الذكي للإجازات</p>
+                               <p className="text-xs font-bold text-primary">{t('home.ai_coach')}</p>
                                <p className="text-[10px] text-muted-foreground leading-tight mt-0.5">
-                                 إذا أخذت إجازة <strong>{suggestion}</strong> ({format(suggestedDate, 'dd/MM')}) ستدمجها مع عطلة {format(upcomingHoliday, 'dd/MM')} وعطلة نهاية الأسبوع!
-                               </p>
+                                 {t('t_auto_296')} <strong>{suggestion}</strong> ({format(suggestedDate, 'dd/MM')}{t('t_auto_297')} {format(upcomingHoliday, 'dd/MM')} {t('t_auto_298')}
+                                                                          </p>
                              </div>
                            </div>
                            <Button 
@@ -921,11 +948,11 @@ export default function HomeView() {
                              onClick={() => {
                                setAbsenceType('annual_leave');
                                setAbsenceDate(format(suggestedDate, 'yyyy-MM-dd'));
-                               setNoteText('إجازة مدمجة مع عطلة رسمية (مقترح المدرب الذكي)');
+                               setNoteText(t('t_auto_299'));
                                setAbsenceDialogOpen(true);
                              }}
                            >
-                             احجزها الآن
+                             {t('home.book_now')}
                            </Button>
                          </div>
                        );
@@ -942,57 +969,85 @@ export default function HomeView() {
 
       {/* Overlay: Smart Dispatcher */}
       {dispatcherOpen && (
-        <div className="absolute inset-0 z-50 flex items-center justify-center backdrop-blur-sm bg-background/60 p-4">
-          <div className="bg-card border border-border p-6 rounded-[2rem] w-full max-w-sm shadow-2xl flex flex-col gap-4 animate-in slide-in-from-bottom-8">
-            <div className="flex flex-col mb-1" dir="rtl">
-              <h3 className="text-xl font-bold">بدء التسجيل</h3>
-              <p className="text-sm text-muted-foreground mt-1">اختر نوع التسجيل للوردية أو الوظيفة الحالية</p>
+        <div className="absolute inset-0 z-50 flex items-center justify-center backdrop-blur-md bg-background/80 p-4">
+          <div className="bg-card border border-white/10 p-6 rounded-[2.5rem] w-full max-w-sm shadow-2xl flex flex-col gap-5 animate-in zoom-in-95 duration-300">
+            <div className="flex flex-col mb-2 text-center" dir="rtl">
+              <div className="w-12 h-12 bg-primary/10 rounded-2xl flex items-center justify-center mx-auto mb-3 text-primary">
+                <Briefcase className="w-6 h-6" />
+              </div>
+              <h3 className="text-2xl font-black">{t('home.log_attendance')}</h3>
+              <p className="text-xs text-muted-foreground mt-1">{t('home.select_task_shift')}</p>
             </div>
             
-            {shifts.length > 0 && (
-              <div className="space-y-2 mt-2" dir="rtl">
-                <h4 className="font-bold text-xs text-muted-foreground flex items-center gap-1.5 uppercase tracking-wider"><Clock className="w-3 h-3"/> الورديات</h4>
-                {shifts.map(shift => {
-                  return (
-                    <Button 
-                      key={shift.id} 
-                      variant="outline"
-                      className="w-full justify-start h-12 rounded-xl relative shadow-sm"
-                      onClick={() => startSpecificSession('shift', shift.id)}
-                    >
-                      <div className="w-2.5 h-2.5 rounded-full mr-2 ml-3 bg-foreground opacity-70" />
-                      {shift.name} ({shift.startTime})
-                    </Button>
-                  );
-                })}
-              </div>
-            )}
+            <div className="space-y-4 overflow-y-auto max-h-[50vh] pr-1 custom-scrollbar" dir="rtl">
+              {shifts.length > 0 && (
+                <div className="space-y-2">
+                  <h4 className="font-bold text-[10px] text-muted-foreground flex items-center gap-1.5 uppercase tracking-wider"><Clock className="w-3 h-3"/> {t('home.scheduled_shifts')}</h4>
+                  <div className="grid grid-cols-1 gap-2">
+                    {shifts.map(shift => {
+                      return (
+                        <button 
+                          key={shift.id} 
+                          className="w-full flex items-center justify-between p-3 rounded-2xl bg-secondary/30 hover:bg-secondary border border-white/5 transition-all text-right group"
+                          onClick={() => startSpecificSession('shift', shift.id)}
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-xl bg-background flex flex-col items-center justify-center shadow-sm">
+                              <span className="text-xs font-bold text-foreground leading-none">{shift.startTime.split(':')[0]}</span>
+                              <span className="text-[10px] text-muted-foreground leading-none">{shift.startTime.split(':')[1]}</span>
+                            </div>
+                            <div className="flex flex-col">
+                               <span className="font-bold text-sm text-foreground">{shift.name}</span>
+                               <span className="text-[10px] text-muted-foreground">{t('home.work_shift')}</span>
+                            </div>
+                          </div>
+                          <div className="w-8 h-8 rounded-full bg-primary/10 text-primary flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                             <Play className="w-4 h-4 ml-0.5" />
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
 
-            {jobs.length > 0 && (
-              <div className="space-y-2 mt-2" dir="rtl">
-                <h4 className="font-bold text-xs text-muted-foreground flex items-center gap-1.5 uppercase tracking-wider"><FileText className="w-3 h-3"/> وظائف أخرى</h4>
-                {jobs.map(job => (
-                  <Button 
-                    key={job.id} 
-                    variant="outline"
-                    className="w-full justify-start h-12 rounded-xl shadow-sm"
-                    onClick={() => startSpecificSession(job.type, job.id)}
-                  >
-                    <div className="w-2.5 h-2.5 rounded-full mr-2 ml-3" style={{backgroundColor: job.color}} />
-                    {job.name}
-                  </Button>
-                ))}
-              </div>
-            )}
+              {jobs.length > 0 && (
+                <div className="space-y-2">
+                  <h4 className="font-bold text-[10px] text-muted-foreground flex items-center gap-1.5 uppercase tracking-wider"><FileText className="w-3 h-3"/> {t('home.jobs_projects')}</h4>
+                  <div className="grid grid-cols-2 gap-2 mt-2">
+                    {jobs.map(job => (
+                      <button 
+                        key={job.id} 
+                        className="w-full flex flex-col items-center justify-center p-3 h-24 rounded-2xl bg-secondary/30 hover:bg-secondary border border-white/5 transition-all text-center group"
+                        onClick={() => startSpecificSession(job.type, job.id)}
+                      >
+                        <div className="w-10 h-10 rounded-xl mb-2 flex items-center justify-center shadow-sm transition-transform group-hover:scale-110" style={{backgroundColor: `${job.color}15`, color: job.color}}>
+                          <Briefcase className="w-5 h-5" />
+                        </div>
+                        <span className="font-bold text-xs text-foreground line-clamp-1">{job.name}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
 
-            <div className="mt-2 pt-4 border-t border-border" dir="rtl">
-               <Button className="w-full h-12 rounded-xl" variant="default" onClick={() => startSpecificSession('salary')}>
-                 حضور عام (موظف)
-               </Button>
+              <div className="pt-2 border-t border-border/50">
+                 <button 
+                    className="w-full flex items-center justify-between p-3 h-16 rounded-2xl bg-primary text-primary-foreground hover:bg-primary/90 transition-all font-bold group"
+                    onClick={() => startSpecificSession('salary')}
+                 >
+                    <div className="flex items-center gap-3">
+                       <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center">
+                          <Check className="w-5 h-5" />
+                       </div>
+                       <span>{t('home.general_attendance')}</span>
+                    </div>
+                 </button>
+              </div>
             </div>
 
-            <Button variant="ghost" className="mt-1 h-12 rounded-xl text-muted-foreground hover:bg-secondary" onClick={() => setDispatcherOpen(false)}>
-              إلغاء
+            <Button variant="ghost" className="w-full mt-1 h-12 rounded-xl text-muted-foreground hover:bg-secondary/50 font-medium" onClick={() => setDispatcherOpen(false)}>
+              {t('home.cancel_undo')}
             </Button>
           </div>
         </div>
@@ -1007,45 +1062,45 @@ export default function HomeView() {
                 <Calendar className="w-5 h-5 text-emerald-500" />
               </div>
               <div>
-                 <h3 className="text-lg font-bold">إدارة الغياب والبدائل</h3>
-                 <p className="text-[10px] text-muted-foreground">قم بتسجيل الإجازات من الأنواع المختلفة</p>
+                 <h3 className="text-lg font-bold">{t('home.manage_leaves')}</h3>
+                 <p className="text-[10px] text-muted-foreground">{t('home.manage_absence_desc')}</p>
               </div>
             </div>
 
             <div className="flex flex-col gap-3 mt-1">
-               <label className="text-sm font-bold">نوع الغياب</label>
+               <label className="text-sm font-bold">{t('cal.leave_type')}</label>
                <select 
                  className="w-full h-12 rounded-xl bg-secondary/30 px-3 border-none focus:ring-2 focus:ring-emerald-500 text-sm"
                  value={absenceType}
                  onChange={(e) => setAbsenceType(e.target.value as any)}
                >
-                 <option value="annual_leave">إجازة اعتيادية/سنوية (يخصم رصيد)</option>
-                 <option value="casual_leave">إجازة عارضة</option>
-                 <option value="sick_leave">إجازة مرضية</option>
-                 <option value="half_day_leave">إجازة نصف يوم</option>
-                 <option value="compensation">يوم بديل (تعويض عمل الإضافي)</option>
+                 <option value="annual_leave">{t('home.annual_leave')}</option>
+                 <option value="casual_leave">{t('home.casual_leave')}</option>
+                 <option value="sick_leave">{t('home.sick_leave')}</option>
+                 <option value="half_day_leave">{t('home.half_day_leave')}</option>
+                 <option value="compensation">{t('home.comp_day')}</option>
                </select>
 
                {absenceType === 'compensation' && (
                  <div className="animate-in fade-in slide-in-from-top-2">
-                   <label className="text-sm font-bold mt-2">اختر العمل الإضافي المراد استبداله</label>
+                   <label className="text-sm font-bold mt-2">{t('home.choose_overtime_day')}</label>
                    <select 
                      className="w-full h-12 rounded-xl bg-secondary/30 px-3 border-none focus:ring-2 focus:ring-emerald-500 text-sm mt-1"
                      value={compensationLeaveSourceId}
                      onChange={(e) => setCompensationLeaveSourceId(e.target.value)}
                    >
-                     <option value="">-- اختر يوم العمل --</option>
+                     <option value="">-- {t('home.day')} --</option>
                      {getAvailableCompensations(absenceDate).map(comp => (
                        <option key={comp.id} value={comp.id} disabled={comp.isExpired}>
-                         {format(new Date(comp.startTime), 'EEEE، dd MMM yyyy', {locale: ar})} 
-                         (متاح {comp.availableDays} يوم){comp.isExpired ? ' - منتهي الصلاحية' : ''}
+                         {format(new Date(comp.startTime), t('t_auto_300'), {locale: ar})} 
+                         {t('t_auto_301')} {comp.availableDays} {t('t_auto_302')}{comp.isExpired ? ' - ' + t('home.expired') : ''}
                        </option>
                      ))}
                    </select>
 
                    {getAvailableCompensations(absenceDate).filter(c => c.isExpired).length > 0 && (
                      <div className="mt-3">
-                       <p className="text-[11px] text-muted-foreground mb-1 font-bold">أيام بديلة منتهية الصلاحية (يمكن إضافة استثناء):</p>
+                       <p className="text-[11px] text-muted-foreground mb-1 font-bold">{t('home.expired_comp')}</p>
                        <div className="flex flex-wrap gap-2">
                          {getAvailableCompensations(absenceDate).filter(c => c.isExpired).map(comp => (
                            <Button 
@@ -1055,14 +1110,14 @@ export default function HomeView() {
                              className="h-7 text-[10px] rounded-full border-dashed border-red-500/50 text-red-500 hover:bg-red-500/10"
                              onClick={(e) => {
                                e.preventDefault();
-                               if (window.confirm('هل تريد إضافة استثناء لتفعيل هذا اليوم البديل على الرغم من انتهاء صلاحيته؟')) {
+                               if (window.confirm(t('home.add_exception_confirm'))) {
                                  // Add exception
                                  updateSession(comp.id, { compensationException: true });
-                                 toast.success('تمت إضافة الاستثناء بنجاح، يمكنك الآن اختياره.');
+                                 toast.success(t('home.exception_added'));
                                }
                              }}
                            >
-                             {format(new Date(comp.startTime), 'dd MMM', {locale: ar})} (+ استثناء)
+                             {format(new Date(comp.startTime), 'dd MMM', {locale: ar})} ({t('home.exception')})
                            </Button>
                          ))}
                        </div>
@@ -1070,12 +1125,12 @@ export default function HomeView() {
                    )}
 
                    {getAvailableCompensations(absenceDate).length === 0 && (
-                     <p className="text-xs text-destructive mt-1">عفواً، لا توجد أيام بديلة صالحة في هذا التاريخ.</p>
+                     <p className="text-xs text-destructive mt-1">{t('home.no_comp_days')}</p>
                    )}
                  </div>
                )}
 
-               <label className="text-sm font-bold mt-2">التاريخ</label>
+               <label className="text-sm font-bold mt-2">{t('home.date')}</label>
                <input 
                  type="date" 
                  value={absenceDate}
@@ -1083,10 +1138,10 @@ export default function HomeView() {
                  className="w-full h-12 rounded-xl bg-secondary/30 px-3 border-none focus:ring-2 focus:ring-emerald-500 text-sm"
                />
 
-               <label className="text-sm font-bold mt-2">ملاحظات (اختياري)</label>
+               <label className="text-sm font-bold mt-2">{t('home.notes_optional')}</label>
                <textarea 
                   className="w-full bg-secondary/30 rounded-xl p-3 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 min-h-[80px] border border-border"
-                  placeholder="سبب الإجازة..."
+                  placeholder={t('home.leave_reason')}
                   value={noteText}
                   onChange={(e) => setNoteText(e.target.value)}
                />
@@ -1107,7 +1162,7 @@ export default function HomeView() {
                       breaks: 0,
                       location: 'office',
                       dayStatus: 'compensation',
-                      notes: noteText || 'إجازة كبديل لعمل يوم راحة',
+                      notes: noteText || t('home.leave_as_comp'),
                       linkedCompensationSessionId: compensationLeaveSourceId,
                       isArchived: false
                     };
@@ -1122,16 +1177,16 @@ export default function HomeView() {
                   
                   if (settings.notificationsEnabled) {
                      import('../../lib/notifications').then(({ sendAppNotification }) => {
-                        sendAppNotification('تم تسجيل الموقف بنجاح', { body: 'تم تحديث سجل اليوم في التقويمات.' });
+                        sendAppNotification(t('home.position_logged'), { body: t('home.calendar_updated') });
                      });
                   }
                 }}
               >
-                تأكيد
-              </Button>
+                {t('t_auto_303')}
+                                            </Button>
               <Button className="flex-1 rounded-xl h-12" variant="ghost" onClick={() => setAbsenceDialogOpen(false)}>
-                إغلاق
-              </Button>
+                {t('t_auto_304')}
+                                            </Button>
             </div>
           </div>
         </div>
@@ -1142,7 +1197,7 @@ export default function HomeView() {
         <div className="absolute inset-0 z-50 flex items-center justify-center backdrop-blur-sm bg-background/60 p-4">
           <div className="bg-card border border-border p-6 rounded-[2rem] w-full max-w-sm shadow-2xl flex flex-col gap-4 animate-in slide-in-from-bottom-8" dir="rtl">
             <h3 className="text-lg font-bold">
-              {actionDialog === 'permission' ? `تصريح (${permissionHours} ساعة/ساعات)` : actionDialog === 'pomodoro' ? 'مؤقت التركيز (Pomodoro)' : 'ملاحظة الجلسة'}
+              {actionDialog === 'permission' ? t('home.permission_hours').replace('{hours}', permissionHours.toString()) : actionDialog === 'pomodoro' ? t('home.pomodoro') : t('home.session_note')}
             </h3>
             
             {actionDialog === 'permission' && (
@@ -1150,12 +1205,12 @@ export default function HomeView() {
                 <div className="flex items-start gap-3 p-3 bg-indigo-500/10 text-indigo-500 rounded-xl mb-2 text-sm border border-indigo-500/20">
                   <Activity className="w-5 h-5 auto flex-shrink-0 mt-0.5" />
                   <span className="leading-relaxed">
-                    <strong>الذكاء الاصطناعي:</strong> تم تصنيف الإذن تلقائياً كـ <strong className="bg-indigo-500/20 px-1 rounded">{permissionType === 'entry' ? 'تأخير دخول' : 'خروج مبكر'}</strong> بناءً على جدول عملك اليوم.
+                    <strong>AI:</strong> {t('home.ai_classified')} <strong className="bg-indigo-500/20 px-1 rounded">{permissionType === 'entry' ? t('home.late_entry') : t('home.early_exit')}</strong> {t('home.based_on_schedule')}
                   </span>
                 </div>
                 <div className="flex gap-2 opacity-60 grayscale scale-95 pointer-events-none">
-                  <Button className="flex-1 rounded-xl h-10" variant={permissionType === 'entry' ? 'default' : 'secondary'}>دخول متأخر</Button>
-                  <Button className="flex-1 rounded-xl h-10" variant={permissionType === 'exit' ? 'default' : 'secondary'}>خروج مبكر</Button>
+                  <Button className="flex-1 rounded-xl h-10" variant={permissionType === 'entry' ? 'default' : 'secondary'}>{t('home.late_entry')}</Button>
+                  <Button className="flex-1 rounded-xl h-10" variant={permissionType === 'exit' ? 'default' : 'secondary'}>{t('home.early_exit')}</Button>
                 </div>
               </div>
             )}
@@ -1166,17 +1221,17 @@ export default function HomeView() {
                    {String(Math.floor(pomodoroTimeLeft / 60)).padStart(2, '0')}:{String(pomodoroTimeLeft % 60).padStart(2, '0')}
                  </div>
                  <div className="flex gap-4 w-full">
-                    {isPomodoroActive ? (
-                      <Button className="flex-1 h-12 rounded-xl text-lg font-bold" variant="destructive" onClick={() => setIsPomodoroActive(false)}>إيقاف</Button>
+                    {pomodoroIsActive ? (
+                      <Button className="flex-1 h-12 rounded-xl text-lg font-bold" variant="destructive" onClick={togglePomodoro}>{t('home.stop')}</Button>
                     ) : (
-                      <Button className="flex-1 h-12 rounded-xl text-lg font-bold bg-primary text-primary-foreground hover:bg-primary/90" onClick={() => setIsPomodoroActive(true)}>بدء التركيز</Button>
+                      <Button className="flex-1 h-12 rounded-xl text-lg font-bold bg-primary text-primary-foreground hover:bg-primary/90" onClick={togglePomodoro}>{t('home.start_focus')}</Button>
                     )}
                  </div>
               </div>
             ) : (
               <textarea 
                 className="w-full bg-secondary/30 rounded-xl p-4 text-sm focus:outline-none focus:ring-2 focus:ring-primary min-h-[100px] border border-border"
-                placeholder="اكتب ملاحظاتك..."
+                placeholder={t('home.write_notes')}
                 value={noteText}
                 onChange={(e) => setNoteText(e.target.value)}
               />
@@ -1185,11 +1240,11 @@ export default function HomeView() {
             <div className="flex gap-2 mt-2">
               {actionDialog !== 'pomodoro' && (
                 <Button className="flex-1 rounded-xl h-12 font-bold" onClick={actionDialog === 'permission' ? submitPermission : submitNote}>
-                  حفظ
-                </Button>
+                  {t('t_auto_234')}
+                                                  </Button>
               )}
               <Button className="flex-1 rounded-xl h-12" variant={actionDialog === 'pomodoro' ? 'default' : 'ghost'} onClick={() => setActionDialog(null)}>
-                {actionDialog === 'pomodoro' ? 'إغلاق' : 'إلغاء'}
+                {actionDialog === 'pomodoro' ? t('t_auto_304') : t('t_auto_305')}
               </Button>
             </div>
           </div>
@@ -1201,15 +1256,15 @@ export default function HomeView() {
         <div className="absolute inset-0 z-50 flex items-center justify-center backdrop-blur-sm bg-background/60 p-4">
           <div className="bg-card border border-border p-6 rounded-[2rem] w-full max-w-sm shadow-2xl flex flex-col gap-4 max-h-[90vh] overflow-y-auto animate-in slide-in-from-bottom-8" dir="rtl">
              <div className="flex flex-col text-center mt-2">
-               <h3 className="text-xl font-bold">{moodDialogState === 'start' ? 'استعد للعمل!' : 'تقييم اليوم'}</h3>
+               <h3 className="text-xl font-bold">{moodDialogState === 'start' ? t('t_auto_306') : t('t_auto_307')}</h3>
                <p className="text-sm text-muted-foreground mt-1">
-                 {moodDialogState === 'start' ? 'كيف تشعر قبل بدء هذه الجلسة؟' : 'كيف تقيم هذه الجلسة؟'}
+                 {moodDialogState === 'start' ? t('t_auto_308') : t('t_auto_309')}
                </p>
              </div>
 
              <div className="space-y-4 my-2">
                <div className="bg-secondary/20 p-4 rounded-3xl">
-                  <p className="text-sm font-medium mb-4 text-center text-foreground/80">المزاج الحالي</p>
+                  <p className="text-sm font-medium mb-4 text-center text-foreground/80">{t('t_auto_310')}</p>
                   <div className="flex justify-between px-2">
                     {['😫', '😕', '😐', '🙂', '🤩'].map((emoji, idx) => {
                       const score = idx + 1;
@@ -1229,7 +1284,7 @@ export default function HomeView() {
                {moodDialogState === 'end' && (
                  <>
                    <div className="pt-2 px-1">
-                      <p className="text-sm font-medium mb-3 text-foreground/80">مستوى إنجازك اليوم</p>
+                      <p className="text-sm font-medium mb-3 text-foreground/80">{t('t_auto_311')}</p>
                       <input 
                         type="range" min="1" max="10" 
                         value={selfScore} onChange={(e) => setSelfScore(Number(e.target.value))}
@@ -1244,14 +1299,14 @@ export default function HomeView() {
                className="w-full h-14 mt-2 text-base font-bold rounded-2xl shadow-md" 
                onClick={moodDialogState === 'start' ? submitMoodStart : submitMoodEnd}
              >
-               {moodDialogState === 'start' ? 'ابدأ العمل بشغف!' : 'حفظ التقييم والمغادرة'}
+               {moodDialogState === 'start' ? t('t_auto_312') : t('t_auto_313')}
              </Button>
              <Button variant="ghost" className="rounded-xl h-10 text-muted-foreground" onClick={() => {
                 if (moodDialogState === 'start') submitMoodStart();
                 else submitMoodEnd();
              }}>
-               تخطي
-             </Button>
+               {t('t_auto_314')}
+                                       </Button>
           </div>
         </div>
       )}
@@ -1260,23 +1315,23 @@ export default function HomeView() {
       {nightShiftModalOpen && pendingNightJob && (
          <div className="absolute inset-0 z-50 flex items-center justify-center backdrop-blur-sm bg-background/60 p-4">
            <div className="bg-card border border-border p-6 rounded-[2rem] w-full max-w-sm shadow-2xl flex flex-col gap-4 animate-in slide-in-from-bottom-8 text-center" dir="rtl">
-              <h3 className="text-xl font-bold">وردية ليلية</h3>
+              <h3 className="text-xl font-bold">{t('t_auto_315')}</h3>
               <p className="text-sm text-muted-foreground leading-relaxed">
-                لقد قمت بتسجيل الدخول بعد منتصف الليل. هل هذا الدوام استكمال لعمل الأمس أم بداية يوم جديد؟
-              </p>
+                {t('t_auto_316')}
+                                        </p>
               <div className="flex gap-2 mt-4">
                 <Button 
                   className="flex-1 rounded-xl h-12" 
                   onClick={() => processSessionStart(pendingNightJob.type, pendingNightJob.entityId, false)}
                 >
-                  يوم جديد
-                </Button>
+                  {t('t_auto_317')}
+                                              </Button>
                 <Button 
                   className="flex-1 rounded-xl h-12" variant="outline"
                   onClick={() => processSessionStart(pendingNightJob.type, pendingNightJob.entityId, true)}
                 >
-                  دوام الأمس
-                </Button>
+                  {t('t_auto_318')}
+                                              </Button>
               </div>
            </div>
          </div>
@@ -1292,54 +1347,53 @@ export default function HomeView() {
               
               {showHalfDayPrompt.isGracePeriodHit ? (
                 <>
-                  <h3 className="text-xl font-bold mt-2 text-center text-orange-500">تجاوز وقت السماح</h3>
+                  <h3 className="text-xl font-bold mt-2 text-center text-orange-500">{t('t_auto_319')}</h3>
                   <p className="text-sm text-muted-foreground leading-relaxed text-center">
-                    لقد تأخرت بنسبة <strong>{(showHalfDayPrompt as any).lateMins} دقيقة</strong>، ووقت السماح هو {settings.advancedRules?.gracePeriodMinutes} دقيقة.
-                    كيف تود التعامل مع هذا التأخير؟
-                  </p>
+                    {t('t_auto_320')} <strong>{(showHalfDayPrompt as any).lateMins} {t('t_auto_171')}</strong>{t('t_auto_321')} {settings.advancedRules?.gracePeriodMinutes} {t('t_auto_322')}
+                                                    </p>
                   <div className="flex flex-col gap-2 mt-4 text-sm gap-y-3">
                     <Button 
                       onClick={() => handleHalfDayAccept('ignore_and_overtime')} 
                       className="bg-indigo-500 hover:bg-indigo-600 rounded-xl whitespace-normal h-auto py-2"
                     >
-                      لا تحسب التأخير (سأعوضه لاحقاً أو كإضافي)
-                    </Button>
+                      {t('t_auto_323')}
+                                                          </Button>
                     <Button 
                       onClick={() => handleHalfDayAccept('use_permission')} 
                       variant="outline" 
                       className="rounded-xl border-orange-500/30 text-orange-600 hover:bg-orange-500/10"
                     >
-                      استخدام تصريح تأخير
-                    </Button>
+                      {t('t_auto_324')}
+                                                          </Button>
                     <Button 
                       onClick={() => handleHalfDayAccept('count_full')} 
                       variant="ghost" 
                       className="rounded-xl text-muted-foreground"
                     >
-                      احتساب كخصم تأخير
-                    </Button>
+                      {t('t_auto_325')}
+                                                          </Button>
                   </div>
                 </>
               ) : (
                 <>
-                  <h3 className="text-xl font-bold mt-2">تسجيل إجازة نصف يوم؟</h3>
+                  <h3 className="text-xl font-bold mt-2">{t('t_auto_326')}</h3>
                   <p className="text-sm text-muted-foreground leading-relaxed">
-                   لقد تأخرت عن موعد بدء العمل المعتاد بأكثر من ساعة. هل تود وتسجيل هذا اليوم كأنه <strong>نصف يوم عمل</strong>؟
-                  </p>
+                   {t('t_auto_327')} <strong>{t('t_auto_328')}</strong>{t('t_auto_329')}
+                                                        </p>
                   <div className="flex flex-col gap-2 mt-4">
                     <Button 
                       className="w-full rounded-xl h-12 font-bold bg-orange-500 hover:bg-orange-600 text-white" 
                       onClick={() => handleHalfDayAccept(true)}
                     >
-                      نعم، سجل نصف يوم
-                    </Button>
+                      {t('t_auto_330')}
+                                                              </Button>
                     <Button 
                       variant="outline"
                       className="w-full rounded-xl h-12" 
                       onClick={() => handleHalfDayAccept(false)}
                     >
-                      لا، عمل كامل
-                    </Button>
+                      {t('t_auto_331')}
+                                                              </Button>
                   </div>
                 </>
               )}
@@ -1354,10 +1408,10 @@ export default function HomeView() {
               <div className="mx-auto w-12 h-12 rounded-full bg-emerald-500/10 flex items-center justify-center">
                 <Coffee className="w-6 h-6 text-emerald-500" />
               </div>
-              <h3 className="text-xl font-bold mt-2 text-center">عمل في يوم راحة</h3>
+              <h3 className="text-xl font-bold mt-2 text-center">{t('t_auto_332')}</h3>
               <p className="text-sm text-muted-foreground leading-relaxed text-center">
-                كيف تود تعويض هذا اليوم في نظام البدائل؟
-              </p>
+                {t('t_auto_333')}
+                                        </p>
               
               <div className="flex flex-col gap-2 mt-2">
                  <Button 
@@ -1365,22 +1419,22 @@ export default function HomeView() {
                    className="justify-start h-12 rounded-xl text-right px-4"
                    onClick={() => setSelectedCompType('1_day')}
                  >
-                   بدل راحة (تعويض بيوم إجازة بديل)
-                 </Button>
+                   {t('t_auto_334')}
+                                               </Button>
                  <Button 
                    variant={selectedCompType === '1_day_plus_overtime' ? 'default' : 'outline'}
                    className="justify-start h-12 rounded-xl text-right px-4"
                    onClick={() => setSelectedCompType('1_day_plus_overtime')}
                  >
-                   بديل يوم + إضافة ساعات كعمل إضافي
-                 </Button>
+                   {t('t_auto_335')}
+                                               </Button>
                  <Button 
                    variant={selectedCompType === '2_days' ? 'default' : 'outline'}
                    className="justify-start h-12 rounded-xl text-right px-4"
                    onClick={() => setSelectedCompType('2_days')}
                  >
-                   تعويض بيومين إجازة
-                 </Button>
+                   {t('t_auto_336')}
+                                               </Button>
               </div>
 
               <div className="flex gap-2 mt-4">
@@ -1399,15 +1453,15 @@ export default function HomeView() {
                     }
                   }}
                 >
-                  تأكيد والمتابعة
-                </Button>
+                  {t('t_auto_337')}
+                                              </Button>
                 <Button 
                   variant="ghost"
                   className="rounded-xl h-12" 
                   onClick={() => setCompensationTypeDialogOpen(false)}
                 >
-                  إلغاء
-                </Button>
+                  {t('t_auto_305')}
+                                              </Button>
               </div>
            </div>
          </div>
@@ -1417,54 +1471,54 @@ export default function HomeView() {
       {retroDialogOpen && (
          <div className="absolute inset-0 z-[60] flex items-center justify-center backdrop-blur-sm bg-background/60 p-4" dir="rtl">
            <div className="bg-card border border-border p-6 rounded-[2rem] w-full max-w-sm shadow-2xl flex flex-col gap-4 animate-in slide-in-from-bottom-8 overflow-y-auto max-h-full">
-              <h3 className="text-xl font-bold mt-2 text-center text-emerald-500">سجل يوم سابق</h3>
-              <p className="text-sm text-muted-foreground leading-relaxed text-center mb-2">أضف أعمال، إجازات، أو تصاريح لأي يوم مضى.</p>
+              <h3 className="text-xl font-bold mt-2 text-center text-emerald-500">{t('t_auto_338')}</h3>
+              <p className="text-sm text-muted-foreground leading-relaxed text-center mb-2">{t('t_auto_339')}</p>
               
               <div className="space-y-4">
                 <div className="space-y-1">
-                  <label className="text-xs font-bold text-foreground">التاريخ</label>
+                  <label className="text-xs font-bold text-foreground">{t('home.date')}</label>
                   <Input type="date" value={retroDate} onChange={e => setRetroDate(e.target.value)} max={format(now, 'yyyy-MM-dd')} />
                 </div>
                 
                 <div className="space-y-1">
-                  <label className="text-xs font-bold text-foreground">نوع السجل</label>
+                  <label className="text-xs font-bold text-foreground">{t('t_auto_246')}</label>
                   <select 
                     className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm"
                     value={retroType}
                     onChange={e => setRetroType(e.target.value as any)}
                   >
-                    <option value="salary">عمل (راتب / أساسي)</option>
-                    <option value="project">مشروع / وظيفة أخرى</option>
-                    <option value="rest_day_work">عمل في يوم راحة (للحصول على بديلة)</option>
-                    <option value="compensation">إجازة بديلة (استهلاك بديلة)</option>
-                    <option value="permission">استئذان (تأخير / مبكر)</option>
-                    <option value="half_day_leave">نصف يوم</option>
-                    <option value="annual_leave">إجازة اعتيادية</option>
-                    <option value="sick_leave">إجازة مرضية</option>
-                    <option value="casual_leave">إجازة عارضة</option>
+                    <option value="salary">{t('t_auto_340')}</option>
+                    <option value="project">{t('t_auto_341')}</option>
+                    <option disabled>──────────</option>
+                    <option value="compensation">{t('t_auto_342')}</option>
+                    <option value="permission">{t('t_auto_343')}</option>
+                    <option value="half_day_leave">{t('t_auto_229')}</option>
+                    <option value="annual_leave">{t('t_auto_344')}</option>
+                    <option value="sick_leave">{t('home.sick_leave')}</option>
+                    <option value="casual_leave">{t('home.casual_leave')}</option>
                   </select>
                 </div>
 
                 {retroType === 'compensation' && (
                   <div className="space-y-1 animate-in fade-in pb-2">
-                    <label className="text-xs font-bold text-emerald-500">اختر العمل الإضافي المراد استبداله</label>
+                    <label className="text-xs font-bold text-emerald-500">{t('home.choose_overtime_day')}</label>
                     <select 
                       className="w-full rounded-xl border border-emerald-500/50 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-600 font-bold"
                       value={compensationLeaveSourceId}
                       onChange={e => setCompensationLeaveSourceId(e.target.value)}
                     >
-                      <option value="">-- اختر يوم العمل --</option>
+                      <option value="">-- {t('home.day')} --</option>
                       {getAvailableCompensations(retroDate).map(comp => (
                         <option key={comp.id} value={comp.id} disabled={comp.isExpired}>
-                          {format(new Date(comp.startTime), 'EEEE، dd MMM yyyy', {locale: ar})} 
-                          (متاح {comp.availableDays} يوم){comp.isExpired ? ' - منتهي الصلاحية' : ''}
+                          {format(new Date(comp.startTime), t('t_auto_300'), {locale: ar})} 
+                          {t('t_auto_301')} {comp.availableDays} {t('t_auto_302')}{comp.isExpired ? ' - ' + t('home.expired') : ''}
                         </option>
                       ))}
                     </select>
 
                     {getAvailableCompensations(retroDate).filter(c => c.isExpired).length > 0 && (
                       <div className="mt-2">
-                        <p className="text-[10px] text-muted-foreground mb-1 font-bold">أيام بديلة منتهية الصلاحية (يمكن إضافة استثناء):</p>
+                        <p className="text-[10px] text-muted-foreground mb-1 font-bold">{t('home.expired_comp')}</p>
                         <div className="flex flex-wrap gap-2">
                           {getAvailableCompensations(retroDate).filter(c => c.isExpired).map(comp => (
                             <Button 
@@ -1474,13 +1528,13 @@ export default function HomeView() {
                               className="h-6 px-2 text-[10px] rounded-full border-dashed border-red-500/50 text-red-500 hover:bg-red-500/10"
                               onClick={(e) => {
                                 e.preventDefault();
-                                if (window.confirm('هل تريد إضافة استثناء لتفعيل هذا اليوم البديل على الرغم من انتهاء صلاحيته؟')) {
+                                if (window.confirm(t('home.add_exception_confirm'))) {
                                   updateSession(comp.id, { compensationException: true });
-                                  toast.success('تمت إضافة الاستثناء بنجاح، يمكنك الآن اختياره.');
+                                  toast.success(t('home.exception_added'));
                                 }
                               }}
                             >
-                              {format(new Date(comp.startTime), 'dd MMM', {locale: ar})} (+ استثناء)
+                              {format(new Date(comp.startTime), 'dd MMM', {locale: ar})} ({t('home.exception')})
                             </Button>
                           ))}
                         </div>
@@ -1490,13 +1544,13 @@ export default function HomeView() {
                 )}
                 {retroType === 'project' && (
                   <div className="space-y-1 animate-in fade-in">
-                    <label className="text-xs font-bold text-foreground">المشروع/الجهة</label>
+                    <label className="text-xs font-bold text-foreground">{t('t_auto_345')}</label>
                     <select 
                       className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm"
                       value={retroJobId}
                       onChange={e => setRetroJobId(e.target.value)}
                     >
-                      <option value="none">-- اختر عمل --</option>
+                      <option value="none">{t('t_auto_346')}</option>
                       {jobs.map(j => <option key={j.id} value={j.id}>{j.name}</option>)}
                     </select>
                   </div>
@@ -1506,30 +1560,33 @@ export default function HomeView() {
                   <>
                     <div className="grid grid-cols-2 gap-3">
                       <div className="space-y-1">
-                        <label className="text-xs font-bold text-foreground">وقت الحضور</label>
+                        <label className="text-xs font-bold text-foreground">{t('t_auto_347')}</label>
                         <SmartTimePicker value={retroStart} onChange={setRetroStart} />
                       </div>
                       <div className="space-y-1">
-                        <label className="text-xs font-bold text-foreground">وقت الانصراف</label>
+                        <label className="text-xs font-bold text-foreground">{t('t_auto_348')}</label>
                         <SmartTimePicker value={retroEnd} onChange={setRetroEnd} />
                       </div>
                     </div>
                     <div className="space-y-1 pb-2">
-                       <label className="text-xs font-bold text-foreground inline-flex items-center gap-1"><Coffee className="w-3 h-3"/> الخصومات/الاستراحات (بالدقائق)</label>
-                       <Input type="number" min="0" value={retroBreak} onChange={e => setRetroBreak(e.target.value)} placeholder="مثال: 30" />
+                       <label className="text-xs font-bold text-foreground inline-flex items-center gap-1"><Coffee className="w-3 h-3"/> {t('t_auto_349')}</label>
+                       <Input type="number" min="0" value={retroBreak} onChange={e => setRetroBreak(e.target.value)} placeholder={t('t_auto_350')} />
                     </div>
                     
-                    {retroType === 'rest_day_work' && (
+                    {retroIsRest && ['salary', 'freelance'].includes(retroType) && (
                        <div className="space-y-1 animate-in fade-in pb-2">
-                         <label className="text-xs font-bold text-orange-500">طبيعة تعويض يوم الراحة/الإجازة</label>
+                         <div className="bg-orange-500/10 text-orange-600 px-3 py-2 rounded-xl text-xs font-bold mb-2">
+                           {t('t_auto_351')}
+                                                                       </div>
+                         <label className="text-xs font-bold text-orange-500">{t('t_auto_352')}</label>
                          <select 
                            className="w-full rounded-xl border border-orange-500/50 bg-orange-500/10 px-3 py-2 text-sm text-orange-600 font-bold"
                            value={retroCompType}
                            onChange={e => setRetroCompType(e.target.value as any)}
                          >
-                           <option value="1_day">يوم راحة بديل واحد</option>
-                           <option value="1_day_plus_overtime">يوم راحة بديل + ساعات إضافية</option>
-                           <option value="2_days">يومي راحة بديلة (2)</option>
+                           <option value="1_day">{t('t_auto_353')}</option>
+                           <option value="1_day_plus_overtime">{t('t_auto_354')}</option>
+                           <option value="2_days">{t('t_auto_355')}</option>
                          </select>
                        </div>
                     )}
@@ -1537,14 +1594,14 @@ export default function HomeView() {
                 )}
                 
                 <div className="space-y-1">
-                  <label className="text-xs font-bold text-foreground">ملاحظات (اختياري)</label>
-                  <Input placeholder="أضف أي ملحوظة عن اليوم..." value={noteText} onChange={e => setNoteText(e.target.value)} />
+                  <label className="text-xs font-bold text-foreground">{t('home.notes_optional')}</label>
+                  <Input placeholder={t('t_auto_356')} value={noteText} onChange={e => setNoteText(e.target.value)} />
                 </div>
               </div>
 
               <div className="flex gap-2 mt-4">
-                 <Button onClick={submitRetroSession} className="flex-1 rounded-xl h-12 bg-emerald-600 hover:bg-emerald-700 text-white font-bold">حفظ السجل</Button>
-                 <Button variant="ghost" onClick={() => {setRetroDialogOpen(false); setNoteText('');}} className="h-12 rounded-xl text-muted-foreground hover:bg-secondary">إلغاء</Button>
+                 <Button onClick={submitRetroSession} className="flex-1 rounded-xl h-12 bg-emerald-600 hover:bg-emerald-700 text-white font-bold">{t('t_auto_357')}</Button>
+                 <Button variant="ghost" onClick={() => {setRetroDialogOpen(false); setNoteText('');}} className="h-12 rounded-xl text-muted-foreground hover:bg-secondary">{t('t_auto_305')}</Button>
               </div>
            </div>
          </div>
@@ -1554,14 +1611,14 @@ export default function HomeView() {
       {showManualEntry && (
          <div className="absolute inset-0 z-[60] flex items-center justify-center backdrop-blur-sm bg-background/60 p-4" dir="rtl">
            <div className="bg-card border border-border p-6 rounded-[2rem] w-full max-w-sm shadow-2xl flex flex-col gap-4 animate-in slide-in-from-bottom-8">
-              <h3 className="text-xl font-bold mt-2 text-center">{activeSession ? 'تعديل وقت الدخول' : 'تسجيل دخول فائت'}</h3>
+              <h3 className="text-xl font-bold mt-2 text-center">{activeSession ? t('t_auto_358') : t('t_auto_359')}</h3>
               <p className="text-sm text-muted-foreground leading-relaxed text-center">
-                {activeSession ? 'هل قمت بالدخول في وقت مختلف؟ قم بتعديل الوقت أدناه وسنقوم بإعادة الحسابات تلقائياً.' : 'لم تقم بتسجيل الدخول في وقتها؟ أدخل الوقت الفعلي أدناه.'}
+                {activeSession ? t('t_auto_360') : t('t_auto_361')}
               </p>
               
               <div className="space-y-4">
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">وقت البدء الفعلي</label>
+                  <label className="text-sm font-medium">{t('t_auto_362')}</label>
                   <SmartTimePicker 
                     value={manualEntryTime}
                     onChange={setManualEntryTime}
@@ -1589,11 +1646,11 @@ export default function HomeView() {
                         }
                      }}
                   >
-                     {activeSession ? 'تحديث وقت البدء' : 'تأكيد وبدء'}
+                     {activeSession ? t('t_auto_363') : t('t_auto_364')}
                   </Button>
                   <Button variant="outline" className="flex-1 rounded-xl h-12" onClick={() => setShowManualEntry(false)}>
-                     إلغاء
-                  </Button>
+                     {t('t_auto_305')}
+                                                    </Button>
                 </div>
               </div>
            </div>
@@ -1604,10 +1661,10 @@ export default function HomeView() {
       {overtimeAskDialog?.show && (
          <div className="absolute inset-0 z-[60] flex items-center justify-center backdrop-blur-sm bg-background/60 p-4" dir="rtl">
            <div className="bg-card border border-border p-6 rounded-[2rem] w-full max-w-sm shadow-2xl flex flex-col gap-4 animate-in slide-in-from-bottom-8 text-center">
-              <h3 className="text-xl font-bold mt-2 text-primary">تسجيل الإضافي</h3>
+              <h3 className="text-xl font-bold mt-2 text-primary">{t('t_auto_365')}</h3>
               <p className="text-sm text-muted-foreground leading-relaxed">
-                لقد عملت وقت إضافي مقداره <span className="font-bold text-foreground">{Math.floor(overtimeAskDialog.baseMins / 60)} ساعة و {overtimeAskDialog.baseMins % 60} دقيقة</span>. كيف تود احتسابه؟
-              </p>
+                {t('t_auto_366')} <span className="font-bold text-foreground">{Math.floor(overtimeAskDialog.baseMins / 60)} {t('t_auto_367')} {overtimeAskDialog.baseMins % 60} {t('t_auto_171')}</span>{t('t_auto_368')}
+                                        </p>
               
               <div className="flex flex-col gap-2 mt-2">
                   <Button 
@@ -1617,8 +1674,8 @@ export default function HomeView() {
                         setOvertimeAskDialog(null);
                      }}
                   >
-                     احتسابه كما هو بالدقيقة
-                  </Button>
+                     {t('t_auto_369')}
+                                                </Button>
                   <Button 
                      variant="outline"
                      className="w-full rounded-xl h-12"
@@ -1628,8 +1685,8 @@ export default function HomeView() {
                         setOvertimeAskDialog(null);
                      }}
                   >
-                     جبره للأعلى ({Math.ceil(overtimeAskDialog.baseMins / 60)} ساعة)
-                  </Button>
+                     {t('t_auto_370')}{Math.ceil(overtimeAskDialog.baseMins / 60)} {t('t_auto_371')}
+                                                </Button>
                   <Button 
                      variant="outline"
                      className="w-full rounded-xl h-12"
@@ -1639,8 +1696,8 @@ export default function HomeView() {
                         setOvertimeAskDialog(null);
                      }}
                   >
-                     اختار التقريب وتجاهل الكسر ({Math.floor(overtimeAskDialog.baseMins / 60)} ساعة)
-                  </Button>
+                     {t('t_auto_372')}{Math.floor(overtimeAskDialog.baseMins / 60)} {t('t_auto_371')}
+                                                </Button>
               </div>
            </div>
          </div>
@@ -1651,38 +1708,38 @@ export default function HomeView() {
         <SheetContent side="bottom" className="rounded-t-[2rem] max-h-[90vh] p-6 z-[120] border-t border-border/50" dir="rtl">
           <SheetHeader className="pb-4 text-center">
              <SheetTitle className="text-2xl font-bold flex flex-col items-center gap-2">
-                تسجيل إجازة
-                <span className="text-sm font-normal text-muted-foreground">اختر نوع الإجازة لليوم</span>
+                {t('t_auto_373')}
+                                          <span className="text-sm font-normal text-muted-foreground">{t('t_auto_374')}</span>
              </SheetTitle>
           </SheetHeader>
           <div className="flex flex-col gap-3 mt-4">
-             <button onClick={() => { logSpecialSession('casual_leave'); setIsLeaveSheetOpen(false); toast.success('تم تسجيل راحة بنجاح'); }} className="w-full flex items-center justify-between p-4 rounded-[1.5rem] bg-secondary/30 hover:bg-secondary/50 transition-colors border border-border/40 group">
-                <span className="font-bold text-foreground text-lg mr-2">راحة</span>
+             <button onClick={() => { logSpecialSession('casual_leave'); setIsLeaveSheetOpen(false); toast.success(t('t_auto_375')); }} className="w-full flex items-center justify-between p-4 rounded-[1.5rem] bg-secondary/30 hover:bg-secondary/50 transition-colors border border-border/40 group">
+                <span className="font-bold text-foreground text-lg mr-2">{t('t_auto_376')}</span>
                 <div className="w-14 h-14 rounded-[14px] bg-blue-500/10 flex items-center justify-center text-blue-500 transition-transform group-hover:scale-110">
                   <Palmtree className="w-7 h-7" />
                 </div>
              </button>
              <button onClick={() => { setAbsenceType('compensation'); setAbsenceDialogOpen(true); setIsLeaveSheetOpen(false); }} className="w-full flex items-center justify-between p-4 rounded-[1.5rem] bg-secondary/30 hover:bg-secondary/50 transition-colors border border-border/40 group">
-                <span className="font-bold text-foreground text-lg mr-2">بديلة</span>
+                <span className="font-bold text-foreground text-lg mr-2">{t('t_auto_377')}</span>
                 <div className="w-14 h-14 rounded-[14px] bg-teal-500/10 flex items-center justify-center text-teal-500 transition-transform group-hover:scale-110">
                   <Calendar className="w-7 h-7" />
                 </div>
              </button>
-             <button onClick={() => { logSpecialSession('sick_leave'); setIsLeaveSheetOpen(false); toast.success('تم تسجيل إجازة مرضية بنجاح'); }} className="w-full flex items-center justify-between p-4 rounded-[1.5rem] bg-secondary/30 hover:bg-secondary/50 transition-colors border border-border/40 group">
-                <span className="font-bold text-foreground text-lg mr-2">مرضي</span>
+             <button onClick={() => { logSpecialSession('sick_leave'); setIsLeaveSheetOpen(false); toast.success(t('t_auto_378')); }} className="w-full flex items-center justify-between p-4 rounded-[1.5rem] bg-secondary/30 hover:bg-secondary/50 transition-colors border border-border/40 group">
+                <span className="font-bold text-foreground text-lg mr-2">{t('t_auto_379')}</span>
                 <div className="w-14 h-14 rounded-[14px] bg-red-500/10 flex items-center justify-center text-red-500 transition-transform group-hover:scale-110">
                   <Clock className="w-7 h-7" />
                 </div>
              </button>
-             <button onClick={() => { logSpecialSession('annual_leave'); setIsLeaveSheetOpen(false); toast.success('تم تسجيل إجازة سنوية بنجاح'); }} className="w-full flex items-center justify-between p-4 rounded-[1.5rem] bg-secondary/30 hover:bg-secondary/50 transition-colors border border-border/40 group">
-                <span className="font-bold text-foreground text-lg mr-2">سنوي</span>
+             <button onClick={() => { logSpecialSession('annual_leave'); setIsLeaveSheetOpen(false); toast.success(t('t_auto_380')); }} className="w-full flex items-center justify-between p-4 rounded-[1.5rem] bg-secondary/30 hover:bg-secondary/50 transition-colors border border-border/40 group">
+                <span className="font-bold text-foreground text-lg mr-2">{t('t_auto_381')}</span>
                 <div className="w-14 h-14 rounded-[14px] bg-orange-500/10 flex items-center justify-center text-orange-500 transition-transform group-hover:scale-110">
                   <Zap className="w-7 h-7" />
                 </div>
              </button>
              <button onClick={() => setIsLeaveSheetOpen(false)} className="w-full mt-2 h-[60px] rounded-[1.5rem] bg-secondary/40 hover:bg-secondary text-foreground font-bold transition-colors">
-                إلغاء
-             </button>
+                {t('t_auto_305')}
+                                       </button>
           </div>
         </SheetContent>
       </Sheet>
@@ -1691,33 +1748,33 @@ export default function HomeView() {
         <SheetContent side="bottom" className="rounded-t-[2rem] max-h-[90vh] p-6 z-[120] border-t border-border/50" dir="rtl">
           <SheetHeader className="pb-4 text-center">
              <SheetTitle className="text-2xl font-bold flex flex-col items-center gap-2">
-                إذن / نصف يوم
-                <span className="text-sm font-normal text-muted-foreground">اختر نوع التصريح للإدخال</span>
+                {t('t_auto_382')}
+                                          <span className="text-sm font-normal text-muted-foreground">{t('t_auto_383')}</span>
              </SheetTitle>
           </SheetHeader>
           <div className="flex flex-col gap-3 mt-4">
-             <button onClick={() => { logSpecialSession('permission', { hours: 1, subtype: 'entry' }); setIsPermissionSheetOpen(false); toast.success('تم تسجيل إذن التأخير بنجاح'); }} className="w-full flex items-center justify-between p-4 rounded-[1.5rem] bg-secondary/30 hover:bg-secondary/50 transition-colors border border-border/40 group">
+             <button onClick={() => { logSpecialSession('permission', { hours: 1, subtype: 'entry' }); setIsPermissionSheetOpen(false); toast.success(t('t_auto_384')); }} className="w-full flex items-center justify-between p-4 rounded-[1.5rem] bg-secondary/30 hover:bg-secondary/50 transition-colors border border-border/40 group">
                 <div className="flex flex-col text-right mr-2">
-                   <span className="font-bold text-foreground text-lg">إذن تأخير (ساعة)</span>
-                   <span className="text-xs text-muted-foreground mt-0.5">يخصم من رصيد الأذونات</span>
+                   <span className="font-bold text-foreground text-lg">{t('t_auto_385')}</span>
+                   <span className="text-xs text-muted-foreground mt-0.5">{t('t_auto_386')}</span>
                 </div>
                 <div className="w-14 h-14 rounded-[14px] bg-yellow-500/10 flex items-center justify-center text-yellow-500 transition-transform group-hover:scale-110">
                   <Timer className="w-7 h-7" />
                 </div>
              </button>
-             <button onClick={() => { logSpecialSession('permission', { hours: 2, subtype: 'exit' }); setIsPermissionSheetOpen(false); toast.success('تم تسجيل إذن الخروج بنجاح'); }} className="w-full flex items-center justify-between p-4 rounded-[1.5rem] bg-secondary/30 hover:bg-secondary/50 transition-colors border border-border/40 group">
+             <button onClick={() => { logSpecialSession('permission', { hours: 2, subtype: 'exit' }); setIsPermissionSheetOpen(false); toast.success(t('t_auto_387')); }} className="w-full flex items-center justify-between p-4 rounded-[1.5rem] bg-secondary/30 hover:bg-secondary/50 transition-colors border border-border/40 group">
                 <div className="flex flex-col text-right mr-2">
-                   <span className="font-bold text-foreground text-lg">إذن خروج (ساعتين)</span>
-                   <span className="text-xs text-muted-foreground mt-0.5">يخصم من رصيد الأذونات</span>
+                   <span className="font-bold text-foreground text-lg">{t('t_auto_388')}</span>
+                   <span className="text-xs text-muted-foreground mt-0.5">{t('t_auto_386')}</span>
                 </div>
                 <div className="w-14 h-14 rounded-[14px] bg-purple-500/10 flex items-center justify-center text-purple-500 transition-transform group-hover:scale-110">
                   <LogOut className="w-7 h-7" />
                 </div>
              </button>
-             <button onClick={() => { logSpecialSession('half_day_leave'); setIsPermissionSheetOpen(false); toast.success('تم تسجيل نصف يوم بنجاح'); }} className="w-full flex items-center justify-between p-4 rounded-[1.5rem] bg-secondary/30 hover:bg-secondary/50 transition-colors border border-border/40 group">
+             <button onClick={() => { logSpecialSession('half_day_leave'); setIsPermissionSheetOpen(false); toast.success(t('t_auto_389')); }} className="w-full flex items-center justify-between p-4 rounded-[1.5rem] bg-secondary/30 hover:bg-secondary/50 transition-colors border border-border/40 group">
                 <div className="flex flex-col text-right mr-2">
-                   <span className="font-bold text-foreground text-lg">إجازة نصف يوم</span>
-                   <span className="text-xs text-muted-foreground mt-0.5">يخصم كإجازة معتمدة لنصف اليوم</span>
+                   <span className="font-bold text-foreground text-lg">{t('home.half_day_leave')}</span>
+                   <span className="text-xs text-muted-foreground mt-0.5">{t('t_auto_390')}</span>
                 </div>
                 <div className="w-14 h-14 rounded-[14px] bg-teal-500/10 flex items-center justify-center text-teal-500 transition-transform group-hover:scale-110">
                   <Activity className="w-7 h-7" />
@@ -1725,8 +1782,8 @@ export default function HomeView() {
              </button>
              
              <button onClick={() => setIsPermissionSheetOpen(false)} className="w-full mt-2 h-[60px] rounded-[1.5rem] bg-secondary/40 hover:bg-secondary text-foreground font-bold transition-colors">
-                إلغاء
-             </button>
+                {t('t_auto_305')}
+                                       </button>
           </div>
         </SheetContent>
       </Sheet>

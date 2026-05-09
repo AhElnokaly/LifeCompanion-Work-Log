@@ -3,8 +3,10 @@ import { Card } from '../ui/card';
 import { Button } from '../ui/button';
 import { Users, FileText, Clock, Briefcase } from 'lucide-react';
 import { useWorkLog } from '../../contexts/WorkLogContext';
+import { useLanguage } from "@/contexts/LanguageContext";
 
 export default function FreelanceCRMView() {
+    const { t, lang } = useLanguage();
   const { projects } = useWorkLog();
 
   return (
@@ -15,8 +17,8 @@ export default function FreelanceCRMView() {
             <Users className="w-6 h-6" />
           </div>
           <div>
-            <h2 className="text-2xl font-bold">إدارة العملاء (CRM)</h2>
-            <p className="text-muted-foreground text-sm">متابعة الفواتير والرصيد المعلق</p>
+            <h2 className="text-2xl font-bold">{t('t_auto_272')}</h2>
+            <p className="text-muted-foreground text-sm">{t('t_auto_273')}</p>
           </div>
         </div>
       </header>
@@ -30,26 +32,26 @@ export default function FreelanceCRMView() {
                    <h3 className="font-bold">{proj.name}</h3>
                 </div>
                 <span className="text-xs text-muted-foreground bg-secondary/50 px-2 py-1 rounded-md">
-                   {proj.hourlyRate ? `${proj.hourlyRate} ج.م / ساعة` : 'قيمة غير محددة'}
+                   {proj.hourlyRate ? `${proj.hourlyRate} ج.م / ساعة` : t('t_auto_274')}
                 </span>
              </div>
              
              <div className="flex gap-2">
                 <Button variant="secondary" className="flex-1 text-xs shadow-sm rounded-xl h-10">
                    <Clock className="w-3 h-3 ml-1" />
-                   تسجيل الأعمال
-                </Button>
+                   {t('t_auto_275')}
+                                        </Button>
                 <Button className="flex-1 text-xs bg-blue-600 hover:bg-blue-700 text-white rounded-xl h-10 shadow-sm">
                    <FileText className="w-3 h-3 ml-1" />
-                   إصدار فاتورة
-                </Button>
+                   {t('t_auto_276')}
+                                        </Button>
              </div>
           </Card>
         )) : (
           <div className="text-center p-8 bg-secondary/10 rounded-3xl border border-dashed border-border/50 text-muted-foreground">
              <Briefcase className="w-8 h-8 opacity-20 mx-auto mb-2" />
-             <p>لا يوجد عملاء أو مشاريع مسجلة حالياً.</p>
-             <p className="text-xs mt-1">أضف مشروعاً من شاشة (المشاريع والمهام).</p>
+             <p>{t('t_auto_277')}</p>
+             <p className="text-xs mt-1">{t('t_auto_278')}</p>
           </div>
         )}
       </div>
