@@ -755,6 +755,13 @@ export default function HomeView({ onNavigate }: { onNavigate?: (tab: string) =>
               <span className="text-sm font-bold text-foreground leading-tight flex-1">{t('home.permission')}</span>
            </button>
 
+           <button onClick={() => setIsLeaveSheetOpen(true)} disabled={!!activeSession || isOnFullDayLeave || isTodayRestDay} className={`rounded-2xl p-3 flex items-center justify-center gap-3 transition-colors text-right h-[70px] shadow-sm group ${(!activeSession && !isOnFullDayLeave && !isTodayRestDay) ? 'bg-card hover:bg-card/80 border border-border/50' : 'bg-card/30 border border-border/20 opacity-60 cursor-not-allowed'}`}>
+              <div className="w-10 h-10 rounded-full bg-blue-500/10 flex items-center justify-center shrink-0 text-blue-500 transition-transform group-hover:scale-110">
+                 <Palmtree className="w-5 h-5" />
+              </div>
+              <span className="text-sm font-bold text-foreground leading-tight flex-1">{t('home.leave')}</span>
+           </button>
+           
            {!isTodayRestDay && !activeSession && !isOnFullDayLeave && (
              <button onClick={() => setMarkHolidayDialogOpen(true)} className="col-span-2 rounded-2xl p-3 flex items-center justify-center gap-3 transition-colors text-right h-[50px] shadow-sm bg-card hover:bg-card/80 border border-border/50 group mb-2 mt-1">
                 <div className="w-8 h-8 rounded-full bg-emerald-500/10 flex items-center justify-center shrink-0 text-emerald-500 transition-transform group-hover:scale-110">
@@ -763,12 +770,6 @@ export default function HomeView({ onNavigate }: { onNavigate?: (tab: string) =>
                 <span className="text-xs font-bold text-foreground leading-tight flex-1">تعيين كعطلة رسمية والعمل (بديلة)</span>
              </button>
            )}
-           <button onClick={() => setIsLeaveSheetOpen(true)} disabled={!!activeSession || isOnFullDayLeave || isTodayRestDay} className={`rounded-2xl p-3 flex items-center justify-center gap-3 transition-colors text-right h-[70px] shadow-sm group ${(!activeSession && !isOnFullDayLeave && !isTodayRestDay) ? 'bg-card hover:bg-card/80 border border-border/50' : 'bg-card/30 border border-border/20 opacity-60 cursor-not-allowed'}`}>
-              <div className="w-10 h-10 rounded-full bg-blue-500/10 flex items-center justify-center shrink-0 text-blue-500 transition-transform group-hover:scale-110">
-                 <Palmtree className="w-5 h-5" />
-              </div>
-              <span className="text-sm font-bold text-foreground leading-tight flex-1">{t('home.leave')}</span>
-           </button>
         </div>
 
           {/* Floating AI Record Button */}

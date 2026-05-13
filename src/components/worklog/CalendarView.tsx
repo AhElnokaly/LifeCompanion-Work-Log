@@ -244,7 +244,8 @@ export default function CalendarView() {
               let hDayStr = '1';
               if (displayMode === 'hijri') {
                  try {
-                   const hijriFormatter = new Intl.DateTimeFormat(lang === 'ar' ? 'ar-SA-u-ca-islamic' : 'en-US-u-ca-islamic', { month: 'numeric', day: 'numeric' });
+                   // +++ تم التعديل بناءً على طلبك لحل مشكلة التاريخ الهجري +++
+                   const hijriFormatter = new Intl.DateTimeFormat('en-US-u-ca-islamic-nu-latn', { month: 'numeric', day: 'numeric' });
                    const hParts = hijriFormatter.formatToParts(day);
                    hDayStr = hParts.find(p => p.type === 'day')?.value || '1';
                  } catch(e) {}
