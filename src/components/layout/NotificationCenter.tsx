@@ -17,10 +17,11 @@ export default function NotificationCenter() {
      
      // 1. Unused compensations
      const validityDays = settings.compensationValidityDays || 30;
-     const availableComps = sessions.filter(s => s.isRestDayWork && !s.isArchived).map(s => {
+     const availableComps = sessions.filter(s => (s.isRestDayWork || s.dayStatus === 'rest_day_work') && !s.isArchived).map(s => {
        let accrued = 0;
-       if (s.restDayCompensation === '1_day' || s.restDayCompensation === '1_day_plus_overtime') accrued = 1;
-       else if (s.restDayCompensation === '2_days') accrued = 2;
+       const compType = s.restDayCompensation || '1_day';
+       if (compType === '1_day' || compType === '1_day_plus_overtime') accrued = 1;
+       else if (compType === '2_days') accrued = 2;
        
        const taken = sessions.filter(t => t.dayStatus === 'compensation' && t.linkedCompensationSessionId === s.id && !t.isArchived).length;
        const daysSinceEarned = (now.getTime() - new Date(s.startTime).getTime()) / (1000 * 60 * 60 * 24);

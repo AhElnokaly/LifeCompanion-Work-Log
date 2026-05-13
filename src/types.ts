@@ -9,6 +9,7 @@ export interface WorkSettings {
   monthlyPermissions: number; 
   annualLeaves: number; 
   restDays: number[];
+  restDaysSchedule?: { fromDate: string; restDays: number[]; originalRestDays?: number[] }[];
   compensationValidityDays?: number;
   expectedStartTime?: string;
   expectedEndTime?: string;
@@ -77,7 +78,7 @@ export interface WorkSession {
   type: WorkType;
   hourlyRate?: number;
   // Enhanced Tracking
-  dayStatus: 'work' | 'annual_leave' | 'sick_leave' | 'casual_leave' | 'half_day_leave' | 'late' | 'absent' | 'mission' | 'rest_day_work' | 'permission' | 'compensation';
+  dayStatus: 'work' | 'annual_leave' | 'sick_leave' | 'casual_leave' | 'half_day_leave' | 'late' | 'absent' | 'mission' | 'rest_day_work' | 'permission' | 'compensation' | 'public_holiday';
   isRestDayWork?: boolean;
   restDayCompensation?: '1_day' | '2_days' | '1_day_plus_overtime';
   compensationException?: boolean;

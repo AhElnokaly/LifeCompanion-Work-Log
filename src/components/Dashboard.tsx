@@ -6,11 +6,9 @@ import CalendarView from './worklog/CalendarView';
 import ProjectsView from './worklog/ProjectsView';
 import ReportsView from './worklog/ReportsView';
 import SettingsView from './worklog/SettingsView';
-import JobsShiftsView from './worklog/JobsShiftsView';
 import SupportQAView from './worklog/SupportQAView';
 import ArchiveView from './worklog/ArchiveView';
 import WalletView from './worklog/WalletView';
-import SmartPageView from './worklog/SmartPageView';
 import AlarmsView from './worklog/AlarmsView';
 import ChartMakerView from './worklog/ChartMakerView';
 import AICore from './aicore/AICore';
@@ -21,20 +19,17 @@ import ProVibeView from './worklog/ProVibeView';
 export default function Dashboard({ activeTab, setActiveTab }: { activeTab: string, setActiveTab: (tab: string) => void }) {
   const { settings } = useWorkLog();
   const { t, lang } = useLanguage();
-  const showShiftsModule = settings.modules?.shifts;
 
   return (
     <div className="h-full w-full max-w-7xl mx-auto">
-      {activeTab === 'home' && <HomeView />}
+      {activeTab === 'home' && <HomeView onNavigate={setActiveTab} />}
       {activeTab === 'week' && <CalendarView />}
       {activeTab === 'projects' && <ProjectsView />}
       {activeTab === 'reports' && <ReportsView />}
       {activeTab === 'wallet' && <WalletView />}
       {activeTab === 'settings' && <SettingsView />}
-      {activeTab === 'workspace' && <JobsShiftsView />}
       {activeTab === 'support' && <SupportQAView />}
       {activeTab === 'archive' && <ArchiveView />}
-      {activeTab === 'smartpage' && <SmartPageView />}
       {activeTab === 'alarms' && <AlarmsView />}
       {activeTab === 'chart_maker' && <ChartMakerView />}
       {activeTab === 'aicore' && <AICore />}
@@ -43,7 +38,6 @@ export default function Dashboard({ activeTab, setActiveTab }: { activeTab: stri
       {activeTab === 'more' && (
         <div className={`flex flex-col gap-4 animate-in fade-in duration-300 pb-20 pt-4 px-2 ${lang === 'ar' ? 'rtl' : 'ltr'}`} dir={lang === 'ar' ? 'rtl' : 'ltr'}>
           <h2 className="text-2xl font-bold mb-4">{t('dash.more_options')}</h2>
-          <OptionsCard title={t('dash.my_page')} desc={t('dash.my_page_desc')} id="smartpage" onClick={() => setActiveTab('smartpage')} lang={lang} />
           <OptionsCard title={t('layout.chart_maker')} desc={t('dash.chart_maker_desc')} id="chart_maker" onClick={() => setActiveTab('chart_maker')} lang={lang} />
           <OptionsCard title={t('layout.my_wallet')} desc={t('dash.wallet_desc')} id="wallet" onClick={() => setActiveTab('wallet')} lang={lang} />
           <OptionsCard title={t('dash.archive')} desc={t('dash.archive_desc')} id="archive" onClick={() => setActiveTab('archive')} lang={lang} />

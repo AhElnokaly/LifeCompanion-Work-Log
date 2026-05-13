@@ -56,9 +56,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const signIn = async () => {
     const provider = new GoogleAuthProvider();
-    await signInWithPopup(auth, provider);
-    setIsOfflineMode(false);
-    localStorage.removeItem('offlineMode');
+    try {
+      await signInWithPopup(auth, provider);
+      setIsOfflineMode(false);
+      localStorage.removeItem('offlineMode');
+    } catch (error: any) {
+      console.warn("Popup failed, trying redirect", error);
+      if (error.code === 'auth/popup-blocked' || error.code === 'auth/popup-closed-by-user' || error.code === 'auth/cancelled-popup-request') {
+         import('firebase/auth').then(({ signInWithRedirect }) => {
+            signInWithRedirect(auth, provider);
+         });
+      } else {
+         import('firebase/auth').then(({ signInWithRedirect }) => {
+            signInWithRedirect(auth, provider);
+         });
+      }
+    }
   };
 
   const continueOffline = () => {

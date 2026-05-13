@@ -3,7 +3,7 @@ import React, { useState, useMemo } from 'react';
 import { Card } from '../ui/card';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
-import { Download, TrendingUp, Clock, Palmtree, History, Filter, Edit2, Trash2, ChevronDown, ChevronUp } from 'lucide-react';
+import { Download, TrendingUp, Clock, Palmtree, History, Filter, Edit2, Trash2, ChevronDown, ChevronUp, Briefcase, Calendar, Activity } from 'lucide-react';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts';
 import { useWorkLog } from '../../contexts/WorkLogContext';
 import { format, addMonths, subMonths, isSameMonth, startOfMonth, endOfMonth, eachDayOfInterval, endOfWeek, eachWeekOfInterval, startOfYear, endOfYear, eachMonthOfInterval } from 'date-fns';
@@ -14,6 +14,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Label } from '../ui/label';
 import { formatMinutesToHHMM } from '../../lib/utils';
+import { UnifiedEntrySheet } from './UnifiedEntrySheet';
 
 export default function ReportsView() {
   const { t, lang } = useLanguage();
@@ -127,6 +128,7 @@ export default function ReportsView() {
   const [filterType, setFilterType] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [expandedDate, setExpandedDate] = useState<string | null>(null);
+  const [expandedLeaveId, setExpandedLeaveId] = useState<string | null>(null);
   
   const filteredSessions = useMemo(() => {
     let filtered = currentMonthSessions;
@@ -188,9 +190,10 @@ export default function ReportsView() {
       </header>
 
       <Tabs defaultValue="history" className="w-full">
-         <TabsList className="grid w-full grid-cols-2 rounded-2xl p-1 bg-secondary/30 h-12 border border-white/5 mb-4">
+         <TabsList className="grid w-full grid-cols-3 rounded-2xl p-1 bg-secondary/30 h-12 border border-white/5 mb-4">
            <TabsTrigger value="history" className="rounded-xl font-bold h-10">{t('rep.attendance_log')}</TabsTrigger>
            <TabsTrigger value="charts" className="rounded-xl font-bold h-10">{t('rep.analytics')}</TabsTrigger>
+           <TabsTrigger value="compensations" className="rounded-xl font-bold h-10">{t('cal.leaves') || 'الإجازات'}</TabsTrigger>
          </TabsList>
 
          <TabsContent value="charts" className="flex flex-col gap-4 mt-0 border-none p-0 outline-none">
@@ -330,23 +333,46 @@ export default function ReportsView() {
             </div>
 
             <div className="flex flex-col gap-3 mt-4" dir={lang === 'ar' ? 'rtl' : 'ltr'}>
-               {groupedSessions.map(([gDate, daySessions]) => {
+                              {groupedSessions.map(([gDate, daySessions]) => {
                   const sDate = new Date(daySessions[0].startTime);
                   const isExpanded = expandedDate === gDate;
                   const hour = sDate.getHours();
+                  
+                  // Base theme by time
                   let theme = { bg: 'bg-slate-700', text: 'text-slate-100', textDark: 'text-slate-400', bgSoft: 'bg-slate-700/10', border: 'border-slate-700/30' };
                   if (hour >= 5 && hour < 12) theme = { bg: 'bg-amber-500', text: 'text-amber-50', textDark: 'text-amber-500', bgSoft: 'bg-amber-500/10', border: 'border-amber-500/30' };
                   else if (hour >= 12 && hour < 17) theme = { bg: 'bg-blue-500', text: 'text-blue-50', textDark: 'text-blue-500', bgSoft: 'bg-blue-500/10', border: 'border-blue-500/30' };
                   else if (hour >= 17 && hour < 20) theme = { bg: 'bg-purple-500', text: 'text-purple-50', textDark: 'text-purple-500', bgSoft: 'bg-purple-500/10', border: 'border-purple-500/30' };
 
-                  // Find primary status of the day to show on the collapsed card
-                  let mainStatus = t('rep.work');
-                  const leaveSession = daySessions.find(s => s.dayStatus?.includes('leave') || s.dayStatus === 'rest_day_work');
+                  // Find primary status of the day to show on the collapsed card & adjust theme
+                  let mainStatus = 'عمل اعتيادي';
+                  const leaveSession = daySessions.find(s => s.dayStatus?.includes('leave') || s.dayStatus === 'rest_day_work' || s.dayStatus === 'compensation');
+                  
                   if (leaveSession) {
-                     if (leaveSession.dayStatus === 'rest_day_work') mainStatus = t('rep.rest_day');
-                     else mainStatus = t('rep.leave');
+                     if (leaveSession.dayStatus === 'rest_day_work') {
+                        mainStatus = 'عمل في يوم راحة (بديلة)';
+                     } else if (leaveSession.dayStatus === 'compensation') {
+                        mainStatus = 'استهلاك بديلة';
+                        theme = { bg: 'bg-orange-500', text: 'text-orange-50', textDark: 'text-orange-600', bgSoft: 'bg-orange-500/10', border: 'border-orange-500/30' };
+                     } else if (leaveSession.dayStatus === 'annual_leave') {
+                        mainStatus = 'إجازة سنوية / اعتيادية';
+                        theme = { bg: 'bg-indigo-500', text: 'text-indigo-50', textDark: 'text-indigo-500', bgSoft: 'bg-indigo-500/10', border: 'border-indigo-500/30' };
+                     } else if (leaveSession.dayStatus === 'sick_leave') {
+                        mainStatus = 'إجازة مرضية';
+                        theme = { bg: 'bg-red-500', text: 'text-red-50', textDark: 'text-red-500', bgSoft: 'bg-red-500/10', border: 'border-red-500/30' };
+                     } else if (leaveSession.dayStatus === 'casual_leave') {
+                        mainStatus = 'إجازة عارضة';
+                     } else if (leaveSession.dayStatus === 'half_day_leave') {
+                        mainStatus = 'إجازة نصف يوم';
+                     } else {
+                        mainStatus = 'إجازة';
+                     }
                   } else if (daySessions.some(s => s.dayStatus === 'permission')) {
-                     mainStatus = t('rep.permission');
+                     mainStatus = 'تصريح';
+                     // If it's just a permission but they worked the rest of the day, we keep the original time theme, 
+                     // or we can append it.
+                     const workSession = daySessions.find(s => s.dayStatus === 'work');
+                     if (workSession) mainStatus = 'عمل + تصريح';
                   }
 
                   const totalHours = daySessions.reduce((acc, s) => acc + (s.duration || 0), 0);
@@ -368,7 +394,7 @@ export default function ReportsView() {
                                      <span className="font-bold text-sm text-foreground flex items-center gap-2 truncate">
                                         {format(sDate, 'MMMM yyyy', { locale: lang === 'ar' ? ar : enUS })}
                                      </span>
-                                     <span className={`${theme.textDark} text-[10px] bg-background/50 px-2 py-0.5 rounded-full font-bold ml-auto shrink-0 max-w-[80px] truncate text-center`}>{mainStatus}</span>
+                                     <span className={`${theme.textDark} text-[10px] bg-background/50 px-2 py-0.5 rounded-full font-bold ml-auto shrink-0 max-w-[120px] truncate text-center`}>{mainStatus}</span>
                                  </div>
                                  <span className="text-xs text-muted-foreground flex items-center gap-1.5 truncate">
                                     <Clock className="w-3 h-3 shrink-0" />
@@ -386,10 +412,17 @@ export default function ReportsView() {
                         {isExpanded && (
                            <div className="bg-card p-3 sm:p-4 border-t border-border/50 flex flex-col gap-3">
                               {daySessions.map((session, idx) => {
-                                 let sessionLabel = t('rep.regular_work'); 
-                                 if (session.dayStatus === 'rest_day_work') sessionLabel = t('rep.rest_day');
-                                 else if (session.dayStatus?.includes('leave')) sessionLabel = t('rep.leave');
-                                 else if (session.dayStatus === 'permission') sessionLabel = t('rep.permission');
+                                 let sessionLabel = 'عمل اعتيادي'; 
+                                 if (session.dayStatus === 'rest_day_work') sessionLabel = 'عمل في يوم راحة (بديلة)';
+                                 else if (session.dayStatus === 'annual_leave') sessionLabel = 'إجازة سنوية';
+                                 else if (session.dayStatus === 'sick_leave') sessionLabel = 'إجازة مرضية';
+                                 else if (session.dayStatus === 'casual_leave') sessionLabel = 'إجازة عارضة';
+                                 else if (session.dayStatus === 'half_day_leave') sessionLabel = 'نصف يوم عمل / إجازة نصف يوم';
+                                 else if (session.dayStatus === 'compensation') sessionLabel = 'استهلاك بديلة';
+                                 else if (session.dayStatus === 'permission') sessionLabel = 'تصريح';
+                                 else if (session.dayStatus === 'public_holiday') sessionLabel = 'عطلة رسمية';
+                                 else if (session.dayStatus === 'absent') sessionLabel = 'غياب';
+                                 else if (session.dayStatus === 'late') sessionLabel = 'تأخير';
 
                                  const hasNotes = session.notes && session.notes.trim().length > 0;
                                  const overtimeHours = session.overtimeMinutes ? Math.floor(session.overtimeMinutes / 60) : 0;
@@ -442,34 +475,14 @@ export default function ReportsView() {
                )}
             </div>
 
-            {/* Edit Session Dialog */}
-            <Dialog open={!!editingSession} onOpenChange={(open) => !open && setEditingSession(null)}>
-              <DialogContent className="sm:max-w-sm rounded-[2rem] border-white/10" dir={lang === 'ar' ? 'rtl' : 'ltr'}>
-                <DialogHeader><DialogTitle className="text-lg">{t('rep.edit_log')}</DialogTitle></DialogHeader>
-                {editingSession && (
-                  <div className="space-y-4 py-3 text-start">
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="space-y-1">
-                        <Label className="text-xs">{t('rep.entry_time')}</Label>
-                        <Input type="datetime-local" className="rounded-xl h-10 text-xs" value={format(new Date(editingSession.startTime), "yyyy-MM-dd'T'HH:mm")} onChange={(e) => setEditingSession({...editingSession, startTime: e.target.value})}/>
-                      </div>
-                      <div className="space-y-1">
-                        <Label className="text-xs">{t('rep.exit_time')}</Label>
-                        <Input type="datetime-local" className="rounded-xl h-10 text-xs" value={editingSession.endTime ? format(new Date(editingSession.endTime), "yyyy-MM-dd'T'HH:mm") : ''} onChange={(e) => setEditingSession({...editingSession, endTime: e.target.value})}/>
-                      </div>
-                    </div>
-                    <div className="space-y-1">
-                      <Label className="text-xs">{t('t_auto_458')}</Label>
-                      <Input className="rounded-xl h-10 text-xs" value={editingSession.notes || ''} onChange={(e) => setEditingSession({...editingSession, notes: e.target.value})} />
-                    </div>
-                  </div>
-                )}
-                <div className="flex gap-2">
-                   <Button onClick={handleEditSave} className="flex-1 rounded-xl h-12 font-bold">{t('rep.save_changes')}</Button>
-                   <Button onClick={() => { setDeletingSessionId(editingSession?.id || null); setEditingSession(null); }} variant="destructive" className="rounded-xl h-12 px-5"><Trash2 className="w-4 h-4" /></Button>
-                </div>
-              </DialogContent>
-            </Dialog>
+            <UnifiedEntrySheet 
+              open={!!editingSession} 
+              onOpenChange={(open) => {
+                if (!open) setEditingSession(null);
+              }}
+              sessionToEdit={editingSession}
+              allowDateChange={true}
+            />
 
             {/* Confirm Delete Dialog */}
             <Dialog open={!!deletingSessionId} onOpenChange={(open) => !open && setDeletingSessionId(null)}>
@@ -482,6 +495,210 @@ export default function ReportsView() {
                 </div>
               </DialogContent>
             </Dialog>
+         </TabsContent>
+         <TabsContent value="compensations" className="flex flex-col gap-4 mt-0 border-none p-0 outline-none">
+            {(() => {
+               // Get all relevant sessions
+               const actualSessions = sessions.filter(s => 
+                 !s.isArchived && 
+                 (s.isRestDayWork || ['annual_leave', 'sick_leave', 'casual_leave', 'half_day_leave', 'permission', 'permission_1h', 'permission_2h', 'compensation', 'rest_day_work'].includes(s.dayStatus!))
+               );
+
+               const allLoggedDays = new Set(sessions.filter(s => !s.isArchived).map(s => format(new Date(s.startTime), 'yyyy-MM-dd')));
+               
+               // Inject auto-holidays/rest days for the last 60 days
+               const virtualSessions: any[] = [];
+               const now = new Date();
+               for (let i = 1; i <= 60; i++) {
+                 const d = new Date(now.getTime() - i * 24 * 60 * 60 * 1000); // Past days
+                 const dString = format(d, 'yyyy-MM-dd');
+                 if (!allLoggedDays.has(dString)) {
+                   const isPublic = settings.customHolidays?.find(h => h.date === dString);
+                   const isRest = (settings.restDays || []).includes(d.getDay());
+                   if (isPublic || isRest) {
+                     virtualSessions.push({
+                       id: `virtual-${dString}`,
+                       startTime: d.toISOString(),
+                       endTime: d.toISOString(),
+                       duration: 0,
+                       dayStatus: isPublic ? 'public_holiday' : 'rest_day_virtual',
+                       notes: isPublic ? isPublic.name : 'يوم راحة أسبوعية مر دون تسجيل أي بيانات',
+                       isVirtual: true
+                     });
+                   }
+                 }
+               }
+
+               const relevantSessions = [...actualSessions, ...virtualSessions]
+                  .sort((a,b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime());
+               
+               if (relevantSessions.length === 0) {
+                 return (
+                    <div className="flex flex-col items-center justify-center p-8 bg-card/40 border border-dashed border-white/10 rounded-2xl opacity-60 mt-4">
+                       <Palmtree className="w-8 h-8 opacity-40 mb-2" />
+                       <p className="text-xs">{t('t_auto_428')}</p>
+                    </div>
+                 );
+               }
+
+               return (
+                  <div className="space-y-4 mt-2">
+                     {relevantSessions.map(sess => {
+                        const isEarnedComp = sess.isRestDayWork || sess.dayStatus === 'rest_day_work';
+                        const isCompensationConsumed = sess.dayStatus === 'compensation';
+                        const isOtherLeave = ['annual_leave', 'sick_leave', 'casual_leave'].includes(sess.dayStatus || '');
+                        
+                        let cardColor = 'border-white/5 bg-card';
+                        let icon = <Palmtree className="w-4 h-4" />;
+                        let title = t('cal.on_leave') || 'إجازة';
+
+                        if (isEarnedComp) {
+                           cardColor = 'border-emerald-500/20 bg-emerald-500/5';
+                           icon = <Briefcase className="w-4 h-4 text-emerald-500" />;
+                           title = t('t_auto_454') || 'حضور بديلة';
+                        } else if (isCompensationConsumed) {
+                           cardColor = 'border-orange-500/20 bg-orange-500/5';
+                           icon = <Calendar className="w-4 h-4 text-orange-500" />;
+                           title = t('cal.alternative_leave') || 'أخذت كتعويض (يوم بديل)';
+                        } else if (sess.dayStatus === 'annual_leave') {
+                           cardColor = 'border-blue-500/20 bg-blue-500/5';
+                           icon = <Palmtree className="w-4 h-4 text-blue-500" />;
+                           title = t('cal.annual') || 'اعتيادي';
+                        } else if (sess.dayStatus === 'sick_leave') {
+                           cardColor = 'border-red-500/20 bg-red-500/5';
+                           icon = <Activity className="w-4 h-4 text-red-500" />;
+                           title = t('cal.sick') || 'مرضي';
+                        } else if (sess.dayStatus === 'casual_leave') {
+                           cardColor = 'border-amber-500/20 bg-amber-500/5 hover:bg-amber-500/10';
+                           icon = <Palmtree className="w-4 h-4 text-amber-500" />;
+                           title = t('cal.casual') || 'عارضة';
+                        } else if (sess.dayStatus === 'half_day_leave') {
+                           cardColor = 'border-purple-500/20 bg-purple-500/5 hover:bg-purple-500/10';
+                           icon = <Palmtree className="w-4 h-4 text-purple-500" />;
+                           title = t('home.half_day_leave') || 'نصف يوم';
+                        }
+
+                        const isExpanded = expandedLeaveId === sess.id;
+                        
+                        return (
+                           <div key={sess.id} className={`rounded-2xl transition-all overflow-hidden border ${isExpanded ? 'shadow-md border-border/80' : 'shadow-none border-border/40 hover:border-border/60'} bg-card`}>
+                              <div 
+                                 className={`p-3 sm:p-4 flex items-center justify-between cursor-pointer ${cardColor.replace('bg-card', '')}`}
+                                 onClick={() => setExpandedLeaveId(isExpanded ? null : sess.id)}
+                              >
+                                 <div className="flex items-center gap-3 w-full">
+                                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold shrink-0 shadow-sm bg-background border border-white/5`}>
+                                       {icon}
+                                    </div>
+                                    <div className="flex flex-col gap-0.5 flex-1 min-w-0">
+                                        <div className="flex items-center justify-between gap-2 overflow-hidden w-full">
+                                            <span className="font-bold text-sm flex items-center gap-2 truncate">
+                                               {title}
+                                            </span>
+                                        </div>
+                                        <span className="text-xs text-muted-foreground flex items-center gap-1.5 truncate">
+                                           <Calendar className="w-3 h-3 shrink-0" />
+                                           {format(new Date(sess.startTime), 'EEEE, dd MMMM yyyy', { locale: lang === 'ar' ? ar : enUS })}
+                                        </span>
+                                    </div>
+                                 </div>
+                                 <div className="ml-3 sm:ml-4 p-1.5 rounded-full bg-background/50 text-muted-foreground shrink-0 border border-white/5">
+                                    {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                                 </div>
+                              </div>
+                              
+                              {isExpanded && (
+                                 <div className="bg-card p-3 sm:p-4 border-t border-border/50 flex flex-col gap-3">
+                                    <div className="flex items-start justify-between">
+                                       <div className="flex flex-wrap gap-2 text-xs">
+                                         {sess.duration !== undefined && sess.duration > 0 && (
+                                           <span className="bg-primary/10 text-primary px-2 py-1 rounded-md font-bold">{Math.floor(sess.duration/60)} {t('t_auto_9')}</span>
+                                         )}
+                                       </div>
+                                       <div className="flex items-center gap-2">
+                                          <Button variant="ghost" size="icon" className="h-7 w-7 text-primary hover:bg-primary/10 mx-1" onClick={(e) => { e.stopPropagation(); setEditingSession(sess); }}><Edit2 className="w-3.5 h-3.5" /></Button>
+                                          <Button variant="ghost" size="icon" className="h-7 w-7 text-red-500 hover:bg-red-500/10" onClick={(e) => { e.stopPropagation(); setDeletingSessionId(sess.id); }}><Trash2 className="w-3.5 h-3.5" /></Button>
+                                       </div>
+                                    </div>
+
+                                    {/* If string notes exist */}
+                                    {sess.notes && (
+                                      <p className="text-xs text-foreground/80 bg-background/50 p-2 rounded-xl border border-border/50">{sess.notes}</p>
+                                    )}
+
+                                    {/* Earned Comp Specifics: Show details of compensation items linked to it */}
+                                    {isEarnedComp && (() => {
+                                       const compType = sess.restDayCompensation || '1_day';
+                                       let accrued = 0;
+                                       if (compType === '1_day' || compType === '1_day_plus_overtime') accrued = 1;
+                                       else if (compType === '2_days') accrued = 2;
+                                       
+                                       const takenSessions = sessions.filter(t => t.dayStatus === 'compensation' && t.linkedCompensationSessionId === sess.id && !t.isArchived);
+                                       const taken = takenSessions.length;
+                                       const available = accrued - taken;
+                                       
+                                       const validityDays = settings.compensationValidityDays || 30;
+                                       const daysSinceEarned = (new Date().getTime() - new Date(sess.startTime).getTime()) / (1000 * 60 * 60 * 24);
+                                       const isExpired = daysSinceEarned > validityDays && !sess.compensationException;
+
+                                       return (
+                                          <div className="pt-3 border-t border-border/50 mt-2">
+                                             <div className="flex gap-4 text-xs mb-3">
+                                               <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500/50"></span>{t('rep.earned')}: <b>{accrued}</b></span>
+                                               <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-orange-500/50"></span>{t('rep.taken')}: <b>{taken}</b></span>
+                                               <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-primary/50"></span>{t('rep.available')}: <b>{available}</b></span>
+                                             </div>
+                                             
+                                             {isExpired && available > 0 && (
+                                                <div className="text-[10px] text-red-500 font-bold bg-red-500/10 px-2 py-1 rounded-md inline-block mb-2">
+                                                   {t('rep.expired')}
+                                                </div>
+                                             )}
+
+                                             {taken > 0 && (
+                                                <div className="bg-background/80 rounded-2xl p-3 border border-white/5 space-y-2 mt-2">
+                                                   <p className="text-[10px] font-bold text-muted-foreground uppercase">{t('t_auto_455') || 'الأيام التي تم أخذها كتعويض:'}</p>
+                                                   <div className="flex flex-col gap-2 relative">
+                                                      <div className="absolute right-3 top-2 bottom-2 w-px bg-border/60"></div>
+                                                      {takenSessions.sort((a,b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime()).map((ts) => (
+                                                         <div key={ts.id} className="flex relative z-10 items-center gap-2 bg-card pr-8 pl-3 py-2 rounded-xl text-xs border border-white/5 shadow-sm">
+                                                            <div className="absolute right-2 w-2 h-2 rounded-full bg-orange-500 outline outline-2 outline-background shrink-0" />
+                                                            <span className="font-bold whitespace-nowrap">
+                                                               {format(new Date(ts.startTime), 'EEEE, dd MMM', { locale: lang === 'ar' ? ar : enUS })}
+                                                            </span>
+                                                            {ts.notes && <span className="text-muted-foreground text-[10px] truncate max-w-[100px]">{ts.notes}</span>}
+                                                            <div className="ml-auto">
+                                                               <Button variant="ghost" size="icon" className="h-6 w-6 text-primary hover:bg-primary/10" onClick={(e) => { e.stopPropagation(); setEditingSession(ts); }}><Edit2 className="w-3 h-3" /></Button>
+                                                            </div>
+                                                         </div>
+                                                      ))}
+                                                   </div>
+                                                </div>
+                                             )}
+                                          </div>
+                                       );
+                                    })()}
+
+                                    {/* If it is a compensation consumed, show which parent it relates to */}
+                                    {isCompensationConsumed && sess.linkedCompensationSessionId && (() => {
+                                       const parent = sessions.find(s => s.id === sess.linkedCompensationSessionId);
+                                       if (parent) {
+                                          return (
+                                             <div className="mt-2 text-[11px] bg-background/50 border border-white/5 px-3 py-2 rounded-xl text-muted-foreground">
+                                                تعويضاً عن الحضور يوم: <strong className="text-foreground">{format(new Date(parent.startTime), 'dd MMM yyyy', { locale: lang === 'ar' ? ar : enUS })}</strong>
+                                             </div>
+                                          )
+                                       }
+                                       return null;
+                                    })()}
+                                 </div>
+                              )}
+                           </div>
+                        );
+                     })}
+                  </div>
+               );
+            })()}
          </TabsContent>
       </Tabs>
       

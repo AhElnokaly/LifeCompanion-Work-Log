@@ -21,7 +21,7 @@ export default function FeedbackView() {
   const handleSend = () => {
     if (msg.length < 5) return alert(t('t_auto_266'));
     const categoryLabel = CATEGORIES.find(c => c.id === cat)?.label;
-    const text = `📱 *LifeCompanion Feedback*\n📂 التصنيف: ${categoryLabel}\n📝 الرسالة:\n${msg}\n\n📅 التاريخ: ${new Date().toLocaleString('ar-EG')}`;
+    const text = `📱 *Work Companion Feedback*\n📂 التصنيف: ${categoryLabel}\n📝 الرسالة:\n${msg}\n\n📅 التاريخ: ${new Date().toLocaleString('ar-EG')}`;
     const url = `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(text)}`;
     window.open(url, '_blank');
   };

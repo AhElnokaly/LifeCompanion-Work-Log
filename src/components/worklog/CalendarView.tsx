@@ -18,7 +18,8 @@ import { Label } from '../ui/label';
 import { toast } from 'sonner';
 
 import { gregorianToHijri } from '../../lib/hijri';
-import JobsShiftsView from './JobsShiftsView';
+import AdvancedShiftEditor from './AdvancedShiftEditor';
+import { UnifiedEntrySheet } from './UnifiedEntrySheet';
 import { detectPermissionType } from '../../lib/smartAttendance';
 
 export default function CalendarView() {
@@ -32,14 +33,32 @@ export default function CalendarView() {
     startTime: '09:00',
     endTime: '17:00',
     jobId: 'none',
+    restDayCompensation: '1_day' as '1_day' | '2_days' | '1_day_plus_overtime',
+    linkedCompensationSessionId: '',
   });
   const [isPaintingMode, setIsPaintingMode] = useState(false);
   const [selectedPaintShiftId, setSelectedPaintShiftId] = useState<string | null>(null);
-  const [viewType, setViewType] = useState<'monthly' | 'weekly' | 'shifts'>('monthly');
+  const [viewType, setViewType] = useState<'monthly' | 'weekly'>('monthly');
   const [displayMode, setDisplayMode] = useState<'gregorian' | 'hijri'>('gregorian');
   
   const [converterOpen, setConverterOpen] = useState(false);
   const [converterDate, setConverterDate] = useState(format(new Date(), 'yyyy-MM-dd'));
+
+  const getAvailableCompensations = (dateBeingProcessed: Date = selectedDay) => {
+    return sessions.filter(s => (s.isRestDayWork || s.dayStatus === 'rest_day_work') && !s.isArchived).map(s => {
+      let accrued = 0;
+      const compType = s.restDayCompensation || '1_day';
+      if (compType === '1_day' || compType === '1_day_plus_overtime') accrued = 1;
+      else if (compType === '2_days') accrued = 2;
+
+      const validityDays = settings.compensationValidityDays || 30; // default 30
+      const daysSinceEarned = (dateBeingProcessed.getTime() - new Date(s.startTime).getTime()) / (1000 * 60 * 60 * 24);
+      const isExpired = daysSinceEarned > validityDays && !s.compensationException;
+
+      const taken = sessions.filter(t => t.dayStatus === 'compensation' && t.linkedCompensationSessionId === s.id && !t.isArchived).length;
+      return { ...s, availableDays: accrued - taken, isExpired, daysUntilExpiry: Math.floor(validityDays - daysSinceEarned) };
+    }).filter(s => s.availableDays > 0);
+  };
 
   // Helper for custom entry form
   const handleCustomEntry = () => {
@@ -74,17 +93,18 @@ export default function CalendarView() {
          type: 'salary',
          startTime: new Date(startStr).toISOString(),
          ...(hasTime && { endTime: new Date(endStr).toISOString() }),
-         dayStatus: finalType,
+         dayStatus: finalType as any,
          breaks: 0,
          duration: duration,
          location: 'office',
-         notes: additionalNotes
+         notes: additionalNotes,
+         linkedCompensationSessionId: finalType === 'compensation' && customEntryData.linkedCompensationSessionId ? customEntryData.linkedCompensationSessionId : undefined,
        });
     } else {
        const duration = differenceInMinutes(new Date(endStr), new Date(startStr));
        const isRestDay = (settings.restDays || []).includes(selectedDay.getDay()) || isPublicHoliday(selectedDay, settings.customHolidays);
        
-       let compType = isRestDay ? '1_day' as any : undefined;
+       let compType = isRestDay ? customEntryData.restDayCompensation : undefined;
        let baseOvertime = 0;
        if (isRestDay) {
          if (compType === '1_day_plus_overtime') baseOvertime = duration;
@@ -142,7 +162,7 @@ export default function CalendarView() {
     const restDaysWorked = monthSessions.filter(s => s.isRestDayWork).length;
     const comps = monthSessions.filter(s => s.dayStatus === 'compensation').length;
     const sickLeaves = monthSessions.filter(s => s.dayStatus === 'sick_leave').length;
-    const annualLeaves = monthSessions.filter(s => ['annual_leave', 'casual_leave'].includes(s.dayStatus as string)).length;
+    const annualLeaves = monthSessions.filter(s => ['annual_leave', 'casual_leave', 'half_day_leave'].includes(s.dayStatus as string)).reduce((acc, s) => acc + (s.dayStatus === 'half_day_leave' ? 0.5 : 1), 0);
     const permissionsCount = monthSessions.filter(s => ['permission', 'half_day_leave'].includes(s.dayStatus as string)).length;
 
     const weekDays = [t('t_auto_461'), t('t_auto_462'), t('t_auto_463'), t('t_auto_464'), t('t_auto_465'), t('t_auto_466'), t('t_auto_460')];
@@ -221,12 +241,12 @@ export default function CalendarView() {
               }
 
               // Handle Hijri display logic
-              let hDayNum = 1;
+              let hDayStr = '1';
               if (displayMode === 'hijri') {
                  try {
                    const hijriFormatter = new Intl.DateTimeFormat(lang === 'ar' ? 'ar-SA-u-ca-islamic' : 'en-US-u-ca-islamic', { month: 'numeric', day: 'numeric' });
                    const hParts = hijriFormatter.formatToParts(day);
-                   hDayNum = parseInt(hParts.find(p => p.type === 'day')?.value || '1');
+                   hDayStr = hParts.find(p => p.type === 'day')?.value || '1';
                  } catch(e) {}
               }
 
@@ -247,7 +267,7 @@ export default function CalendarView() {
                       (isHol || isRestD) ? 'text-rose-500 hover:bg-rose-500/10' :
                       isToday ? 'bg-secondary text-primary' : 'text-foreground/90 hover:bg-secondary/40'}
                   `}>
-                    {displayMode === 'gregorian' ? format(day, 'd') : hDayNum}
+                    {displayMode === 'gregorian' ? format(day, 'd') : hDayStr}
                   </span>
                   
                   {/* Indicator Section */}
@@ -423,38 +443,59 @@ export default function CalendarView() {
         {/* Dynamic form based on type */}
         <div className="flex flex-col gap-4">
           {['annual_leave', 'sick_leave', 'casual_leave', 'compensation'].includes(customEntryData.type) && (
-             <div className="space-y-2">
-               <Label className="text-muted-foreground font-bold">{t('cal.leave_type')}</Label>
-               <div className="flex flex-wrap gap-2">
-                 <Button 
-                   variant={customEntryData.type === 'annual_leave' ? 'default' : 'secondary'}
-                   className={`rounded-xl h-12 flex-1 font-bold ${customEntryData.type === 'annual_leave' ? 'bg-orange-600 hover:bg-orange-700 text-white' : ''}`}
-                   onClick={() => setCustomEntryData({...customEntryData, type: 'annual_leave'})}
-                 >
-                   {t('cal.casual')}
-                                                 </Button>
-                 <Button 
-                   variant={customEntryData.type === 'sick_leave' ? 'default' : 'secondary'}
-                   className={`rounded-xl h-12 flex-1 font-bold ${customEntryData.type === 'sick_leave' ? 'bg-red-600 hover:bg-red-700 text-white' : ''}`}
-                   onClick={() => setCustomEntryData({...customEntryData, type: 'sick_leave'})}
-                 >
-                   {t('t_auto_208')}
-                                                 </Button>
-                 <Button 
-                   variant={customEntryData.type === 'casual_leave' ? 'default' : 'secondary'}
-                   className={`rounded-xl h-12 flex-1 font-bold ${customEntryData.type === 'casual_leave' ? 'bg-amber-600 hover:bg-amber-700 text-white' : ''}`}
-                   onClick={() => setCustomEntryData({...customEntryData, type: 'casual_leave'})}
-                 >
-                   {t('cal.unpaid')}
-                                                 </Button>
-                 <Button 
-                   variant={customEntryData.type === 'compensation' ? 'default' : 'secondary'}
-                   className={`rounded-xl h-12 flex-1 font-bold ${customEntryData.type === 'compensation' ? 'bg-emerald-600 hover:bg-emerald-700 text-white' : ''}`}
-                   onClick={() => setCustomEntryData({...customEntryData, type: 'compensation'})}
-                 >
-                   {t('cal.alternative_leave')}
-                                                 </Button>
+             <div className="space-y-4">
+               <div className="space-y-2">
+                 <Label className="text-muted-foreground font-bold">{t('cal.leave_type')}</Label>
+                 <div className="flex flex-wrap gap-2">
+                   <Button 
+                     variant={customEntryData.type === 'annual_leave' ? 'default' : 'secondary'}
+                     className={`rounded-xl h-12 flex-1 font-bold ${customEntryData.type === 'annual_leave' ? 'bg-orange-600 hover:bg-orange-700 text-white' : ''}`}
+                     onClick={() => setCustomEntryData({...customEntryData, type: 'annual_leave'})}
+                   >
+                     {t('cal.casual')}
+                                                   </Button>
+                   <Button 
+                     variant={customEntryData.type === 'sick_leave' ? 'default' : 'secondary'}
+                     className={`rounded-xl h-12 flex-1 font-bold ${customEntryData.type === 'sick_leave' ? 'bg-red-600 hover:bg-red-700 text-white' : ''}`}
+                     onClick={() => setCustomEntryData({...customEntryData, type: 'sick_leave'})}
+                   >
+                     {t('t_auto_208')}
+                                                   </Button>
+                   <Button 
+                     variant={customEntryData.type === 'casual_leave' ? 'default' : 'secondary'}
+                     className={`rounded-xl h-12 flex-1 font-bold ${customEntryData.type === 'casual_leave' ? 'bg-amber-600 hover:bg-amber-700 text-white' : ''}`}
+                     onClick={() => setCustomEntryData({...customEntryData, type: 'casual_leave'})}
+                   >
+                     {t('cal.unpaid')}
+                                                   </Button>
+                   <Button 
+                     variant={customEntryData.type === 'compensation' ? 'default' : 'secondary'}
+                     className={`rounded-xl h-12 flex-1 font-bold ${customEntryData.type === 'compensation' ? 'bg-emerald-600 hover:bg-emerald-700 text-white' : ''}`}
+                     onClick={() => setCustomEntryData({...customEntryData, type: 'compensation'})}
+                   >
+                     {t('cal.alternative_leave')}
+                                                   </Button>
+                 </div>
                </div>
+               
+               {customEntryData.type === 'compensation' && (
+                  <div className="space-y-2">
+                     <Label className="text-muted-foreground font-bold text-emerald-600 dark:text-emerald-500">اختر البدل من الأيام السابقة</Label>
+                     <select 
+                       className="w-full rounded-xl border border-emerald-500/50 bg-emerald-500/10 px-3 py-3 text-sm text-emerald-600 font-bold"
+                       value={customEntryData.linkedCompensationSessionId}
+                       onChange={e => setCustomEntryData({...customEntryData, linkedCompensationSessionId: e.target.value})}
+                     >
+                       <option value="">-- {t('home.day')} --</option>
+                       {getAvailableCompensations(selectedDay).map(comp => (
+                         <option key={comp.id} value={comp.id} disabled={comp.isExpired}>
+                           {format(new Date(comp.startTime), t('t_auto_300'), {locale: lang === 'ar' ? ar : enUS})} 
+                           {t('t_auto_301')} {comp.availableDays} {t('t_auto_302')}{comp.isExpired ? ' - ' + t('home.expired') : ''}
+                         </option>
+                       ))}
+                     </select>
+                  </div>
+               )}
              </div>
           )}
 
@@ -532,11 +573,29 @@ export default function CalendarView() {
                   className="h-14 rounded-2xl bg-secondary/30 border-none font-bold text-lg w-full"
                 />
               </div>
+
+               {((settings.restDays || []).includes(selectedDay.getDay()) || isPublicHoliday(selectedDay, settings.customHolidays)) && (
+                    <div className="space-y-2">
+                       <Label className="text-muted-foreground font-bold">طبيعة البدل (راحة/عطلة)</Label>
+                       <div className="relative">
+                         <select 
+                           className="w-full h-14 rounded-2xl border-none bg-orange-500/10 px-4 py-2 font-bold text-orange-600 appearance-none"
+                           value={customEntryData.restDayCompensation || '1_day'}
+                           onChange={e => setCustomEntryData({...customEntryData, restDayCompensation: e.target.value as any})}
+                         >
+                           <option value="1_day">{t('t_auto_353')}</option>
+                           <option value="1_day_plus_overtime">{t('t_auto_354')}</option>
+                           <option value="2_days">{t('t_auto_355')}</option>
+                         </select>
+                       </div>
+                    </div>
+               )}
             </>
           )}
 
           <Button 
             className="w-full h-14 rounded-2xl bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-lg mt-2 shadow-sm"
+            disabled={customEntryData.type === 'compensation' && (!customEntryData.linkedCompensationSessionId || getAvailableCompensations(selectedDay).length === 0)}
             onClick={handleCustomEntry}
           >
              {t('cal.log')}
@@ -589,8 +648,6 @@ export default function CalendarView() {
   };
 
   const renderHolidaysTable = () => {
-    if (viewType === 'shifts') return null;
-    
     // Sort holidays by date
     const hols = [...(settings.customHolidays || [])].sort((a,b) => a.date.localeCompare(b.date));
     
@@ -724,8 +781,6 @@ export default function CalendarView() {
         return renderMonthlyGrid();
       case 'weekly':
         return renderWeeklyGrid();
-      case 'shifts':
-        return <JobsShiftsView />;
       default:
         return null;
     }
@@ -738,14 +793,13 @@ export default function CalendarView() {
       <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-5 mt-2 px-2 shrink-0">
         <div className="flex items-center gap-4">
           <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-indigo-500/20 to-purple-500/20 flex items-center justify-center text-indigo-500 shadow-sm border border-indigo-500/10">
-            {viewType === 'shifts' ? <Briefcase className="w-6 h-6" /> : <CalendarIcon className="w-6 h-6" />}
+            <CalendarIcon className="w-6 h-6" />
           </div>
           <div className="flex flex-col">
-            <h2 className="text-2xl font-black tracking-tight">{viewType === 'shifts' ? t('cal.schedule_shifts') : t('cal.advanced_calendar')}</h2>
+            <h2 className="text-2xl font-black tracking-tight">{t('cal.advanced_calendar')}</h2>
             <div className="text-muted-foreground text-sm flex items-center gap-2 mt-0.5 font-medium">
               {viewType === 'monthly' && format(currentDate, 'MMMM yyyy', { locale: lang === 'ar' ? ar : enUS })}
               {viewType === 'weekly' && `الأسبوع: ${format(startOfWeek(currentDate, {weekStartsOn:6}), 'd MMM')} - ${format(endOfWeek(currentDate, {weekStartsOn:6}), 'd MMM')}`}
-              {viewType === 'shifts' && t('cal.setup_shifts_jobs')}
             </div>
           </div>
         </div>
@@ -753,31 +807,27 @@ export default function CalendarView() {
         <div className="flex flex-col sm:flex-row w-full xl:w-auto items-stretch sm:items-center gap-3 bg-secondary/20 p-1.5 rounded-[1.5rem] shadow-sm border border-border/50 backdrop-blur-md">
           
           {/* Smart Toggle: Gregorian / Hijri */}
-          {viewType !== 'shifts' && (
-             <div className="flex bg-secondary/40 p-1 rounded-2xl w-full sm:w-auto">
-                <button 
-                   onClick={() => setDisplayMode('gregorian')}
-                   className={`flex-1 sm:px-6 py-2 rounded-xl text-[13px] sm:text-sm transition-all duration-200 ${displayMode === 'gregorian' ? 'bg-background font-bold text-indigo-500 shadow-sm' : 'text-muted-foreground hover:text-foreground font-medium'}`}
-                >
-                   {t('cal.gregorian')}
-                                              </button>
-                <button 
-                   onClick={() => setDisplayMode('hijri')}
-                   className={`flex-1 sm:px-6 py-2 rounded-xl text-[13px] sm:text-sm transition-all duration-200 ${displayMode === 'hijri' ? 'bg-background font-bold text-indigo-500 shadow-sm' : 'text-muted-foreground hover:text-foreground font-medium'}`}
-                >
-                   {t('cal.hijri')}
-                                              </button>
-             </div>
-          )}
+          <div className="flex bg-secondary/40 p-1 rounded-2xl w-full sm:w-auto">
+            <button 
+                onClick={() => setDisplayMode('gregorian')}
+                className={`flex-1 sm:px-6 py-2 rounded-xl text-[13px] sm:text-sm transition-all duration-200 ${displayMode === 'gregorian' ? 'bg-background font-bold text-indigo-500 shadow-sm' : 'text-muted-foreground hover:text-foreground font-medium'}`}
+            >
+                {t('cal.gregorian')}
+            </button>
+            <button 
+                onClick={() => setDisplayMode('hijri')}
+                className={`flex-1 sm:px-6 py-2 rounded-xl text-[13px] sm:text-sm transition-all duration-200 ${displayMode === 'hijri' ? 'bg-background font-bold text-indigo-500 shadow-sm' : 'text-muted-foreground hover:text-foreground font-medium'}`}
+            >
+                {t('cal.hijri')}
+            </button>
+          </div>
 
-          {viewType !== 'shifts' && (
-             <Button variant="outline" size="sm" onClick={() => setConverterOpen(true)} className="h-10 sm:h-auto rounded-2xl sm:rounded-xl font-bold bg-secondary/30 hover:bg-secondary/60 flex-shrink-0 px-4 border-transparent shadow-none" title={t('cal.date_converter')}>
-               <RefreshCw className="w-4 h-4 ml-1.5" />
-               <span className="inline-block">{t('cal.date_converter')}</span>
-             </Button>
-          )}
+          <Button variant="outline" size="sm" onClick={() => setConverterOpen(true)} className="h-10 sm:h-auto rounded-2xl sm:rounded-xl font-bold bg-secondary/30 hover:bg-secondary/60 flex-shrink-0 px-4 border-transparent shadow-none" title={t('cal.date_converter')}>
+            <RefreshCw className="w-4 h-4 ml-1.5" />
+            <span className="inline-block">{t('cal.date_converter')}</span>
+          </Button>
 
-          {viewType !== 'shifts' && <div className="hidden sm:block w-px h-8 bg-border/50 self-center mx-1"></div>}
+          <div className="hidden sm:block w-px h-8 bg-border/50 self-center mx-1"></div>
 
           {/* View Toggles */}
           <div className="flex bg-secondary/40 p-1 rounded-2xl w-full sm:w-auto flex-wrap sm:flex-nowrap gap-1">
@@ -805,18 +855,10 @@ export default function CalendarView() {
             >
               <Palette className="w-4 h-4 mr-1.5" /> {t('cal.scheduling')}
                                       </Button>
-            <Button 
-              variant={viewType === 'shifts' ? 'secondary' : 'ghost'} 
-              size="sm" 
-              className={`flex-1 min-w-[70px] h-10 text-[13px] sm:text-sm rounded-xl transition-all ${viewType === 'shifts' ? 'font-bold bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
-              onClick={() => { setViewType('shifts'); setIsPaintingMode(false); }}
-            >
-              <Briefcase className="w-4 h-4 mr-1.5" /> {t('cal.jobs')}
-                                      </Button>
           </div>
 
           {/* Navigation */}
-          {viewType !== 'shifts' && viewType !== 'monthly' && (
+          {viewType !== 'monthly' && (
             <div className="flex items-center gap-1 w-full sm:w-auto justify-center">
               <Button variant="ghost" size="icon" onClick={nextPeriod} className="h-9 w-9 rounded-xl hover:bg-secondary/50">
                 <ChevronRight className="w-5 h-5" />
@@ -835,44 +877,39 @@ export default function CalendarView() {
 
       <div className="flex-1 overflow-y-auto px-2">
         {isPaintingMode && (
-          <div className="flex flex-wrap gap-2 p-4 mt-2 bg-card/80 backdrop-blur-xl border border-indigo-500/30 rounded-2xl justify-center animate-in slide-in-from-top-4 shadow-md">
-            <p className="w-full text-center text-xs font-bold text-muted-foreground mb-1">{t('cal.select_shift_click_days')}</p>
-            {shifts.map(shift => (
-              <Button
-                key={shift.id}
-                variant={selectedPaintShiftId === shift.id ? 'default' : 'outline'}
-                size="sm"
-                className={`rounded-xl h-9 px-3 transition-all font-bold ${selectedPaintShiftId === shift.id ? 'border-2 scale-105' : 'opacity-80 hover:opacity-100'}`}
-                style={selectedPaintShiftId === shift.id ? { borderColor: shift.color, backgroundColor: shift.color + '20', color: shift.color } : {}}
-                onClick={() => setSelectedPaintShiftId(shift.id)}
-              >
-                <div className="w-2.5 h-2.5 rounded-full ml-1.5 shadow-sm" style={{ backgroundColor: shift.color }}/>
-                {shift.name} ({shift.startTime})
-              </Button>
-            ))}
-            {shifts.length === 0 && <span className="text-xs text-amber-500">{t('t_auto_221')}</span>}
+          <div className="flex flex-col gap-2 p-4 mt-2 bg-card/80 backdrop-blur-xl border border-indigo-500/30 rounded-2xl justify-center animate-in slide-in-from-top-4 shadow-md">
+            <div className="flex flex-wrap gap-2 justify-center w-full">
+              <p className="w-full text-center text-xs font-bold text-muted-foreground mb-1">{t('cal.select_shift_click_days')}</p>
+              {shifts.map(shift => (
+                <Button
+                  key={shift.id}
+                  variant={selectedPaintShiftId === shift.id ? 'default' : 'outline'}
+                  size="sm"
+                  className={`rounded-xl h-9 px-3 transition-all font-bold ${selectedPaintShiftId === shift.id ? 'border-2 scale-105' : 'opacity-80 hover:opacity-100'}`}
+                  style={selectedPaintShiftId === shift.id ? { borderColor: shift.color, backgroundColor: shift.color + '20', color: shift.color } : {}}
+                  onClick={() => setSelectedPaintShiftId(shift.id)}
+                >
+                  <div className="w-2.5 h-2.5 rounded-full ml-1.5 shadow-sm" style={{ backgroundColor: shift.color }}/>
+                  {shift.name} ({shift.startTime})
+                </Button>
+              ))}
+              {shifts.length === 0 && <span className="text-xs text-amber-500">{t('t_auto_221')}</span>}
+            </div>
+            
+            <AdvancedShiftEditor />
+            
           </div>
         )}
         {renderCurrentView()}
         {renderHolidaysTable()}
       </div>
 
-      <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
-        <SheetContent side="bottom" className="rounded-t-[2rem] max-h-[95vh] overflow-y-auto z-[100] p-4 pb-20">
-           <SheetHeader className="pb-2">
-             <SheetTitle className="text-2xl font-black text-right mb-1">
-                {t('cal.edit_log')}
-                                       </SheetTitle>
-             <div className="text-xs text-muted-foreground font-bold text-right flex gap-1 items-center justify-end">
-                <span>{new Intl.DateTimeFormat(lang === 'ar' ? 'ar-SA-u-ca-islamic' : 'en-US-u-ca-islamic', { day: 'numeric', month: 'long', year: 'numeric' }).format(selectedDay)}</span>
-                <span className="w-1 h-1 rounded-full bg-border inline-block" />
-                <span>{format(selectedDay, t('t_auto_222'), { locale: lang === 'ar' ? ar : enUS })}</span>
-                <CalendarIcon className="w-3 h-3 text-primary ml-1" />
-             </div>
-           </SheetHeader>
-           {renderDayDetails()}
-        </SheetContent>
-      </Sheet>
+      <UnifiedEntrySheet 
+        open={sheetOpen} 
+        onOpenChange={setSheetOpen} 
+        initialDate={selectedDay}
+        allowDateChange={false}
+      />
 
       <Sheet open={converterOpen} onOpenChange={setConverterOpen}>
          <SheetContent side="bottom" className="rounded-t-[2rem] max-h-[85vh] z-[110] p-6 text-center shadow-2xl">

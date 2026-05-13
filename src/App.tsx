@@ -38,6 +38,23 @@ function AppContent() {
     }
   }, [activeSession, settings?.onboardingCompleted, startSession]);
 
+  useEffect(() => {
+    // Apply dynamic holiday themes
+    if (settings && settings.customHolidays && settings.customHolidays.length > 0) {
+      const today = new Date().toISOString().split('T')[0];
+      const activeHoliday = settings.customHolidays.find(h => h.date === today);
+      const root = window.document.documentElement;
+      
+      root.classList.remove('theme-ramadan', 'theme-eid', 'theme-holiday');
+      
+      if (activeHoliday) {
+        if (activeHoliday.name.includes('رمضان')) root.classList.add('theme-ramadan');
+        else if (activeHoliday.name.includes('عيد')) root.classList.add('theme-eid');
+        else root.classList.add('theme-holiday');
+      }
+    }
+  }, [settings?.customHolidays]);
+
   if (loading) {
      return <div className="min-h-screen flex items-center justify-center bg-background"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>;
   }

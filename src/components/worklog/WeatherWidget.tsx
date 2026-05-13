@@ -23,17 +23,50 @@ export default function WeatherWidget({ variant = 'standalone', shiftStartHour, 
     let isMounted = true;
 
     const fetchWeather = async (latitude: number, longitude: number) => {
+      // Check cache first
+      const cachedWeatherStr = localStorage.getItem('weather_cache');
+      const cachedLoc = localStorage.getItem('weather_loc_cache');
+      const isOnline = navigator.onLine !== false;
+      
+      if (cachedWeatherStr) {
+         try {
+           const parsedCache = JSON.parse(cachedWeatherStr);
+           const age = Date.now() - parsedCache.timestamp;
+           // Use cache if under 1 hr old, OR if offline and under 24 hr old
+           if (age < 3600000 || (!isOnline && age < 86400000)) {
+               const result = parsedCache.data;
+               if (isMounted) {
+                 setData(result);
+                 if (cachedLoc) setLocationName(cachedLoc);
+                 generateTip(result.current.weather_code, result.current.temperature_2m);
+                 if (shiftStartHour !== undefined && shiftEndHour !== undefined && shiftStartHour !== null && shiftEndHour !== null) {
+                    generateShiftSummary(result, shiftStartHour, shiftEndHour);
+                 }
+                 setLoading(false);
+               }
+               return; // Exit without fetching
+           }
+         } catch(e) {}
+      }
+
       try {
         const res = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,weather_code,wind_speed_10m&hourly=temperature_2m,weather_code&timezone=auto`);
         if (!res.ok) throw new Error('Network response was not ok');
         const result = await res.json();
         
+        // Cache weather data for 48 hours
+        localStorage.setItem('weather_cache', JSON.stringify({
+          data: result,
+          timestamp: Date.now()
+        }));
+
         let locName = null;
         try {
            const geoRes = await fetch(`https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${latitude}&longitude=${longitude}&localityLanguage=ar`);
            if (geoRes.ok) {
               const geoData = await geoRes.json();
               locName = geoData.city || geoData.locality || geoData.principalSubdivision || t('t_auto_515');
+              localStorage.setItem('weather_loc_cache', locName);
            }
         } catch (e) {}
         
@@ -49,6 +82,32 @@ export default function WeatherWidget({ variant = 'standalone', shiftStartHour, 
         }
       } catch (err) {
         if (isMounted) {
+          // Attempt to load from cache
+          const cachedWeather = localStorage.getItem('weather_cache');
+          const cachedLoc = localStorage.getItem('weather_loc_cache');
+          
+          if (cachedWeather) {
+            try {
+              const parsedCache = JSON.parse(cachedWeather);
+              // Fallback cache logic if fetch fails
+              const age = Date.now() - parsedCache.timestamp;
+              if (age < 86400000) { // 24 hours fallback
+                const result = parsedCache.data;
+                setData(result);
+                if (cachedLoc) setLocationName(cachedLoc);
+                generateTip(result.current.weather_code, result.current.temperature_2m);
+                
+                if (shiftStartHour !== undefined && shiftEndHour !== undefined && shiftStartHour !== null && shiftEndHour !== null) {
+                   generateShiftSummary(result, shiftStartHour, shiftEndHour);
+                }
+                setLoading(false);
+                return; // Suppress error since we have cached data
+              }
+            } catch (e) {
+               // ignore parse errors
+            }
+          }
+          
           setError(t('t_auto_516'));
           setLoading(false);
         }

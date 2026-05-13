@@ -13,7 +13,7 @@ export default function SupportQAView() {
 
   const sendWhatsApp = (type: string) => {
     if (!feedback.trim()) return;
-    const text = encodeURIComponent(`*${type}*\n${feedback}\n\n---\nمُرسَل من تطبيق LifeCompanion`);
+    const text = encodeURIComponent(`*${type}*\n${feedback}\n\n---\nمُرسَل من تطبيق Work Companion`);
     const url = `https://wa.me/${WHATSAPP_NUMBER}?text=${text}`;
     window.open(url, '_blank');
     setFeedback('');
@@ -123,7 +123,7 @@ export default function SupportQAView() {
 
           <Card 
             className="p-4 bg-primary/10 border-primary/20 rounded-2xl flex items-center gap-4 cursor-pointer hover:bg-primary/20 transition-colors"
-            onClick={() => window.open(`https://wa.me/?text=${encodeURIComponent('Hello, I need support with LifeCompanion App')}`, '_blank')}
+            onClick={() => window.open(`https://wa.me/?text=${encodeURIComponent('Hello, I need support with Work Companion App')}`, '_blank')}
           >
             <div className="w-10 h-10 rounded-full bg-primary/20 flex shrink-0 items-center justify-center text-primary">
               <Phone className="w-5 h-5" />

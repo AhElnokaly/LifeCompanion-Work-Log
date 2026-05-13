@@ -23,7 +23,7 @@ export const generateEgyptianHolidays = (currentYear: number): {date: string, na
 
      let hMonth = 0, hDay = 0;
      try {
-        const hijriFormatter = new Intl.DateTimeFormat('en-u-ca-islamic', { month: 'numeric', day: 'numeric' });
+        const hijriFormatter = new Intl.DateTimeFormat('en-US-u-ca-islamic-nu-latn', { month: 'numeric', day: 'numeric' });
         const hParts = hijriFormatter.formatToParts(day);
         const mPart = hParts.find(p => p.type === 'month')?.value;
         const dPart = hParts.find(p => p.type === 'day')?.value;
@@ -53,6 +53,29 @@ export const generateEgyptianHolidays = (currentYear: number): {date: string, na
   }
   
   return generatedHolidays.sort((a,b) => a.date.localeCompare(b.date));
+};
+
+export const getRestDaysForDate = (day: Date, settings: any): number[] => {
+  if (!settings.restDaysSchedule || settings.restDaysSchedule.length === 0) return settings.restDays || [];
+  const targetDate = day.getTime();
+  
+  // Sort schedule so newest applied first
+  const sortedSchedule = [...settings.restDaysSchedule].sort((a,b) => new Date(b.fromDate).getTime() - new Date(a.fromDate).getTime());
+  
+  for (const sch of sortedSchedule) {
+    if (targetDate >= new Date(sch.fromDate).getTime()) {
+      return sch.restDays;
+    }
+  }
+  
+  // If targetDate is older than the oldest schedule record, return the originalRestDays of the oldest record
+  // (We'll store originalRestDays when we create a schedule)
+  const oldestSch = sortedSchedule[sortedSchedule.length - 1];
+  return oldestSch.originalRestDays !== undefined ? oldestSch.originalRestDays : (settings.restDays || []);
+};
+
+export const isRestDayForDate = (day: Date, settings: any): boolean => {
+  return getRestDaysForDate(day, settings).includes(day.getDay()) || isPublicHoliday(day, settings.customHolidays);
 };
 
 export const isPublicHoliday = (day: Date, customHolidays?: {date: string, name: string}[]): boolean => {
@@ -112,7 +135,7 @@ interface WorkLogContextType {
 const defaultSettings: WorkSettings = {
   system: 'fixed',
   dailyHours: 8,
-  monthlyPermissions: 8,
+  monthlyPermissions: 2,
   annualLeaves: 21,
   restDays: [5, 6], // Friday, Saturday
   modules: {
@@ -277,6 +300,30 @@ export const WorkLogProvider: React.FC<{ children: React.ReactNode }> = ({ child
       sendAppNotification('تم تسجيل الحضور بنجاح', { body: 'نتمنى لك يوم عمل مثمر! يعتمد عليك المحرك الذكي في تتبع إنتاجيتك.' });
     }
     toast.success('تم تسجيل الحضور بنجاح');
+
+    // Smart attendance detection for Rest Days
+    if (isRestDayWork && !overrideData?.restDayCompensation) {
+      setTimeout(() => {
+        toast('🚨 تنبيه: حضور في يوم إجازة!', {
+          description: 'أنت تسجل حضور في يوم مصنف كعطلة أو راحة في إعداداتك. كيف تود احتساب هذا اليوم؟',
+          duration: 15000,
+          action: {
+            label: 'عائد نقدي إضافي (Overtime)',
+            onClick: () => {
+              updateActiveSession({ restDayCompensation: '1_day_plus_overtime' });
+              toast.success('تم تحديد اليوم كعمل إضافي (Overtime)');
+            }
+          },
+          cancel: {
+            label: 'إضافة كرصيد يوم بديل',
+            onClick: () => {
+              updateActiveSession({ restDayCompensation: '1_day' });
+              toast.success('تم التحديد للحصول على يوم بديل');
+            }
+          }
+        });
+      }, 500);
+    }
   };
 
   const calculateOvertime = (durationMins: number, isRestDay: boolean, compType?: '1_day' | '2_days' | '1_day_plus_overtime') => {
@@ -384,8 +431,49 @@ export const WorkLogProvider: React.FC<{ children: React.ReactNode }> = ({ child
   };
 
   const addSession = (session: WorkSession) => {
-    const isRestDay = session.isRestDayWork || false;
+    // Overlap check
+    if (session.startTime && session.endTime && (session.dayStatus === 'work' || session.dayStatus === 'rest_day_work')) {
+      const newStart = new Date(session.startTime).getTime();
+      const newEnd = new Date(session.endTime).getTime();
+      
+      const hasOverlap = sessions.some(s => {
+        if (s.id === session.id || s.isArchived) return false;
+        if (s.dayStatus !== 'work' && s.dayStatus !== 'rest_day_work') return false;
+        if (!s.startTime || !s.endTime) return false;
+        const existsStart = new Date(s.startTime).getTime();
+        const existsEnd = new Date(s.endTime).getTime();
+        // Check overlap
+        return (newStart < existsEnd && newEnd > existsStart);
+      });
+      
+      // Allow projects to overlap as they act like "tasks", but main work sessions shouldn't overlap
+      if (hasOverlap && session.type !== 'project') {
+         toast.error('لا يمكن تسجيل فترتي عمل متداخلتين. تأكد من مواعيد الحضور والانصراف.');
+         return; // Cancel insertion
+      }
+    }
+    let isRestDay = session.isRestDayWork || false;
     let duration = session.duration || 0;
+    
+    // Smart verification for manual entries
+    if (session.startTime) {
+       const sDate = new Date(session.startTime);
+       const dayOfWeek = sDate.getDay();
+       const isActuallyHoliday = settings.restDays.includes(dayOfWeek) || isPublicHoliday(sDate, settings.customHolidays);
+
+       if (session.dayStatus === 'work' && isActuallyHoliday && !isRestDay) {
+          if (window.confirm('🚨 تنبيه ذكي: أنت تسجل يوم عمل في تاريخ يُعتبر عطلة رسمية أو يعتب يوم راحة! هل تود اعتباره "عمل في يوم عطلة" (Overtime / Compensation)؟')) {
+             isRestDay = true;
+             session.isRestDayWork = true;
+             session.restDayCompensation = '1_day_plus_overtime';
+          }
+       } else if (['annual_leave', 'half_day_leave', 'casual_leave'].includes(session.dayStatus || '') && isActuallyHoliday) {
+          if (window.confirm('🚨 تنبيه ذكي: هذا التاريخ المحدد يُعتبر بالفعل عطلة رسمية بالدولة أو يوم راحة! هل تود تسجيله كـ "عطلة رسمية" بدلاً من إجازة تخصم من رصيدك السنوي؟')) {
+             session.dayStatus = 'public_holiday';
+             session.notes = 'عطلة رسمية / يوم راحة (تصحيح ذكي للرصيد)';
+          }
+       }
+    }
     
     if (!duration && session.startTime && session.endTime) {
       duration = Math.round((new Date(session.endTime).getTime() - new Date(session.startTime).getTime()) / 60000);
@@ -393,10 +481,34 @@ export const WorkLogProvider: React.FC<{ children: React.ReactNode }> = ({ child
     
     const overtimeMinutes = session.overtimeMinutes !== undefined ? session.overtimeMinutes : calculateOvertime(duration, isRestDay, session.restDayCompensation);
     
-    setSessions([...sessions, { ...session, duration, overtimeMinutes }]);
+    setSessions([...sessions, { ...session, isRestDayWork: isRestDay, duration, overtimeMinutes }]);
   };
 
   const updateSession = (id: string, updates: Partial<WorkSession>) => {
+    // Overlap check for updates
+    const existingSession = sessions.find(s => s.id === id);
+    if (existingSession && (updates.startTime || updates.endTime)) {
+      const newStart = updates.startTime ? new Date(updates.startTime).getTime() : new Date(existingSession.startTime).getTime();
+      const newEnd = updates.endTime ? new Date(updates.endTime).getTime() : (existingSession.endTime ? new Date(existingSession.endTime).getTime() : null);
+      const newDayStatus = updates.dayStatus !== undefined ? updates.dayStatus : existingSession.dayStatus;
+      const newType = updates.type !== undefined ? updates.type : existingSession.type;
+      
+      if (newEnd && (newDayStatus === 'work' || newDayStatus === 'rest_day_work')) {
+        const hasOverlap = sessions.some(s => {
+          if (s.id === id || s.isArchived) return false;
+          if (s.dayStatus !== 'work' && s.dayStatus !== 'rest_day_work') return false;
+          if (!s.startTime || !s.endTime) return false;
+          const existsStart = new Date(s.startTime).getTime();
+          const existsEnd = new Date(s.endTime).getTime();
+          return (newStart < existsEnd && newEnd > existsStart);
+        });
+        
+        if (hasOverlap && newType !== 'project') {
+           toast.error('لا يمكن تعديل وقت العمل ليتداخل مع فترة عمل أخرى مسجلة.');
+           return; // Cancel update
+        }
+      }
+    }
     setSessions(current => current.map(sess => {
       if (sess.id !== id) return sess;
       const updated = { ...sess, ...updates };
@@ -483,8 +595,13 @@ export const WorkLogProvider: React.FC<{ children: React.ReactNode }> = ({ child
     
     // Annual leaves
     const usedAnnualLeaves = sessions
-      .filter(s => s.dayStatus === "annual_leave" && new Date(s.startTime).getFullYear() === currentYear)
-      .reduce((acc, s) => acc + (s.duration === (settings.dailyHours * 60) / 2 ? 0.5 : 1), 0);
+      .filter(s => (s.dayStatus === "annual_leave" || s.dayStatus === "half_day_leave") && new Date(s.startTime).getFullYear() === currentYear && !s.isArchived)
+      .filter(s => {
+        const d = new Date(s.startTime);
+        const isRest = (settings.restDays || []).includes(d.getDay()) || isPublicHoliday(d, settings.customHolidays);
+        return !isRest;
+      })
+      .reduce((acc, s) => acc + (s.dayStatus === "half_day_leave" ? 0.5 : 1), 0);
     const remainingAnnualLeaves = settings.annualLeaves - usedAnnualLeaves;
 
     // Permissions (hours)
@@ -498,9 +615,10 @@ export const WorkLogProvider: React.FC<{ children: React.ReactNode }> = ({ child
     let compensationDaysTaken = sessions.filter(s => s.dayStatus === 'compensation').length;
 
     sessions.forEach(s => {
-      if (s.isRestDayWork) {
-        if (s.restDayCompensation === '1_day' || s.restDayCompensation === '1_day_plus_overtime') compensationDaysAccrued += 1;
-        else if (s.restDayCompensation === '2_days') compensationDaysAccrued += 2;
+      if (s.isRestDayWork || s.dayStatus === 'rest_day_work') {
+        const compType = s.restDayCompensation || '1_day';
+        if (compType === '1_day' || compType === '1_day_plus_overtime') compensationDaysAccrued += 1;
+        else if (compType === '2_days') compensationDaysAccrued += 2;
       }
     });
     
@@ -557,6 +675,17 @@ export const WorkLogProvider: React.FC<{ children: React.ReactNode }> = ({ child
       newSession.linkedCompensationSessionId = data?.linkedId;
       newSession.duration = settings.dailyHours * 60;
       newSession.notes = data?.note || 'يوم بديل لعمل في يوم راحة';
+    }
+
+    const sDate = new Date(newSession.startTime);
+    const dayOfWeek = sDate.getDay();
+    const isActuallyHoliday = settings.restDays.includes(dayOfWeek) || isPublicHoliday(sDate, settings.customHolidays);
+
+    if (isActuallyHoliday && ['annual_leave', 'half_day_leave', 'casual_leave'].includes(type) && (!data || !data.force)) {
+      if (window.confirm('🚨 تنبيه ذكي: هذا اليوم الذي تحاول تسجيله يُعتبر بالفعل عطلة رسمية أو يوم راحة في نظامك! هل تود تسجيله كـ "عطلة رسمية/يوم راحة" (لا يخصم من رصيدك) بدلاً من إجازة عادية؟')) {
+        newSession.dayStatus = 'public_holiday';
+        newSession.notes = 'عطلة رسمية / يوم راحة (معدل تلقائياً بتوجيه ذكي)';
+      }
     }
 
     setSessions([...sessions, newSession]);

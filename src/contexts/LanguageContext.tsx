@@ -154,7 +154,9 @@ const ar: Translations = {
   'home.select_work': '-- اختر عمل --',
   'home.checkin_time': 'وقت الحضور',
   'home.checkout_time': 'وقت الانصراف',
+  'home.details_day': 'تفاصيل اليوم',
   'home.deductions_breaks': 'الخصومات/الاستراحات (بالدقائق)',
+  'cal.leaves': 'الإجازات',
   'home.rest_or_holiday': 'يوم السجل المختار يعادل يوم راحة أو إجازة رسمية!',
   'home.comp_nature': 'طبيعة تعويض يوم الراحة/الإجازة',
   'home.one_comp_day': 'يوم راحة بديل واحد',
@@ -335,6 +337,11 @@ const ar: Translations = {
   'rep.permissions': 'الأذونات',
   'rep.permission': 'إذن',
   'rep.rest': 'راحة',
+  'rep.earned': 'المكتسب',
+  'rep.available': 'متبقي',
+  'rep.expired': 'منتهي الصلاحية',
+  'rep.taken': 'مُستخدم',
+  'rep.dates': 'في تواريخ',
   'rep.day': 'يوم',
   'rep.sick': 'مرضي',
   'rep.base': 'أساسي',
@@ -492,7 +499,7 @@ const ar: Translations = {
   'settings.auto.93': 'هادئ',
   'settings.auto.94': 'اهتزاز',
   'settings.auto.95': 'إشعار تجريبي 🎉',
-  'settings.auto.96': 'نظام الإشعارات يعمل بنجاح في تطبيق LifeCompanion!',
+  'settings.auto.96': 'نظام الإشعارات يعمل بنجاح في تطبيق Work Companion!',
   'settings.auto.97': 'تجربة الإشعارات الآن',
   'settings.auto.98': 'منطق الإضافي والتأخيرات',
   'settings.auto.99': 'تحديد دقيق لآليات التعويض والمساءلة',
@@ -524,7 +531,7 @@ const ar: Translations = {
   'settings.auto.125': '📦 تصدير وحفظ نسخة بيانات',
   'settings.auto.126': 'سيتم إضافة ميزة الاستيراد قريباً لتجنب تعارض البيانات خطأً',
   'settings.auto.127': '📥 استيراد نسخة محفوظة (قريباً)',
-  'settings.auto.128': 'https://wa.me/201009969653?text=مرحباً، لدي شكوى/اقتراح بخصوص تطبيق LifeCompanion:',
+  'settings.auto.128': 'https://wa.me/201009969653?text=مرحباً، لدي شكوى/اقتراح بخصوص تطبيق Work Companion:',
   'settings.auto.129': '💬 الدعم الفني بالمراسلة',
   'settings.auto.130': '🚨 هل أنت متأكد تماماً من مسح جميع بيانات وتاريخ التطبيق؟ لن يمكنك التراجع عن هذه الخطوة.',
   'settings.auto.131': '⚠️ فرمتة جميع البيانات نهائياً',
@@ -567,7 +574,7 @@ const ar: Translations = {
   't_auto_31': 'كيف يُحسب العمل الإضافي (Overtime)؟',
   't_auto_32': 'هل يمكنني إضافة إجازة أو تصريح بأثر رجعي؟',
   't_auto_33': 'هل يمكن للذكاء الاصطناعي تقييم أأدائي لهذا الشهر؟',
-  't_auto_34': 'أهلاً بك! أنا مساعدك الذكي الخاص بـ LifeCompanion المدمج في واجهتك. كيف يمكنني إفادتك اليوم؟ 🧠',
+  't_auto_34': 'أهلاً بك! أنا مساعدك الذكي الخاص بـ Work Companion المدمج في واجهتك. كيف يمكنني إفادتك اليوم؟ 🧠',
   't_auto_35': 'إجاز',
   't_auto_36': 'اجاز',
   't_auto_37': 'عطل',
@@ -612,7 +619,7 @@ const ar: Translations = {
   't_auto_76': 'اسأل الذكاء',
   't_auto_77': 'تثبيت التطبيق',
   't_auto_78': 'تخطي (لا ينصح به)',
-  't_auto_79': 'https://wa.me/201009969653?text=لدي اقتراح أو شكوى بخصوص تطبيق LifeCompanion',
+  't_auto_79': 'https://wa.me/201009969653?text=لدي اقتراح أو شكوى بخصوص تطبيق Work Companion',
   't_auto_80': 'الشكاوى والمقترحات',
   't_auto_81': 'فاتح',
   't_auto_82': 'داكن',
@@ -1237,7 +1244,9 @@ const en: Translations = {
   'home.select_work': '-- Select Work --',
   'home.checkin_time': 'Check-in Time',
   'home.checkout_time': 'Checkout Time',
+  'home.details_day': 'Day Details',
   'home.deductions_breaks': 'Breaks/Deductions (Mins)',
+  'cal.leaves': 'Leaves',
   'home.rest_or_holiday': 'Selected day is a public holiday or rest day!',
   'home.comp_nature': 'Nature of Compensation',
   'home.one_comp_day': '1 Alternative Rest Day',
@@ -1418,6 +1427,11 @@ const en: Translations = {
   'rep.permissions': 'Permissions',
   'rep.permission': 'Permission',
   'rep.rest': 'Rest',
+  'rep.earned': 'Earned',
+  'rep.available': 'Available',
+  'rep.expired': 'Expired',
+  'rep.taken': 'Used',
+  'rep.dates': 'On Dates',
   'rep.day': 'Day',
   'rep.sick': 'Sick',
   'rep.base': 'Base',
@@ -1575,7 +1589,7 @@ const en: Translations = {
   'settings.auto.93': 'Quiet', // AR: هادئ
   'settings.auto.94': 'Vibrate', // AR: اهتزاز
   'settings.auto.95': 'Test Notification 🎉', // AR: إشعار تجريبي 🎉
-  'settings.auto.96': 'Notifications are working successfully!', // AR: نظام الإشعارات يعمل بنجاح في تطبيق LifeCompanion!
+  'settings.auto.96': 'Notifications are working successfully!', // AR: نظام الإشعارات يعمل بنجاح في تطبيق Work Companion!
   'settings.auto.97': 'Test Notifications Now', // AR: تجربة الإشعارات الآن
   'settings.auto.98': 'Overtime & Delay Logic', // AR: منطق الإضافي والتأخيرات
   'settings.auto.99': 'Precise definition for compensation and accountability', // AR: تحديد دقيق لآليات التعويض والمساءلة
@@ -1607,7 +1621,7 @@ const en: Translations = {
   'settings.auto.125': '📦 Export and Save Data Copy', // AR: 📦 تصدير وحفظ نسخة بيانات
   'settings.auto.126': 'Import feature will be added soon to avoid accidental data conflicts.', // AR: سيتم إضافة ميزة الاستيراد قريباً لتجنب تعارض البيانات خطأً
   'settings.auto.127': '📥 Import Saved Copy (Soon)', // AR: 📥 استيراد نسخة محفوظة (قريباً)
-  'settings.auto.128': 'https://wa.me/201009969653?text=Hello, I have a request/suggestion for LifeCompanion:', // AR: https://wa.me/201009969653?text=مرحباً، لدي شكوى/اقتراح بخصوص تطبيق LifeCompanion:
+  'settings.auto.128': 'https://wa.me/201009969653?text=Hello, I have a request/suggestion for Work Companion:', // AR: https://wa.me/201009969653?text=مرحباً، لدي شكوى/اقتراح بخصوص تطبيق Work Companion:
   'settings.auto.129': '💬 Chat Technical Support', // AR: 💬 الدعم الفني بالمراسلة
   'settings.auto.130': '🚨 Are you absolutely sure you want to clear all data? This cannot be undone.', // AR: 🚨 هل أنت متأكد تماماً من مسح جميع بيانات وتاريخ التطبيق؟ لن يمكنك التراجع عن هذه الخطوة.
   'settings.auto.131': '⚠️ Format All Data Permanently', // AR: ⚠️ فرمتة جميع البيانات نهائياً
@@ -1632,7 +1646,7 @@ const en: Translations = {
   't_auto_13': 'Automated productivity advisor',
   't_auto_14': 'Sorry, I don\'t have an exact answer yet.',
   't_auto_15': 'To get a professional answer, you can ask the application developer directly by messaging him on WhatsApp.',
-  't_auto_16': 'My question about the Life Companion app:',
+  't_auto_16': 'My question about the Work Companion app:',
   't_auto_17': 'Contact now',
   't_auto_18': 'Pattern analysis is being done...',
   't_auto_19': 'How do I regain my energy? Is Alexandria a good idea?',
@@ -1650,7 +1664,7 @@ const en: Translations = {
   't_auto_31': 'How is overtime calculated?',
   't_auto_32': 'Can I add a leave or permit retroactively?',
   't_auto_33': 'Can artificial intelligence evaluate my performance this month?',
-  't_auto_34': 'Hey, you! I am your own intelligent assistant with LifeCompanion built into your interface. How can I help you today? 🧠',
+  't_auto_34': 'Hey, you! I am your own intelligent assistant with Work Companion built into your interface. How can I help you today? 🧠',
   't_auto_35': 'Ijaz',
   't_auto_36': 'permission',
   't_auto_37': 'Malfunction',
@@ -1695,7 +1709,7 @@ const en: Translations = {
   't_auto_76': 'Ask intelligence',
   't_auto_77': 'Install the application',
   't_auto_78': 'Skip (not recommended)',
-  't_auto_79': 'https://wa.me/201009969653?text=I have a suggestion or complaint about the LifeCompanion app',
+  't_auto_79': 'https://wa.me/201009969653?text=I have a suggestion or complaint about the Work Companion app',
   't_auto_80': 'Complaints and suggestions',
   't_auto_81': 'Winner',
   't_auto_82': 'dark',
@@ -2148,7 +2162,7 @@ const en: Translations = {
   't_auto_529': 'Weekly Report',
   't_auto_530': 'Back to Current Week',
   't_auto_531': 'Goal',
-  't_auto_532': 'Life Companion',
+  't_auto_532': 'Work Companion',
   't_auto_533': 'Log in now to sync your cloud data, or continue in offline mode to start immediately.',
   't_auto_534': 'Sign in (Google)',
   't_auto_535': 'Continue Offline',

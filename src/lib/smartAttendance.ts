@@ -57,6 +57,40 @@ export const generateSmartInsights = (
    const insights: AttendanceInsight[] = [];
    const now = new Date();
    
+   // 0. Holiday Greeting Insight
+   if (settings.customHolidays && settings.customHolidays.length > 0) {
+      const today = now.toISOString().split('T')[0];
+      const activeHoliday = settings.customHolidays.find(h => h.date === today);
+      if (activeHoliday) {
+         insights.push({
+            type: 'info',
+            title: 'تهنئة بمناسبة العطلة 🎉',
+            message: `بمناسبة ${activeHoliday.name}، نتمنى لك لحظات سعيدة وممتعة! تذكر أن تستمتع بوقتك وتأخذ قسطاً من الراحة.`,
+            icon: '🎊'
+         });
+      }
+   }
+
+   // 1a. Check for leaves recorded on holidays/rest days
+   const misloggedLeaves = sessions.filter(s => {
+      const isLeave = ['annual_leave', 'sick_leave', 'casual_leave', 'half_day_leave'].includes(s.dayStatus || '');
+      if (!isLeave || s.isArchived) return false;
+      const d = new Date(s.startTime);
+      const fullDateKey = format(d, 'yyyy-MM-dd');
+      const isPublic = settings.customHolidays?.some(h => h.date === fullDateKey);
+      const isRest = (settings.restDays || []).includes(d.getDay()) || isPublic;
+      return isRest;
+   });
+
+   if (misloggedLeaves.length > 0) {
+      insights.push({
+         type: 'warning',
+         title: 'إجازات مسجلة بالخطأ',
+         message: `لاحظنا أنك قمت بتسجيل إجازة (${misloggedLeaves.length}) في يوم عطلة أسبوعية أو مناسبة رسمية! نوصي بمسحها من سجل الإجازات حتى لا يتم خصمها من رصيدك السنوي بتاتاً.`,
+         icon: '⚠️'
+      });
+   }
+
    // 1. Analyze general punctuality (Fixed system)
    if (settings.system === 'fixed' && settings.expectedStartTime) {
       const expectedDate = new Date(`1970-01-01T${settings.expectedStartTime}:00`);
@@ -213,10 +247,11 @@ export const generateSmartInsights = (
    const validityDays = settings.compensationValidityDays || 30;
    let expiringCount = 0;
    
-   const availableComps = sessions.filter(s => s.isRestDayWork && !s.isArchived).map(s => {
+   const availableComps = sessions.filter(s => (s.isRestDayWork || s.dayStatus === 'rest_day_work') && !s.isArchived).map(s => {
       let accrued = 0;
-      if (s.restDayCompensation === '1_day' || s.restDayCompensation === '1_day_plus_overtime') accrued = 1;
-      else if (s.restDayCompensation === '2_days') accrued = 2;
+      const compType = s.restDayCompensation || '1_day';
+      if (compType === '1_day' || compType === '1_day_plus_overtime') accrued = 1;
+      else if (compType === '2_days') accrued = 2;
       const taken = sessions.filter(t => t.dayStatus === 'compensation' && t.linkedCompensationSessionId === s.id && !t.isArchived).length;
       const daysSinceEarned = (now.getTime() - new Date(s.startTime).getTime()) / (1000 * 60 * 60 * 24);
       return { availableDays: accrued - taken, daysUntilExpiry: validityDays - daysSinceEarned };
@@ -243,8 +278,15 @@ export const generateSmartInsights = (
    const currentYear = now.getFullYear();
    
    const usedAnnualLeaves = sessions
-      .filter(s => s.dayStatus === "annual_leave" && new Date(s.startTime).getFullYear() === currentYear && !s.isArchived)
-      .reduce((acc, s) => acc + (s.duration === (settings.dailyHours * 60) / 2 ? 0.5 : 1), 0);
+      .filter(s => (s.dayStatus === "annual_leave" || s.dayStatus === "half_day_leave") && new Date(s.startTime).getFullYear() === currentYear && !s.isArchived)
+      .filter(s => {
+          const d = new Date(s.startTime);
+          const fullDateKey = format(d, 'yyyy-MM-dd');
+          const isPublic = settings.customHolidays?.some(h => h.date === fullDateKey);
+          const isRest = (settings.restDays || []).includes(d.getDay()) || isPublic;
+          return !isRest;
+      })
+      .reduce((acc, s) => acc + (s.dayStatus === "half_day_leave" ? 0.5 : 1), 0);
       
    const remainingAnnualLeaves = settings.annualLeaves - usedAnnualLeaves;
    const monthsLeft = 12 - currentMonth;

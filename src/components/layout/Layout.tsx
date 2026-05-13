@@ -55,8 +55,8 @@ export default function Layout({ children, activeTab, setActiveTab }: LayoutProp
         // In iframes, navigator.share often fails or is blocked, fallback safely
         if (navigator.share) {
            await navigator.share({
-              title: 'LifeCompanion - Work Log',
-              text: `${t('layout.try_app')} LifeCompanion - ${t('layout.smart_companion')}!`,
+              title: 'Work Companion - Work Log',
+              text: `${t('layout.try_app')} Work Companion - ${t('layout.smart_companion')}!`,
               url: shareUrl,
            }).catch(() => {
               // Fallback if share cancels or fails
@@ -75,8 +75,11 @@ export default function Layout({ children, activeTab, setActiveTab }: LayoutProp
   };
 
   const handleDownloadAPK = () => {
-     const apkUrl = "https://lifecompanionworklog.netlify.app/lifecompanion.apk";
-     window.open(apkUrl, '_blank');
+     // GitHub Release URL structure. You can replace this with your actual repository URL
+     // For example: "https://github.com/Ah-Elnokaly/LifeCompanion/releases/latest/download/app-release.apk"
+     toast.success('جاري توجيهك لتحميل التطبيق من GitHub...');
+     const githubApkUrl = "https://github.com/your-username/your-repo/releases/latest/download/app-release.apk";
+     window.open(githubApkUrl, '_blank');
   };
 
   // Trigger burnout automatically if conditions suggest huge burnout and not previously ignored
@@ -111,11 +114,11 @@ export default function Layout({ children, activeTab, setActiveTab }: LayoutProp
       {/* Mobile Header */}
       <div className="md:hidden flex items-center justify-between p-4 border-b bg-card/80 backdrop-blur-xl relative z-10">
         <div className="flex items-center gap-2">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-primary/20 to-emerald-500/20 shadow-sm relative overflow-hidden flex-shrink-0 flex items-center justify-center p-1 border border-primary/20">
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-primary/20 to-emerald-500/20 shadow-sm relative overflow-hidden flex-shrink-0 flex items-center justify-center p-1 border border-primary/20 cursor-pointer hover:scale-105 transition-transform" onClick={() => toast('🌟 Work Companion يتمنى لك يوماً سعيداً ومليئاً بالإنجازات!', { icon: '✨', duration: 4000 })}>
              <AppLogo className="w-full h-full text-primary" />
           </div>
           <h1 className="text-xl font-extrabold bg-gradient-to-r from-primary to-emerald-500 bg-clip-text text-transparent leading-none">
-            LifeCompanion
+            Work Companion
             <span className="block text-[10px] font-medium text-muted-foreground uppercase tracking-widest mt-1 text-right">Work Log</span>
           </h1>
         </div>
@@ -163,11 +166,11 @@ export default function Layout({ children, activeTab, setActiveTab }: LayoutProp
       {/* Desktop Sidebar */}
       <aside className="hidden md:flex flex-col w-64 border-r p-4 gap-8 bg-card relative z-10">
         <div className="flex items-center gap-2 px-2 relative">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-primary/20 to-emerald-500/20 shadow-sm relative overflow-hidden flex-shrink-0 flex items-center justify-center p-1 border border-primary/20">
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-primary/20 to-emerald-500/20 shadow-sm relative overflow-hidden flex-shrink-0 flex items-center justify-center p-1 border border-primary/20 cursor-pointer hover:scale-105 transition-transform" onClick={() => toast('🌟 Work Companion يعزز من إنتاجيتك وصحتك، استمر!', { icon: '🚀', duration: 4000 })}>
              <AppLogo className="w-full h-full text-primary" />
           </div>
           <h1 className="text-xl font-extrabold bg-gradient-to-r from-primary to-emerald-500 bg-clip-text text-transparent leading-tight">
-            LifeCompanion
+            Work Companion
             <span className="block text-[10px] font-medium text-muted-foreground uppercase tracking-widest mt-0.5">Work Log</span>
           </h1>
         </div>
@@ -264,7 +267,7 @@ export default function Layout({ children, activeTab, setActiveTab }: LayoutProp
                        <Briefcase className="w-8 h-8 text-emerald-500" />
                      </div>
                   </div>
-                  <div>{t('layout.share')} LifeCompanion</div>
+                  <div>{t('layout.share')} Work Companion</div>
                </SheetTitle>
             </SheetHeader>
             <div className="space-y-4 mt-4" dir="rtl">

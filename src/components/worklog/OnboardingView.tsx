@@ -29,15 +29,20 @@ export default function OnboardingView() {
         {/* Step 1: Welcome */}
         {step === 1 && (
           <div className="flex flex-col items-center p-8 text-center space-y-6">
-            <div className="w-24 h-24 bg-gradient-to-tr from-primary/20 to-emerald-500/20 shadow-sm border border-primary/20 rounded-full flex items-center justify-center p-4">
+            <div 
+               className="w-24 h-24 bg-gradient-to-tr from-primary/20 to-emerald-500/20 shadow-md border border-primary/20 rounded-3xl flex items-center justify-center p-4 cursor-pointer hover:scale-105 transition-transform"
+               onClick={() => {
+                  import('sonner').then(({toast}) => toast('🌟 مرحباً بك في رفيقك الجديد للعمل!', { icon: '🚀', duration: 3000 }));
+               }}
+            >
               <AppLogo className="w-full h-full text-primary" />
             </div>
             <div>
-              <h1 className="text-3xl font-extrabold mb-1">Life Companion</h1>
+              <h1 className="text-3xl font-extrabold mb-1 bg-gradient-to-r from-primary to-emerald-500 bg-clip-text text-transparent">Work Companion</h1>
               <p className="text-sm font-bold text-primary mb-4 uppercase tracking-widest text-[10px]">Work Log</p>
               <p className="text-muted-foreground text-sm">{t('t_auto_424')}</p>
             </div>
-            <Button onClick={() => setStep(2)} className="w-full h-14 rounded-xl text-lg font-bold">
+            <Button onClick={() => setStep(2)} className="w-full h-14 rounded-2xl text-lg font-bold shadow-lg shadow-primary/20">
                {t('t_auto_425')} <ChevronLeft className="mr-2" />
             </Button>
           </div>

@@ -15,7 +15,7 @@ export default function AppraisalView() {
     const monthSessions = sessions.filter(s => isSameMonth(new Date(s.startTime), now));
     const totalExtra = monthSessions.reduce((acc, s) => acc + (s.overtimeMinutes || 0), 0);
     const totalRestDaysWork = monthSessions.filter(s => s.isRestDayWork).length;
-    const leaveDays = monthSessions.filter(s => s.dayStatus === 'annual_leave').length;
+    const leaveDays = monthSessions.filter(s => s.dayStatus === 'annual_leave' || s.dayStatus === 'half_day_leave').reduce((acc, s) => acc + (s.dayStatus === 'half_day_leave' ? 0.5 : 1), 0);
     
     return {
        totalExtraHrs: (totalExtra / 60).toFixed(1),

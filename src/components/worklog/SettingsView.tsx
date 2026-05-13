@@ -21,10 +21,37 @@ export default function SettingsView() {
   const [localSettings, setLocalSettings] = useState(settings);
   const [newHolidayDate, setNewHolidayDate] = useState('');
   const [newHolidayName, setNewHolidayName] = useState('');
+  const [restDayChangeDialog, setRestDayChangeDialog] = useState(false);
+  const [restDayChangeDate, setRestDayChangeDate] = useState('');
 
   const handleSave = () => {
-    updateSettings(localSettings);
-    toast.success(t('settings.auto.1'));
+    const originalRestDays = [...settings.restDays].sort().join(',');
+    const newRestDays = [...localSettings.restDays].sort().join(',');
+    if (originalRestDays !== newRestDays) {
+       setRestDayChangeDialog(true);
+    } else {
+       updateSettings(localSettings);
+       toast.success(t('settings.auto.1'));
+    }
+  };
+
+  const applyRestDayChange = (mode: 'always' | 'from_date') => {
+     let newSettings = { ...localSettings };
+     if (mode === 'from_date') {
+        if (!restDayChangeDate) { toast.error('يرجى اختيار التاريخ'); return; }
+        const currentSchedule = newSettings.restDaysSchedule || [];
+        newSettings.restDaysSchedule = [
+          ...currentSchedule,
+          { fromDate: restDayChangeDate, restDays: localSettings.restDays, originalRestDays: settings.restDays }
+        ];
+     } else {
+        // Always -> reset schedule
+        newSettings.restDaysSchedule = [];
+     }
+     
+     updateSettings(newSettings);
+     toast.success(t('settings.auto.1'));
+     setRestDayChangeDialog(false);
   };
 
   const requestNotificationPermission = async () => {

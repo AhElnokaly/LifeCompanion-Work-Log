@@ -101,7 +101,7 @@ export default function WalletView() {
             الإجمالي النهائي: ${totalEstimatedRevenue.toLocaleString()} ج.م
           </div>
           
-          <p style="margin-top: 50px; font-size: 0.9rem; color: #666;">تم إنشاء هذه الفاتورة تلقائياً عبر نظام LifeCompanion.</p>
+          <p style="margin-top: 50px; font-size: 0.9rem; color: #666;">تم إنشاء هذه الفاتورة تلقائياً عبر نظام Work Companion.</p>
           <button onclick="window.print()" style="margin-top:20px; padding: 10px 20px; background: #10b981; color: white; border: none; border-radius: 5px; cursor: pointer;">طباعة / حفظ كـ PDF</button>
         </body>
       </html>

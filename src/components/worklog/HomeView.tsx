@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Button } from '../ui/button';
-import { Play, Square, Clock, Calendar, Coffee, FileText, Check, Bell, Zap, Timer, Shuffle, Brain, Loader2, Send, Activity, Moon, Sun, Sunrise, Sunset, Plus, Minus, LogIn, LogOut, Palmtree, Briefcase, Trophy } from 'lucide-react';
+import { Play, Square, Clock, Calendar, Coffee, FileText, Check, Bell, Zap, Timer, Shuffle, Brain, Loader2, Send, Activity, Settings, Moon, Sun, Sunrise, Sunset, Plus, Minus, LogIn, LogOut, Palmtree, Briefcase, Trophy } from 'lucide-react';
 import { useWorkLog, isPublicHoliday } from '../../contexts/WorkLogContext';
 import { useAICore } from '../../contexts/AICoreContext';
 import { format, differenceInMinutes, addMinutes } from 'date-fns';
@@ -12,10 +12,11 @@ import { WorkSession } from '../../types';
 import { toast } from 'sonner';
 import { detectPermissionType, generateSmartInsights, AttendanceInsight } from '../../lib/smartAttendance';
 import { formatMinutesToHHMM } from '../../lib/utils';
+import { UnifiedEntrySheet } from './UnifiedEntrySheet';
 import WeatherWidget from './WeatherWidget';
 import { useLanguage } from '../../contexts/LanguageContext';
 
-export default function HomeView() {
+export default function HomeView({ onNavigate }: { onNavigate?: (tab: string) => void }) {
   const { 
     activeSession, sessions, jobs, shifts, shiftAssignments, startSession, addSession, endSession, settings, updateSettings, getBalances, logSpecialSession, updateSession, updateActiveSession, toggleBreak,
     pomodoroTimeLeft, pomodoroIsActive, pomodoroMode, togglePomodoro, resetPomodoro
@@ -68,6 +69,8 @@ export default function HomeView() {
   const [retroBreak, setRetroBreak] = useState('0');
   const [retroCompType, setRetroCompType] = useState<'1_day' | '1_day_plus_overtime' | '2_days'>('1_day');
   const [retroIsRest, setRetroIsRest] = useState(false);
+  const [markHolidayDialogOpen, setMarkHolidayDialogOpen] = useState(false);
+  const [newHolidayName, setNewHolidayName] = useState('');
 
   useEffect(() => {
      if (retroDialogOpen && retroDate) {
@@ -87,10 +90,11 @@ export default function HomeView() {
 
 
   const getAvailableCompensations = (dateBeingProcessed: string = format(now, 'yyyy-MM-dd')) => {
-    return sessions.filter(s => s.isRestDayWork && !s.isArchived).map(s => {
+    return sessions.filter(s => (s.isRestDayWork || s.dayStatus === 'rest_day_work') && !s.isArchived).map(s => {
       let accrued = 0;
-      if (s.restDayCompensation === '1_day' || s.restDayCompensation === '1_day_plus_overtime') accrued = 1;
-      else if (s.restDayCompensation === '2_days') accrued = 2;
+      const compType = s.restDayCompensation || '1_day';
+      if (compType === '1_day' || compType === '1_day_plus_overtime') accrued = 1;
+      else if (compType === '2_days') accrued = 2;
 
       // Check validity
       const validityDays = settings.compensationValidityDays || 30; // default 30
@@ -285,8 +289,8 @@ export default function HomeView() {
        
        const diffMins = (now.getTime() - expectedStart.getTime()) / 60000;
        
-       // If late by > 60 mins and less than half shift (e.g. 4 hours)
-       if (diffMins > 60 && diffMins < (settings.dailyHours * 60 / 2)) {
+       // If late by > 60 mins
+       if (diffMins > 60) {
          setShowHalfDayPrompt({show: true, type, entityId, forceYesterday, explicitOverrides, isGracePeriodHit: false});
          return;
        }
@@ -744,14 +748,22 @@ export default function HomeView() {
               <span className="text-sm font-bold text-foreground leading-tight flex-1">{t('home.exit')}</span>
            </button>
 
-           <button onClick={() => setIsPermissionSheetOpen(true)} disabled={isOnFullDayLeave} className={`rounded-2xl p-3 flex items-center justify-center gap-3 transition-colors text-right h-[70px] shadow-sm group ${(!isOnFullDayLeave) ? 'bg-card hover:bg-card/80 border border-border/50' : 'bg-card/30 border border-border/20 opacity-60 cursor-not-allowed'}`}>
+           <button onClick={() => setIsPermissionSheetOpen(true)} disabled={isOnFullDayLeave || (!activeSession && isTodayRestDay)} className={`rounded-2xl p-3 flex items-center justify-center gap-3 transition-colors text-right h-[70px] shadow-sm group ${(!isOnFullDayLeave && !(!activeSession && isTodayRestDay)) ? 'bg-card hover:bg-card/80 border border-border/50' : 'bg-card/30 border border-border/20 opacity-60 cursor-not-allowed'}`}>
               <div className="w-10 h-10 rounded-full bg-purple-500/10 flex items-center justify-center shrink-0 text-purple-500 transition-transform group-hover:scale-110">
                  <Clock className="w-5 h-5" />
               </div>
               <span className="text-sm font-bold text-foreground leading-tight flex-1">{t('home.permission')}</span>
            </button>
 
-           <button onClick={() => setIsLeaveSheetOpen(true)} disabled={!!activeSession || isOnFullDayLeave} className={`rounded-2xl p-3 flex items-center justify-center gap-3 transition-colors text-right h-[70px] shadow-sm group ${(!activeSession && !isOnFullDayLeave) ? 'bg-card hover:bg-card/80 border border-border/50' : 'bg-card/30 border border-border/20 opacity-60 cursor-not-allowed'}`}>
+           {!isTodayRestDay && !activeSession && !isOnFullDayLeave && (
+             <button onClick={() => setMarkHolidayDialogOpen(true)} className="col-span-2 rounded-2xl p-3 flex items-center justify-center gap-3 transition-colors text-right h-[50px] shadow-sm bg-card hover:bg-card/80 border border-border/50 group mb-2 mt-1">
+                <div className="w-8 h-8 rounded-full bg-emerald-500/10 flex items-center justify-center shrink-0 text-emerald-500 transition-transform group-hover:scale-110">
+                   <Calendar className="w-4 h-4" />
+                </div>
+                <span className="text-xs font-bold text-foreground leading-tight flex-1">تعيين كعطلة رسمية والعمل (بديلة)</span>
+             </button>
+           )}
+           <button onClick={() => setIsLeaveSheetOpen(true)} disabled={!!activeSession || isOnFullDayLeave || isTodayRestDay} className={`rounded-2xl p-3 flex items-center justify-center gap-3 transition-colors text-right h-[70px] shadow-sm group ${(!activeSession && !isOnFullDayLeave && !isTodayRestDay) ? 'bg-card hover:bg-card/80 border border-border/50' : 'bg-card/30 border border-border/20 opacity-60 cursor-not-allowed'}`}>
               <div className="w-10 h-10 rounded-full bg-blue-500/10 flex items-center justify-center shrink-0 text-blue-500 transition-transform group-hover:scale-110">
                  <Palmtree className="w-5 h-5" />
               </div>
@@ -962,6 +974,16 @@ export default function HomeView() {
                  })()}
               </div>
             )}
+
+            {/* Advanced Settings Link */}
+             {onNavigate && (
+                <div className="flex justify-center mt-6">
+                   <Button variant="ghost" className="rounded-2xl text-muted-foreground flex items-center gap-2 hover:bg-secondary/50" onClick={() => onNavigate('settings')}>
+                      <Settings className="w-4 h-4" />
+                      إعدادات العمل والغياب المتقدمة
+                   </Button>
+                </div>
+             )}
 
         </div>
       )}
@@ -1338,6 +1360,39 @@ export default function HomeView() {
       )}
 
       {/* Overlay: Half Day Prompt / Lateness */}
+      {markHolidayDialogOpen && (
+        <div className="absolute inset-0 z-[60] flex items-center justify-center backdrop-blur-sm bg-background/60 p-4">
+           <div className="bg-card border border-border p-6 rounded-[2rem] w-full max-w-sm shadow-2xl flex flex-col gap-4 animate-in slide-in-from-bottom-8" dir="rtl">
+              <h3 className="text-lg font-bold text-center">تعيين اليوم كعطلة رسمية</h3>
+              <p className="text-sm text-muted-foreground text-center">سيتم إضافة اليوم لعطلاتك الرسمية وتستطيع الدخول للعمل كـ (بديلة).</p>
+              <Input 
+                 placeholder="اسم العطلة (مثل: ذكرى المولد النبوي)"
+                 value={newHolidayName}
+                 onChange={e => setNewHolidayName(e.target.value)}
+                 className="h-12 rounded-xl"
+              />
+              <div className="flex flex-col gap-2 mt-2">
+                 <Button className="w-full rounded-xl h-12 flex items-center justify-center font-bold" onClick={() => {
+                    if(!newHolidayName) { toast.error('يرجى إدخال اسم العطلة'); return; }
+                    const dStr = format(now, 'yyyy-MM-dd');
+                    const cHol = settings.customHolidays ? [...settings.customHolidays] : [];
+                    // Ensure we don't have duplicates
+                    if (!cHol.some(h => h.date === dStr)) {
+                       cHol.push({date: dStr, name: newHolidayName});
+                    }
+                    updateSettings({ ...settings, customHolidays: cHol });
+                    toast.success('تمت إضافة العطلة بنجاح');
+                    setMarkHolidayDialogOpen(false);
+                    setCompensationTypeDialogOpen(true); // Open the compensation flow
+                 }}>
+                    تأكيد والبدء
+                 </Button>
+                 <Button variant="ghost" className="w-full rounded-xl h-12" onClick={() => setMarkHolidayDialogOpen(false)}>إلغاء</Button>
+              </div>
+           </div>
+        </div>
+      )}
+      
       {showHalfDayPrompt.show && (
          <div className="absolute inset-0 z-[60] flex items-center justify-center backdrop-blur-sm bg-background/60 p-4">
            <div className="bg-card border border-border p-6 rounded-[2rem] w-full max-w-sm shadow-2xl flex flex-col gap-4 animate-in slide-in-from-bottom-8 text-center" dir="rtl">
@@ -1468,144 +1523,12 @@ export default function HomeView() {
       )}
 
       {/* Overlay: Retroactive Past Day Log */}
-      {retroDialogOpen && (
-         <div className="absolute inset-0 z-[60] flex items-center justify-center backdrop-blur-sm bg-background/60 p-4" dir="rtl">
-           <div className="bg-card border border-border p-6 rounded-[2rem] w-full max-w-sm shadow-2xl flex flex-col gap-4 animate-in slide-in-from-bottom-8 overflow-y-auto max-h-full">
-              <h3 className="text-xl font-bold mt-2 text-center text-emerald-500">{t('t_auto_338')}</h3>
-              <p className="text-sm text-muted-foreground leading-relaxed text-center mb-2">{t('t_auto_339')}</p>
-              
-              <div className="space-y-4">
-                <div className="space-y-1">
-                  <label className="text-xs font-bold text-foreground">{t('home.date')}</label>
-                  <Input type="date" value={retroDate} onChange={e => setRetroDate(e.target.value)} max={format(now, 'yyyy-MM-dd')} />
-                </div>
-                
-                <div className="space-y-1">
-                  <label className="text-xs font-bold text-foreground">{t('t_auto_246')}</label>
-                  <select 
-                    className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm"
-                    value={retroType}
-                    onChange={e => setRetroType(e.target.value as any)}
-                  >
-                    <option value="salary">{t('t_auto_340')}</option>
-                    <option value="project">{t('t_auto_341')}</option>
-                    <option disabled>──────────</option>
-                    <option value="compensation">{t('t_auto_342')}</option>
-                    <option value="permission">{t('t_auto_343')}</option>
-                    <option value="half_day_leave">{t('t_auto_229')}</option>
-                    <option value="annual_leave">{t('t_auto_344')}</option>
-                    <option value="sick_leave">{t('home.sick_leave')}</option>
-                    <option value="casual_leave">{t('home.casual_leave')}</option>
-                  </select>
-                </div>
-
-                {retroType === 'compensation' && (
-                  <div className="space-y-1 animate-in fade-in pb-2">
-                    <label className="text-xs font-bold text-emerald-500">{t('home.choose_overtime_day')}</label>
-                    <select 
-                      className="w-full rounded-xl border border-emerald-500/50 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-600 font-bold"
-                      value={compensationLeaveSourceId}
-                      onChange={e => setCompensationLeaveSourceId(e.target.value)}
-                    >
-                      <option value="">-- {t('home.day')} --</option>
-                      {getAvailableCompensations(retroDate).map(comp => (
-                        <option key={comp.id} value={comp.id} disabled={comp.isExpired}>
-                          {format(new Date(comp.startTime), t('t_auto_300'), {locale: ar})} 
-                          {t('t_auto_301')} {comp.availableDays} {t('t_auto_302')}{comp.isExpired ? ' - ' + t('home.expired') : ''}
-                        </option>
-                      ))}
-                    </select>
-
-                    {getAvailableCompensations(retroDate).filter(c => c.isExpired).length > 0 && (
-                      <div className="mt-2">
-                        <p className="text-[10px] text-muted-foreground mb-1 font-bold">{t('home.expired_comp')}</p>
-                        <div className="flex flex-wrap gap-2">
-                          {getAvailableCompensations(retroDate).filter(c => c.isExpired).map(comp => (
-                            <Button 
-                              key={`retro-${comp.id}`} 
-                              variant="outline" 
-                              size="sm"
-                              className="h-6 px-2 text-[10px] rounded-full border-dashed border-red-500/50 text-red-500 hover:bg-red-500/10"
-                              onClick={(e) => {
-                                e.preventDefault();
-                                if (window.confirm(t('home.add_exception_confirm'))) {
-                                  updateSession(comp.id, { compensationException: true });
-                                  toast.success(t('home.exception_added'));
-                                }
-                              }}
-                            >
-                              {format(new Date(comp.startTime), 'dd MMM', {locale: ar})} ({t('home.exception')})
-                            </Button>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                )}
-                {retroType === 'project' && (
-                  <div className="space-y-1 animate-in fade-in">
-                    <label className="text-xs font-bold text-foreground">{t('t_auto_345')}</label>
-                    <select 
-                      className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm"
-                      value={retroJobId}
-                      onChange={e => setRetroJobId(e.target.value)}
-                    >
-                      <option value="none">{t('t_auto_346')}</option>
-                      {jobs.map(j => <option key={j.id} value={j.id}>{j.name}</option>)}
-                    </select>
-                  </div>
-                )}
-
-                {!['annual_leave', 'sick_leave', 'half_day_leave', 'casual_leave', 'permission', 'compensation'].includes(retroType) && (
-                  <>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="space-y-1">
-                        <label className="text-xs font-bold text-foreground">{t('t_auto_347')}</label>
-                        <SmartTimePicker value={retroStart} onChange={setRetroStart} />
-                      </div>
-                      <div className="space-y-1">
-                        <label className="text-xs font-bold text-foreground">{t('t_auto_348')}</label>
-                        <SmartTimePicker value={retroEnd} onChange={setRetroEnd} />
-                      </div>
-                    </div>
-                    <div className="space-y-1 pb-2">
-                       <label className="text-xs font-bold text-foreground inline-flex items-center gap-1"><Coffee className="w-3 h-3"/> {t('t_auto_349')}</label>
-                       <Input type="number" min="0" value={retroBreak} onChange={e => setRetroBreak(e.target.value)} placeholder={t('t_auto_350')} />
-                    </div>
-                    
-                    {retroIsRest && ['salary', 'freelance'].includes(retroType) && (
-                       <div className="space-y-1 animate-in fade-in pb-2">
-                         <div className="bg-orange-500/10 text-orange-600 px-3 py-2 rounded-xl text-xs font-bold mb-2">
-                           {t('t_auto_351')}
-                                                                       </div>
-                         <label className="text-xs font-bold text-orange-500">{t('t_auto_352')}</label>
-                         <select 
-                           className="w-full rounded-xl border border-orange-500/50 bg-orange-500/10 px-3 py-2 text-sm text-orange-600 font-bold"
-                           value={retroCompType}
-                           onChange={e => setRetroCompType(e.target.value as any)}
-                         >
-                           <option value="1_day">{t('t_auto_353')}</option>
-                           <option value="1_day_plus_overtime">{t('t_auto_354')}</option>
-                           <option value="2_days">{t('t_auto_355')}</option>
-                         </select>
-                       </div>
-                    )}
-                  </>
-                )}
-                
-                <div className="space-y-1">
-                  <label className="text-xs font-bold text-foreground">{t('home.notes_optional')}</label>
-                  <Input placeholder={t('t_auto_356')} value={noteText} onChange={e => setNoteText(e.target.value)} />
-                </div>
-              </div>
-
-              <div className="flex gap-2 mt-4">
-                 <Button onClick={submitRetroSession} className="flex-1 rounded-xl h-12 bg-emerald-600 hover:bg-emerald-700 text-white font-bold">{t('t_auto_357')}</Button>
-                 <Button variant="ghost" onClick={() => {setRetroDialogOpen(false); setNoteText('');}} className="h-12 rounded-xl text-muted-foreground hover:bg-secondary">{t('t_auto_305')}</Button>
-              </div>
-           </div>
-         </div>
-      )}
+      <UnifiedEntrySheet 
+        open={retroDialogOpen} 
+        onOpenChange={setRetroDialogOpen} 
+        initialDate={new Date(new Date().getTime() - 86400000)}
+        allowDateChange={true} 
+      />
 
       {/* Overlay: Manual Past Session Entry o Edit Active Session Time */}
       {showManualEntry && (
@@ -1753,7 +1676,7 @@ export default function HomeView() {
              </SheetTitle>
           </SheetHeader>
           <div className="flex flex-col gap-3 mt-4">
-             <button onClick={() => { logSpecialSession('permission', { hours: 1, subtype: 'entry' }); setIsPermissionSheetOpen(false); toast.success(t('t_auto_384')); }} className="w-full flex items-center justify-between p-4 rounded-[1.5rem] bg-secondary/30 hover:bg-secondary/50 transition-colors border border-border/40 group">
+             <button onClick={() => { logSpecialSession('permission', { hours: 1, subtype: 'entry' }); if(activeSession) { handleEndSession(); } setIsPermissionSheetOpen(false); toast.success(t('t_auto_384')); }} className="w-full flex items-center justify-between p-4 rounded-[1.5rem] bg-secondary/30 hover:bg-secondary/50 transition-colors border border-border/40 group">
                 <div className="flex flex-col text-right mr-2">
                    <span className="font-bold text-foreground text-lg">{t('t_auto_385')}</span>
                    <span className="text-xs text-muted-foreground mt-0.5">{t('t_auto_386')}</span>
@@ -1762,7 +1685,7 @@ export default function HomeView() {
                   <Timer className="w-7 h-7" />
                 </div>
              </button>
-             <button onClick={() => { logSpecialSession('permission', { hours: 2, subtype: 'exit' }); setIsPermissionSheetOpen(false); toast.success(t('t_auto_387')); }} className="w-full flex items-center justify-between p-4 rounded-[1.5rem] bg-secondary/30 hover:bg-secondary/50 transition-colors border border-border/40 group">
+             <button onClick={() => { logSpecialSession('permission', { hours: 2, subtype: 'exit' }); if(activeSession) { handleEndSession(); } setIsPermissionSheetOpen(false); toast.success(t('t_auto_387')); }} className="w-full flex items-center justify-between p-4 rounded-[1.5rem] bg-secondary/30 hover:bg-secondary/50 transition-colors border border-border/40 group">
                 <div className="flex flex-col text-right mr-2">
                    <span className="font-bold text-foreground text-lg">{t('t_auto_388')}</span>
                    <span className="text-xs text-muted-foreground mt-0.5">{t('t_auto_386')}</span>
@@ -1771,7 +1694,7 @@ export default function HomeView() {
                   <LogOut className="w-7 h-7" />
                 </div>
              </button>
-             <button onClick={() => { logSpecialSession('half_day_leave'); setIsPermissionSheetOpen(false); toast.success(t('t_auto_389')); }} className="w-full flex items-center justify-between p-4 rounded-[1.5rem] bg-secondary/30 hover:bg-secondary/50 transition-colors border border-border/40 group">
+             <button onClick={() => { logSpecialSession('half_day_leave'); if(activeSession) { handleEndSession(); } setIsPermissionSheetOpen(false); toast.success(t('t_auto_389')); }} className="w-full flex items-center justify-between p-4 rounded-[1.5rem] bg-secondary/30 hover:bg-secondary/50 transition-colors border border-border/40 group">
                 <div className="flex flex-col text-right mr-2">
                    <span className="font-bold text-foreground text-lg">{t('home.half_day_leave')}</span>
                    <span className="text-xs text-muted-foreground mt-0.5">{t('t_auto_390')}</span>
