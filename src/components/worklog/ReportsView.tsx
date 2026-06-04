@@ -18,8 +18,9 @@ import { UnifiedEntrySheet } from './UnifiedEntrySheet';
 
 export default function ReportsView() {
   const { t, lang } = useLanguage();
-  const { sessions, deleteSession, updateSession, settings } = useWorkLog();
+  const { sessions, deleteSession, updateSession, settings, getBalances } = useWorkLog();
   const [currentDate, setCurrentDate] = useState(new Date());
+  const [leaveFilter, setLeaveFilter] = useState('all');
   
   // Chart Controls
   const [chartGrouping, setChartGrouping] = useState<'daily' | 'weekly' | 'monthly'>('daily');
@@ -350,7 +351,14 @@ export default function ReportsView() {
                   
                   if (leaveSession) {
                      if (leaveSession.dayStatus === 'rest_day_work') {
-                        mainStatus = 'عمل في يوم راحة (بديلة)';
+                        const compType = leaveSession.restDayCompensation || '1_day';
+                        if (compType === '1_day_plus_overtime') {
+                           mainStatus = 'عمل في يوم راحة (بديلة ووقت إضافي)';
+                        } else if (compType === '2_days') {
+                           mainStatus = 'عمل في يوم راحة (بديلة بيومين)';
+                        } else {
+                           mainStatus = 'عمل في يوم راحة (بديلة)';
+                        }
                      } else if (leaveSession.dayStatus === 'compensation') {
                         mainStatus = 'استهلاك بديلة';
                         theme = { bg: 'bg-orange-500', text: 'text-orange-50', textDark: 'text-orange-600', bgSoft: 'bg-orange-500/10', border: 'border-orange-500/30' };
@@ -413,7 +421,16 @@ export default function ReportsView() {
                            <div className="bg-card p-3 sm:p-4 border-t border-border/50 flex flex-col gap-3">
                               {daySessions.map((session, idx) => {
                                  let sessionLabel = 'عمل اعتيادي'; 
-                                 if (session.dayStatus === 'rest_day_work') sessionLabel = 'عمل في يوم راحة (بديلة)';
+                                 if (session.dayStatus === 'rest_day_work') {
+                                    const compType = session.restDayCompensation || '1_day';
+                                    if (compType === '1_day_plus_overtime') {
+                                       sessionLabel = 'عمل في يوم راحة (بديلة ووقت إضافي)';
+                                    } else if (compType === '2_days') {
+                                       sessionLabel = 'عمل في يوم راحة (بديلة بيومين)';
+                                    } else {
+                                       sessionLabel = 'عمل في يوم راحة (بديلة)';
+                                    }
+                                 }
                                  else if (session.dayStatus === 'annual_leave') sessionLabel = 'إجازة سنوية';
                                  else if (session.dayStatus === 'sick_leave') sessionLabel = 'إجازة مرضية';
                                  else if (session.dayStatus === 'casual_leave') sessionLabel = 'إجازة عارضة';
@@ -474,30 +491,11 @@ export default function ReportsView() {
                   </div>
                )}
             </div>
-
-            <UnifiedEntrySheet 
-              open={!!editingSession} 
-              onOpenChange={(open) => {
-                if (!open) setEditingSession(null);
-              }}
-              sessionToEdit={editingSession}
-              allowDateChange={true}
-            />
-
-            {/* Confirm Delete Dialog */}
-            <Dialog open={!!deletingSessionId} onOpenChange={(open) => !open && setDeletingSessionId(null)}>
-              <DialogContent className="sm:max-w-sm rounded-[2rem] border-white/10" dir={lang === 'ar' ? 'rtl' : 'ltr'}>
-                <DialogHeader><DialogTitle className="text-lg text-red-500">{t('rep.confirm_delete')}</DialogTitle></DialogHeader>
-                <p className="text-xs text-muted-foreground my-2">{t('rep.sure_delete_log')}</p>
-                <div className="flex gap-2 mt-4">
-                  <Button onClick={confirmDelete} variant="destructive" className="flex-1 rounded-xl h-11">{t('rep.final_delete')}</Button>
-                  <Button onClick={() => setDeletingSessionId(null)} variant="outline" className="flex-1 rounded-xl h-11">{t('rep.cancel')}</Button>
-                </div>
-              </DialogContent>
-            </Dialog>
          </TabsContent>
          <TabsContent value="compensations" className="flex flex-col gap-4 mt-0 border-none p-0 outline-none">
             {(() => {
+               // Calculate balances
+               const balances = getBalances();
                // Get all relevant sessions
                const actualSessions = sessions.filter(s => 
                  !s.isArchived && 
@@ -529,21 +527,58 @@ export default function ReportsView() {
                  }
                }
 
-               const relevantSessions = [...actualSessions, ...virtualSessions]
+               const allRelevant = [...actualSessions, ...virtualSessions]
                   .sort((a,b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime());
                
-               if (relevantSessions.length === 0) {
-                 return (
-                    <div className="flex flex-col items-center justify-center p-8 bg-card/40 border border-dashed border-white/10 rounded-2xl opacity-60 mt-4">
-                       <Palmtree className="w-8 h-8 opacity-40 mb-2" />
-                       <p className="text-xs">{t('t_auto_428')}</p>
-                    </div>
-                 );
-               }
+               const filteredSessions = allRelevant.filter(s => {
+                  if (leaveFilter === 'all') return true;
+                  if (leaveFilter === 'annual') return s.dayStatus === 'annual_leave' || s.dayStatus === 'half_day_leave';
+                  if (leaveFilter === 'sick_casual') return s.dayStatus === 'sick_leave' || s.dayStatus === 'casual_leave';
+                  if (leaveFilter === 'permissions') return s.dayStatus?.startsWith('permission');
+                  if (leaveFilter === 'compensations') return s.isRestDayWork || s.dayStatus === 'rest_day_work' || s.dayStatus === 'compensation';
+                  if (leaveFilter === 'public_holiday') return s.dayStatus === 'public_holiday';
+                  return true;
+               });
 
                return (
-                  <div className="space-y-4 mt-2">
-                     {relevantSessions.map(sess => {
+                  <div className="flex flex-col gap-4">
+                     {/* Balances Dashboard */}
+                     <div className="grid grid-cols-2 gap-3 mb-2">
+                        <div className="bg-card border border-white/5 rounded-2xl p-4 shadow-sm flex flex-col justify-between relative overflow-hidden">
+                           <div className="absolute top-0 right-0 w-24 h-24 bg-blue-500/10 rounded-full blur-3xl" />
+                           <span className="text-xs text-muted-foreground font-bold mb-1 z-10">{t('settings.auto.72') || 'الإجازات السنوية'}</span>
+                           <div className="flex items-end gap-1 z-10">
+                              <span className="text-2xl font-black text-blue-500">{balances.remainingAnnualLeaves}</span>
+                              <span className="text-xs text-muted-foreground mb-1 font-medium">/ {settings.annualLeaves || 21} يوم</span>
+                           </div>
+                        </div>
+                        <div className="bg-card border border-white/5 rounded-2xl p-4 shadow-sm flex flex-col justify-between relative overflow-hidden">
+                           <div className="absolute top-0 right-0 w-24 h-24 bg-purple-500/10 rounded-full blur-3xl" />
+                           <span className="text-xs text-muted-foreground font-bold mb-1 z-10">{t('home.permission') || 'التصاريح'}</span>
+                           <div className="flex items-end gap-1 z-10">
+                              <span className="text-2xl font-black text-purple-500">{balances.remainingPermissionsHours}</span>
+                              <span className="text-xs text-muted-foreground mb-1 font-medium">/ {settings.monthlyPermissions || 4} ساعة (للشهر الحالي)</span>
+                           </div>
+                        </div>
+                     </div>
+
+                     {/* Filters */}
+                     <div className="flex items-center justify-between gap-2 overflow-x-auto pb-1 hide-scrollbar">
+                        <Button variant={leaveFilter === 'all' ? 'default' : 'outline'} className={`rounded-xl h-9 text-xs shrink-0 ${leaveFilter === 'all' ? '' : 'bg-card/50'}`} onClick={() => setLeaveFilter('all')}>{t('t_auto_4') || 'الكل'}</Button>
+                        <Button variant={leaveFilter === 'annual' ? 'default' : 'outline'} className={`rounded-xl h-9 text-xs shrink-0 border-blue-500/20 ${leaveFilter === 'annual' ? 'bg-blue-500 hover:bg-blue-600' : 'text-blue-500 hover:bg-blue-500/10'}`} onClick={() => setLeaveFilter('annual')}>{t('cal.annual') || 'اعتيادي'}</Button>
+                        <Button variant={leaveFilter === 'sick_casual' ? 'default' : 'outline'} className={`rounded-xl h-9 text-xs shrink-0 border-red-500/20 ${leaveFilter === 'sick_casual' ? 'bg-red-500 hover:bg-red-600' : 'text-red-500 hover:bg-red-500/10'}`} onClick={() => setLeaveFilter('sick_casual')}>{t('cal.sick') || 'مرضي'} / {t('cal.casual') || 'عارضة'}</Button>
+                        <Button variant={leaveFilter === 'permissions' ? 'default' : 'outline'} className={`rounded-xl h-9 text-xs shrink-0 border-purple-500/20 ${leaveFilter === 'permissions' ? 'bg-purple-500 hover:bg-purple-600' : 'text-purple-500 hover:bg-purple-500/10'}`} onClick={() => setLeaveFilter('permissions')}>{t('home.permission') || 'تصريح'}</Button>
+                        <Button variant={leaveFilter === 'compensations' ? 'default' : 'outline'} className={`rounded-xl h-9 text-xs shrink-0 border-emerald-500/20 ${leaveFilter === 'compensations' ? 'bg-emerald-500 hover:bg-emerald-600' : 'text-emerald-500 hover:bg-emerald-500/10'}`} onClick={() => setLeaveFilter('compensations')}>{t('t_auto_454') || 'بديلة'}</Button>
+                     </div>
+
+                     <div className="space-y-4">
+                        {filteredSessions.length === 0 && (
+                           <div className="flex flex-col items-center justify-center p-8 bg-card/40 border border-dashed border-white/10 rounded-2xl opacity-60 mt-4">
+                              <Palmtree className="w-8 h-8 opacity-40 mb-2" />
+                              <p className="text-xs">{t('t_auto_428') || 'لا توجد بيانات ليتم عرضها'}</p>
+                           </div>
+                        )}
+                        {filteredSessions.map(sess => {
                         const isEarnedComp = sess.isRestDayWork || sess.dayStatus === 'rest_day_work';
                         const isCompensationConsumed = sess.dayStatus === 'compensation';
                         const isOtherLeave = ['annual_leave', 'sick_leave', 'casual_leave'].includes(sess.dayStatus || '');
@@ -555,7 +590,14 @@ export default function ReportsView() {
                         if (isEarnedComp) {
                            cardColor = 'border-emerald-500/20 bg-emerald-500/5';
                            icon = <Briefcase className="w-4 h-4 text-emerald-500" />;
-                           title = t('t_auto_454') || 'حضور بديلة';
+                           const compType = sess.restDayCompensation || '1_day';
+                           if (compType === '1_day_plus_overtime') {
+                              title = lang === 'ar' ? 'بديلة ووقت إضافي' : 'Substitute & Overtime';
+                           } else if (compType === '2_days') {
+                              title = lang === 'ar' ? 'بديلة بيومين' : '2 Days Substitute';
+                           } else {
+                              title = lang === 'ar' ? 'بديلة' : 'Substitute Day';
+                           }
                         } else if (isCompensationConsumed) {
                            cardColor = 'border-orange-500/20 bg-orange-500/5';
                            icon = <Calendar className="w-4 h-4 text-orange-500" />;
@@ -697,11 +739,32 @@ export default function ReportsView() {
                         );
                      })}
                   </div>
-               );
-            })()}
-         </TabsContent>
+               </div>
+            );
+         })()}
+      </TabsContent>
       </Tabs>
       
+      <UnifiedEntrySheet 
+        open={!!editingSession} 
+        onOpenChange={(open) => {
+          if (!open) setEditingSession(null);
+        }}
+        sessionToEdit={editingSession}
+        allowDateChange={true}
+      />
+
+      {/* Confirm Delete Dialog */}
+      <Dialog open={!!deletingSessionId} onOpenChange={(open) => !open && setDeletingSessionId(null)}>
+        <DialogContent className="sm:max-w-sm rounded-[2rem] border-white/10" dir={lang === 'ar' ? 'rtl' : 'ltr'}>
+          <DialogHeader><DialogTitle className="text-lg text-red-500">{t('rep.confirm_delete')}</DialogTitle></DialogHeader>
+          <p className="text-xs text-muted-foreground my-2">{t('rep.sure_delete_log')}</p>
+          <div className="flex gap-2 mt-4">
+            <Button onClick={confirmDelete} variant="destructive" className="flex-1 rounded-xl h-11">{t('rep.final_delete')}</Button>
+            <Button onClick={() => setDeletingSessionId(null)} variant="outline" className="flex-1 rounded-xl h-11">{t('rep.cancel')}</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

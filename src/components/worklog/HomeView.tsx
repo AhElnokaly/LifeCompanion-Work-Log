@@ -186,8 +186,8 @@ export default function HomeView({ onNavigate }: { onNavigate?: (tab: string) =>
   };
 
   const getLeaveText = () => {
-    if (todaySessions.some(s => s.dayStatus === 'compensation')) return "${t('home.enjoy_rest')}";
-    return "${t('home.enjoy_annual')}";
+    if (todaySessions.some(s => s.dayStatus === 'compensation')) return t('home.enjoy_rest');
+    return t('home.enjoy_annual');
   };
 
   const handleStartSession = () => {
@@ -263,7 +263,16 @@ export default function HomeView({ onNavigate }: { onNavigate?: (tab: string) =>
       const yesterday = new Date();
       yesterday.setDate(yesterday.getDate() - 1);
       yesterday.setHours(23, 59, 59, 999);
-      overrideData = { ...overrideData, startTime: yesterday.toISOString() };
+      // +++ أضيف بناءً على طلبك لشمل وقت الدخول الفعلي في الملاحظات +++
+      const formattedActualTime = format(new Date(), 'hh:mm a', { locale: lang === 'ar' ? ar : undefined });
+      const actualStartLabel = t('home.actual_start') || 'وقت البدء الفعلي';
+      const actualStartNote = `${actualStartLabel}: ${formattedActualTime}`;
+      const existingNotes = overrideData.notes ? `${overrideData.notes}\n` : '';
+      overrideData = { 
+        ...overrideData, 
+        startTime: yesterday.toISOString(),
+        notes: `${existingNotes}${actualStartNote}`
+      };
     }
 
     // Grace Period Lateness logic
@@ -738,7 +747,7 @@ export default function HomeView({ onNavigate }: { onNavigate?: (tab: string) =>
               <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 transition-transform group-hover:scale-110 ${activeSession ? 'bg-teal-500/10 text-teal-500' : 'bg-indigo-500/10 text-indigo-500'}`}>
                  {activeSession ? <Clock className="w-5 h-5" /> : <LogIn className="w-5 h-5" />}
               </div>
-              <span className="text-sm font-bold text-foreground leading-tight flex-1">{activeSession ? t('home.switch') : t('home.entry')}</span>
+              <span className={`font-bold text-foreground leading-tight flex-1 ${activeSession ? 'text-[11px] sm:text-xs md:text-sm tracking-tight font-cairo' : 'text-sm'}`}>{activeSession ? t('home.edit_entry_time') : t('home.entry')}</span>
            </button>
            
            <button onClick={() => activeSession && handleEndSession()} disabled={!activeSession} className={`rounded-2xl p-3 flex items-center justify-center gap-3 transition-colors text-right h-[70px] shadow-sm group ${activeSession ? 'bg-card hover:bg-card/80 border border-border/50' : 'bg-card/30 border border-border/20 opacity-60 cursor-not-allowed'}`}>

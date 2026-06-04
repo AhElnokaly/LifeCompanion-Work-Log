@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Card } from '../ui/card';
-import { CloudRain, Sun, Cloud, Wind, Thermometer, AlertTriangle, AlertCircle, Loader2 } from 'lucide-react';
+import { CloudRain, Sun, Cloud, Wind, Thermometer, AlertTriangle, AlertCircle, Loader2, Moon } from 'lucide-react';
 import { weatherTips } from '../../lib/weatherTips';
 import { useLanguage } from "@/contexts/LanguageContext";
 
@@ -131,21 +131,54 @@ export default function WeatherWidget({ variant = 'standalone', shiftStartHour, 
     return () => { isMounted = false; };
   }, [shiftStartHour, shiftEndHour]);
 
+  const isNightTime = () => {
+    const hour = new Date().getHours();
+    return hour >= 18 || hour < 6;
+  };
+
   const generateTip = (weatherCode: number, temp: number) => {
-    let condition = 'clear';
-    if (weatherCode >= 50 && weatherCode <= 69) condition = 'rain'; // drizzle / rain
-    else if (weatherCode >= 70 && weatherCode <= 79) condition = 'snow'; // snow
-    else if (weatherCode >= 80 && weatherCode <= 99) condition = 'rain'; // showers / thunderstorms
-    else if (weatherCode === 45 || weatherCode === 48) condition = 'fog'; // fog
-    else if (temp >= 35) condition = 'hot';
-    else if (temp <= 10) condition = 'cold';
+    const isNight = isNightTime();
+    let condition = isNight ? 'night_clear' : 'clear';
+    
+    if (weatherCode >= 50 && weatherCode <= 69) condition = isNight ? 'night_rain' : 'rain'; // drizzle / rain
+    else if (weatherCode >= 70 && weatherCode <= 79) condition = isNight ? 'night_snow' : 'snow'; // snow
+    else if (weatherCode >= 80 && weatherCode <= 99) condition = isNight ? 'night_rain' : 'rain'; // showers / thunderstorms
+    else if (weatherCode === 45 || weatherCode === 48) condition = isNight ? 'night_fog' : 'fog'; // fog
+    else if (temp >= 35) condition = isNight ? 'night_hot' : 'hot';
+    else if (temp <= 10) condition = isNight ? 'night_cold' : 'cold';
 
     const eligibleTips = weatherTips.filter(t => t.condition === condition);
     if (eligibleTips.length > 0) {
       const randomTip = eligibleTips[Math.floor(Math.random() * eligibleTips.length)].message;
       setTip(randomTip);
     } else {
-      setTip(weatherTips.find(t => t.condition === 'clear')?.message || t('t_auto_517'));
+      setTip(weatherTips.find(t => t.condition === (isNight ? 'night_clear' : 'clear'))?.message || t('t_auto_517'));
+    }
+  };
+
+  const cycleTip = () => {
+    if (!data) return;
+    const code = data.current.weather_code;
+    const temp = data.current.temperature_2m;
+    const isNight = isNightTime();
+    let condition = isNight ? 'night_clear' : 'clear';
+    
+    if (code >= 50 && code <= 69) condition = isNight ? 'night_rain' : 'rain';
+    else if (code >= 70 && code <= 79) condition = isNight ? 'night_snow' : 'snow';
+    else if (code >= 80 && code <= 99) condition = isNight ? 'night_rain' : 'rain';
+    else if (code === 45 || code === 48) condition = isNight ? 'night_fog' : 'fog';
+    else if (temp >= 35) condition = isNight ? 'night_hot' : 'hot';
+    else if (temp <= 10) condition = isNight ? 'night_cold' : 'cold';
+
+    const eligibleTips = weatherTips.filter(t => t.condition === condition);
+    if (eligibleTips.length > 1) {
+      let newTip = tip;
+      let attempts = 0;
+      while (newTip === tip && attempts < 15) {
+        newTip = eligibleTips[Math.floor(Math.random() * eligibleTips.length)].message;
+        attempts++;
+      }
+      setTip(newTip);
     }
   };
 
@@ -181,21 +214,23 @@ export default function WeatherWidget({ variant = 'standalone', shiftStartHour, 
   };
 
   const getWeatherIcon = (code: number, temp: number) => {
+    const isNight = isNightTime();
     if (code >= 50 && code <= 99) return <CloudRain className="w-8 h-8 text-blue-500" />;
     if (code === 45 || code === 48) return <Cloud className="w-8 h-8 text-gray-400" />;
-    if (temp >= 35) return <Sun className="w-8 h-8 text-orange-500" />;
+    if (temp >= 35) return isNight ? <Moon className="w-8 h-8 text-indigo-400 animate-pulse" /> : <Sun className="w-8 h-8 text-orange-500" />;
     if (temp <= 10) return <Thermometer className="w-8 h-8 text-teal-500" />;
-    if (code === 0 || code === 1) return <Sun className="w-8 h-8 text-yellow-500" />;
+    if (code === 0 || code === 1) return isNight ? <Moon className="w-8 h-8 text-indigo-300 animate-pulse" /> : <Sun className="w-8 h-8 text-yellow-500" />;
     return <Cloud className="w-8 h-8 text-gray-300" />;
   };
 
   const getWeatherLabel = (code: number, temp: number) => {
+    const isNight = isNightTime();
     if (code >= 50 && code <= 99) return t('t_auto_521');
     if (code === 45 || code === 48) return t('t_auto_522');
-    if (temp >= 35) return t('t_auto_523');
-    if (temp <= 10) return t('t_auto_524');
-    if (code === 0 || code === 1) return t('t_auto_525');
-    return t('t_auto_526');
+    if (temp >= 35) return isNight ? (lang === 'ar' ? 'ليلة حارة' : 'Hot Night') : t('t_auto_523');
+    if (temp <= 10) return isNight ? (lang === 'ar' ? 'ليلة باردة جداً' : 'Very Cold Night') : t('t_auto_524');
+    if (code === 0 || code === 1) return isNight ? (lang === 'ar' ? 'ليلة صافية' : 'Clear Night') : t('t_auto_525');
+    return isNight ? (lang === 'ar' ? 'أجواء ليلية غائمة' : 'Cloudy Night') : t('t_auto_526');
   };
 
   if (loading) {
@@ -235,7 +270,11 @@ export default function WeatherWidget({ variant = 'standalone', shiftStartHour, 
              {React.cloneElement(getWeatherIcon(data.current.weather_code, data.current.temperature_2m), { className: "w-5 h-5 text-white drop-shadow-md" })}
            </div>
            
-           <div className="text-right flex-1 pr-3">
+           <div 
+             className="text-right flex-1 pr-3 cursor-pointer select-none active:scale-98 duration-100 transition-transform" 
+             onClick={() => !shiftSummary && cycleTip()}
+             title={!shiftSummary ? (lang === 'ar' ? 'اضغط لتغيير النصيحة' : 'Click to cycle tip') : undefined}
+           >
              <p className="text-[10px] sm:text-xs font-medium text-white/95 leading-snug">
                {shiftSummary ? shiftSummary : tip}
              </p>
@@ -281,8 +320,12 @@ export default function WeatherWidget({ variant = 'standalone', shiftStartHour, 
       </div>
 
       <div className="mt-4 pt-4 border-t border-white/5">
-        <div className="flex gap-2 items-start text-sm bg-primary/5 text-primary p-3 rounded-xl">
-           <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+        <div 
+          onClick={() => !shiftSummary && cycleTip()}
+          className="flex gap-2 items-start text-sm bg-primary/5 hover:bg-primary/10 text-primary p-3 rounded-xl cursor-pointer select-none active:scale-[0.99] transition-all duration-200"
+          title={!shiftSummary ? (lang === 'ar' ? 'انقر لتغيير النصيحة' : 'Click to cycle advice') : undefined}
+        >
+           <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5 animate-pulse" />
            <p className="font-medium leading-relaxed">{shiftSummary ? shiftSummary : tip}</p>
         </div>
       </div>
