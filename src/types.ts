@@ -83,6 +83,7 @@ export interface WorkSession {
   restDayCompensation?: '1_day' | '2_days' | '1_day_plus_overtime';
   compensationException?: boolean;
   overtimeMinutes?: number;
+  fractionMinutes?: number; // +++ كسر الساعة بالدقائق المتبقية بالعمل +++
   permissionHours?: number; 
   permissionSubtype?: 'entry' | 'exit' | 'mid_day';
   linkedCompensationSessionId?: string;

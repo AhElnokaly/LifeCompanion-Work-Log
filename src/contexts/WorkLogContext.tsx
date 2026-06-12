@@ -110,11 +110,17 @@ interface WorkLogContextType {
   removeShift: (id: string) => void;
   toggleShiftAssignment: (dateStr: string, shiftId: string) => void;
   toggleBreak: () => void;
-  getBalances: () => {
+  getBalances: (targetDate?: Date) => {
     remainingAnnualLeaves: number;
     remainingPermissionsHours: number;
     availableCompensations: WorkSession[];
   };
+  calculateOvertimeAndFraction: (
+    durationMins: number,
+    isRestDay: boolean,
+    compType?: '1_day' | '2_days' | '1_day_plus_overtime',
+    userSelectedMins?: number
+  ) => { overtimeMinutes: number; fractionMinutes: number };
   logSpecialSession: (type: 'annual_leave' | 'half_day_leave' | 'permission' | 'compensation' | 'sick_leave' | 'casual_leave', data?: any) => void;
   deleteAllData: () => Promise<void>;
   
@@ -225,6 +231,7 @@ export const WorkLogProvider: React.FC<{ children: React.ReactNode }> = ({ child
     if (savedShifts) setShifts(JSON.parse(savedShifts));
     if (savedAssignments) setShiftAssignments(JSON.parse(savedAssignments));
     if (savedActive) setActiveSession(JSON.parse(savedActive));
+    let activeSet = defaultSettings;
     if (savedSettings) {
       const parsedSettings = JSON.parse(savedSettings);
       
@@ -234,12 +241,82 @@ export const WorkLogProvider: React.FC<{ children: React.ReactNode }> = ({ child
       }
       
       setSettings(parsedSettings);
+      activeSet = parsedSettings;
     } else {
       // Auto-populate for default settings
       const newSettings = { ...defaultSettings, onboardingCompleted: false };
       newSettings.customHolidays = generateEgyptianHolidays(new Date().getFullYear());
       setSettings(newSettings);
+      activeSet = newSettings;
     }
+
+    // Function to normalize / clean up any old sessions that have float values in overtime or miss fractionMinutes
+    const cleanSessionOvertimeAndFractions = (sess: WorkSession, activeSetVal: typeof defaultSettings) => {
+      if (sess.dayStatus !== 'work' && sess.dayStatus !== 'rest_day_work') {
+        return { ...sess, overtimeMinutes: 0, fractionMinutes: 0 };
+      }
+
+      let durationVal = sess.duration || 0;
+      if (!durationVal && sess.startTime && sess.endTime) {
+        durationVal = Math.round((new Date(sess.endTime).getTime() - new Date(sess.startTime).getTime()) / 60000);
+      }
+
+      const isRest = sess.isRestDayWork || false;
+      const comp = sess.restDayCompensation;
+      let baseOvertime = 0;
+
+      if (isRest) {
+        if (comp === '1_day_plus_overtime') {
+           baseOvertime = durationVal;
+        } else if (comp === '2_days') {
+           baseOvertime = 0;
+        } else {
+           baseOvertime = comp === '1_day' ? 0 : durationVal; 
+        }
+      } else {
+        const expectedMins = activeSetVal.dailyHours * 60;
+        baseOvertime = durationVal > expectedMins ? durationVal - expectedMins : 0;
+      }
+
+      if (baseOvertime === 0) {
+        return { ...sess, duration: durationVal, overtimeMinutes: 0, fractionMinutes: 0 };
+      }
+
+      const advanced = activeSetVal.advancedRules;
+      if (activeSetVal.usageComplexity === 'advanced' && advanced) {
+         if (advanced.overtimeMinThresholdMinutes && baseOvertime < advanced.overtimeMinThresholdMinutes) {
+            return { ...sess, duration: durationVal, overtimeMinutes: 0, fractionMinutes: 0 };
+         }
+      }
+
+      // Respect the rounding strategy
+      const strategy = (activeSetVal.usageComplexity === 'advanced' && advanced) 
+        ? (advanced.overtimeRoundingStrategy || 'exact') 
+        : 'exact';
+
+      let calculatedOvertimeMins = baseOvertime;
+
+      if (strategy === 'round_down_half') {
+        calculatedOvertimeMins = Math.floor(baseOvertime / 30) * 30;
+      } else {
+        // Default to whole hours for exact, round_down_hour, etc.
+        calculatedOvertimeMins = Math.floor(baseOvertime / 60) * 60;
+      }
+
+      // Apply corporate max overtime cap
+      if (activeSetVal.usageComplexity === 'advanced' && advanced && advanced.maxOvertimeHours) {
+         calculatedOvertimeMins = Math.min(calculatedOvertimeMins, advanced.maxOvertimeHours * 60);
+      }
+
+      const calculatedFractionMins = Math.max(0, baseOvertime - calculatedOvertimeMins);
+
+      return {
+        ...sess,
+        duration: durationVal,
+        overtimeMinutes: calculatedOvertimeMins,
+        fractionMinutes: calculatedFractionMins
+      };
+    };
 
     // Load sessions and cleanup old archived sessions automatically (Feature 8)
     if (savedSessions) {
@@ -250,7 +327,7 @@ export const WorkLogProvider: React.FC<{ children: React.ReactNode }> = ({ child
         const diffMs = now.getTime() - new Date(s.archivedAt).getTime();
         const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
         return diffDays < 365; // Keep only if archived within the last 365 days
-      });
+      }).map(s => cleanSessionOvertimeAndFractions(s, activeSet));
       setSessions(cleanedSessions);
     }
   }, []);
@@ -308,25 +385,23 @@ export const WorkLogProvider: React.FC<{ children: React.ReactNode }> = ({ child
           description: 'أنت تسجل حضور في يوم مصنف كعطلة أو راحة في إعداداتك. كيف تود احتساب هذا اليوم؟',
           duration: 15000,
           action: {
-            label: 'عائد نقدي إضافي (Overtime)',
+            label: 'عائد نقدي ووقت إضافي',
             onClick: () => {
               updateActiveSession({ restDayCompensation: '1_day_plus_overtime' });
-              toast.success('تم تحديد اليوم كعمل إضافي (Overtime)');
-            }
-          },
-          cancel: {
-            label: 'إضافة كرصيد يوم بديل',
-            onClick: () => {
-              updateActiveSession({ restDayCompensation: '1_day' });
-              toast.success('تم التحديد للحصول على يوم بديل');
             }
           }
         });
-      }, 500);
+      }, 1000);
     }
   };
 
-  const calculateOvertime = (durationMins: number, isRestDay: boolean, compType?: '1_day' | '2_days' | '1_day_plus_overtime') => {
+  // +++ تم تعديل السلوك لإرجاع الساعات الإضافية وكسر الساعة بدقة مع احترام استراتيجيات وبنود التقريب +++
+  const calculateOvertimeAndFraction = (
+    durationMins: number,
+    isRestDay: boolean,
+    compType?: '1_day' | '2_days' | '1_day_plus_overtime',
+    userSelectedMins?: number
+  ) => {
     let baseOvertime = 0;
     
     if (isRestDay) {
@@ -342,25 +417,59 @@ export const WorkLogProvider: React.FC<{ children: React.ReactNode }> = ({ child
       baseOvertime = durationMins > expectedMins ? durationMins - expectedMins : 0;
     }
 
-    if (baseOvertime === 0) return 0;
+    if (baseOvertime === 0) {
+      return { overtimeMinutes: 0, fractionMinutes: 0 };
+    }
     
     const advanced = settings.advancedRules;
     if (settings.usageComplexity === 'advanced' && advanced) {
-       // Threshold check (e.g. if worked < 60 min overtime, and threshold is 60, counts as 0)
+       // Check threshold
        if (advanced.overtimeMinThresholdMinutes && baseOvertime < advanced.overtimeMinThresholdMinutes) {
-          return 0; // Did not cross threshold
+          return { overtimeMinutes: 0, fractionMinutes: 0 };
        }
-
-       // Rounding Strategy
-       if (advanced.overtimeRoundingStrategy === 'round_down_hour') {
-          return Math.floor(baseOvertime / 60) * 60;
-       } else if (advanced.overtimeRoundingStrategy === 'round_down_half') {
-          return Math.floor(baseOvertime / 30) * 30;
-       }
-       // dynamic_ask is handled at endSession UI level usually, but we keep exact here for now
     }
 
-    return baseOvertime;
+    // If there is an explicit userSelectedMins choice from the dialog (e.g. from endSession)
+    if (userSelectedMins !== undefined) {
+      const maxMins = (settings.usageComplexity === 'advanced' && advanced && advanced.maxOvertimeHours) 
+        ? advanced.maxOvertimeHours * 60 
+        : Infinity;
+      const finalMins = Math.min(userSelectedMins, maxMins);
+      return {
+        overtimeMinutes: finalMins,
+        fractionMinutes: Math.max(0, baseOvertime - finalMins)
+      };
+    }
+
+    // Respect the rounding strategy
+    const strategy = (settings.usageComplexity === 'advanced' && advanced) 
+      ? (advanced.overtimeRoundingStrategy || 'exact') 
+      : 'exact';
+
+    let calculatedOvertimeMins = baseOvertime;
+
+    if (strategy === 'round_down_half') {
+      calculatedOvertimeMins = Math.floor(baseOvertime / 30) * 30;
+    } else {
+      // Default to whole hours for exact, round_down_hour, etc.
+      calculatedOvertimeMins = Math.floor(baseOvertime / 60) * 60;
+    }
+
+    // Apply corporate max overtime cap if applicable
+    if (settings.usageComplexity === 'advanced' && advanced && advanced.maxOvertimeHours) {
+       calculatedOvertimeMins = Math.min(calculatedOvertimeMins, advanced.maxOvertimeHours * 60);
+    }
+
+    const calculatedFractionMins = Math.max(0, baseOvertime - calculatedOvertimeMins);
+
+    return {
+      overtimeMinutes: calculatedOvertimeMins,
+      fractionMinutes: calculatedFractionMins
+    };
+  };
+
+  const calculateOvertime = (durationMins: number, isRestDay: boolean, compType?: '1_day' | '2_days' | '1_day_plus_overtime') => {
+    return calculateOvertimeAndFraction(durationMins, isRestDay, compType).overtimeMinutes;
   };
 
   const endSession = (notes: string, manualData?: Partial<WorkSession>) => {
@@ -385,7 +494,9 @@ export const WorkLogProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
     const isRestDay = activeSession.isRestDayWork || false;
     const compType = activeSession.restDayCompensation;
-    const overtimeMinutes = calculateOvertime(duration, isRestDay, compType);
+    
+    // +++ استخدام الحسبة الجديدة لتفريع الإضافي والكسر بدقة مع الحفاظ على الاختيار اليدوي للمستخدم +++
+    const calcResult = calculateOvertimeAndFraction(duration, isRestDay, compType, manualData?.overtimeMinutes);
 
     const completedSession: WorkSession = {
       ...activeSession,
@@ -394,7 +505,8 @@ export const WorkLogProvider: React.FC<{ children: React.ReactNode }> = ({ child
       duration,
       breaks: finalBreaks,
       activeBreakStartTime: undefined,
-      overtimeMinutes,
+      overtimeMinutes: calcResult.overtimeMinutes,
+      fractionMinutes: calcResult.fractionMinutes,
       notes,
     };
     
@@ -479,9 +591,12 @@ export const WorkLogProvider: React.FC<{ children: React.ReactNode }> = ({ child
       duration = Math.round((new Date(session.endTime).getTime() - new Date(session.startTime).getTime()) / 60000);
     }
     
-    const overtimeMinutes = session.overtimeMinutes !== undefined ? session.overtimeMinutes : calculateOvertime(duration, isRestDay, session.restDayCompensation);
+    // +++ استخدام الحسبة الجديدة لتحديد الإضافي والكسر وتجنب ترحيل الكسور للأوفرتايم +++
+    const calcResult = calculateOvertimeAndFraction(duration, isRestDay, session.restDayCompensation, session.overtimeMinutes);
+    const overtimeMinutes = calcResult.overtimeMinutes;
+    const fractionMinutes = calcResult.fractionMinutes;
     
-    setSessions([...sessions, { ...session, isRestDayWork: isRestDay, duration, overtimeMinutes }]);
+    setSessions([...sessions, { ...session, isRestDayWork: isRestDay, duration, overtimeMinutes, fractionMinutes }]);
   };
 
   const updateSession = (id: string, updates: Partial<WorkSession>) => {
@@ -512,13 +627,21 @@ export const WorkLogProvider: React.FC<{ children: React.ReactNode }> = ({ child
     setSessions(current => current.map(sess => {
       if (sess.id !== id) return sess;
       const updated = { ...sess, ...updates };
-      // Recalculate duration & overtime if times changed or if compensation changed
-      if (updates.startTime || updates.endTime || updates.isRestDayWork !== undefined || updates.duration !== undefined || updates.restDayCompensation !== undefined) {
+      // Recalculate duration & overtime if times, day status, or compensation changed
+      if (updates.startTime || updates.endTime || updates.isRestDayWork !== undefined || updates.duration !== undefined || updates.restDayCompensation !== undefined || updates.dayStatus !== undefined) {
          if (updated.endTime && updated.startTime) {
            updated.duration = Math.round((new Date(updated.endTime).getTime() - new Date(updated.startTime).getTime()) / 60000);
          }
-         const isRest = updated.isRestDayWork || false;
-         updated.overtimeMinutes = calculateOvertime(updated.duration || 0, isRest, updated.restDayCompensation);
+         if (updated.dayStatus !== 'work' && updated.dayStatus !== 'rest_day_work') {
+           updated.overtimeMinutes = 0;
+           updated.fractionMinutes = 0;
+         } else {
+           const isRest = updated.isRestDayWork || false;
+           // +++ استخدام الحسبة الجديدة لتحديث الإضافي والكسر وتصحيحه عند التحديث +++
+           const calcResult = calculateOvertimeAndFraction(updated.duration || 0, isRest, updated.restDayCompensation, updates.overtimeMinutes !== undefined ? updates.overtimeMinutes : updated.overtimeMinutes);
+           updated.overtimeMinutes = calcResult.overtimeMinutes;
+           updated.fractionMinutes = calcResult.fractionMinutes;
+         }
       }
       return updated;
     }));
@@ -589,9 +712,10 @@ export const WorkLogProvider: React.FC<{ children: React.ReactNode }> = ({ child
     });
   };
 
-  const getBalances = () => {
-    const currentYear = new Date().getFullYear();
-    const currentMonth = new Date().getMonth();
+  const getBalances = (targetDate?: Date) => {
+    const refDate = targetDate || new Date();
+    const currentYear = refDate.getFullYear();
+    const currentMonth = refDate.getMonth();
     
     // Annual leaves
     const usedAnnualLeaves = sessions
@@ -729,7 +853,7 @@ export const WorkLogProvider: React.FC<{ children: React.ReactNode }> = ({ child
     <WorkLogContext.Provider value={{ 
       sessions: activeSessions, archivedSessions, projects, jobs, shifts, shiftAssignments, activeSession, settings, 
       updateSettings, startSession, endSession, addSession, updateSession, updateActiveSession, deleteSession, restoreSession, addProject, addJob, updateJob, addShift, updateShift, removeJob, removeShift, toggleShiftAssignment,
-      toggleBreak, getBalances, logSpecialSession, deleteAllData,
+      toggleBreak, getBalances, calculateOvertimeAndFraction, logSpecialSession, deleteAllData,
       pomodoroTimeLeft, pomodoroIsActive, pomodoroMode, togglePomodoro, resetPomodoro,
       alarms, addAlarm, toggleAlarm, deleteAlarm
     }}>

@@ -24,7 +24,7 @@ import { detectPermissionType } from '../../lib/smartAttendance';
 
 export default function CalendarView() {
   const { t, lang } = useLanguage();
-  const { sessions, jobs, shifts, shiftAssignments, toggleShiftAssignment, settings, updateSettings, deleteSession, logSpecialSession, addSession } = useWorkLog();
+  const { sessions, jobs, shifts, shiftAssignments, toggleShiftAssignment, settings, updateSettings, deleteSession, logSpecialSession, addSession, getBalances } = useWorkLog();
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDay, setSelectedDay] = useState<Date>(new Date());
   const [sheetOpen, setSheetOpen] = useState(false);
@@ -328,6 +328,7 @@ export default function CalendarView() {
     const actualTotalHours = dailyData.reduce((acc, d) => acc + d.hours, 0);
     const goalHours = settings.dailyHours * (7 - settings.restDays.length);
     const totalOvertime = thisWeekSessions.reduce((acc, s) => acc + ((s.overtimeMinutes || 0) / 60), 0);
+    const totalWeeklyFraction = thisWeekSessions.reduce((acc, s) => acc + (s.fractionMinutes || 0), 0);
 
     const lastWeekStart = subWeeks(weekStart, 1);
     const lastWeekEnd = subDays(weekStart, 1);
@@ -355,9 +356,16 @@ export default function CalendarView() {
           
           <Card className="p-6 bg-yellow-500/10 border-yellow-500/20 shadow-lg rounded-3xl relative overflow-hidden flex flex-col justify-center items-center text-center">
             <p className="text-sm text-yellow-500 mb-1 font-bold">{t('cal.weekly_overtime')}</p>
-            <div className="flex items-baseline gap-1">
-              <span className="text-4xl font-black text-yellow-500">{totalOvertime.toFixed(1)}</span>
-              <span className="text-yellow-500/70 font-medium text-xs">{t('cal.hour')}</span>
+            <div className="flex flex-col justify-center items-center">
+               <div className="flex items-baseline gap-1">
+                 <span className="text-4xl font-black text-yellow-500">{Number(totalOvertime.toFixed(2))}</span>
+                 <span className="text-yellow-500/70 font-medium text-xs">{t('cal.hour')}</span>
+               </div>
+               {totalWeeklyFraction > 0 && (
+                  <span className="text-[10px] font-bold text-amber-500 mt-1">
+                     +{totalWeeklyFraction} {lang === 'ar' ? 'د كسر' : 'm fraction'}
+                  </span>
+               )}
             </div>
           </Card>
         </div>
@@ -415,6 +423,7 @@ export default function CalendarView() {
     const totalHours = Math.floor(totalMinutes / 60);
     const totalOvertime = daySessions.reduce((acc, s) => acc + (s.overtimeMinutes || 0), 0);
     const overtimeHours = Math.floor(totalOvertime / 60);
+    const dayFractions = daySessions.reduce((acc, s) => acc + (s.fractionMinutes || 0), 0);
 
     return (
       <div className="flex flex-col gap-6 mt-4">
@@ -501,32 +510,52 @@ export default function CalendarView() {
           )}
 
           {['half_day_leave', 'permission', 'permission_1h', 'permission_2h'].includes(customEntryData.type) && (
-             <div className="space-y-2">
-               <Label className="text-muted-foreground font-bold">{t('cal.permission_type')}</Label>
-               <div className="flex flex-wrap gap-2">
-                 <Button 
-                   variant={customEntryData.type === 'permission_1h' ? 'default' : 'secondary'}
-                   className={`rounded-xl h-10 flex-1 font-bold ${customEntryData.type === 'permission_1h' ? 'bg-purple-600 hover:bg-purple-700 text-white' : ''}`}
-                   onClick={() => setCustomEntryData({...customEntryData, type: 'permission_1h'})}
-                 >
-                   {t('t_auto_209')}
-                                                 </Button>
-                 <Button 
-                   variant={customEntryData.type === 'permission_2h' ? 'default' : 'secondary'}
-                   className={`rounded-xl h-10 flex-1 font-bold ${customEntryData.type === 'permission_2h' ? 'bg-purple-600 hover:bg-purple-700 text-white' : ''}`}
-                   onClick={() => setCustomEntryData({...customEntryData, type: 'permission_2h'})}
-                 >
-                   {t('t_auto_210')}
-                                                 </Button>
-                 <Button 
-                   variant={customEntryData.type === 'half_day_leave' ? 'default' : 'secondary'}
-                   className={`rounded-xl h-10 flex-1 font-bold ${customEntryData.type === 'half_day_leave' ? 'bg-blue-600 hover:bg-blue-700 text-white' : ''}`}
-                   onClick={() => setCustomEntryData({...customEntryData, type: 'half_day_leave'})}
-                 >
-                   {t('cal.half_day_work')}
-                                                 </Button>
-               </div>
-             </div>
+             (() => {
+                const existingDayPermission = sessions.find(s => {
+                  const sDate = new Date(s.startTime);
+                  return s.dayStatus === 'permission' && 
+                         sDate.getDate() === selectedDay.getDate() && 
+                         sDate.getMonth() === selectedDay.getMonth() && 
+                         sDate.getFullYear() === selectedDay.getFullYear();
+                });
+                let calPermissionOffset = 0;
+                if (existingDayPermission) {
+                  calPermissionOffset = existingDayPermission.permissionHours || ((existingDayPermission.duration || 0) / 60);
+                }
+                const calBalances = getBalances(selectedDay);
+                const isCalOneHourOffline = (calBalances.remainingPermissionsHours + calPermissionOffset) < 1;
+                const isCalTwoHoursOffline = (calBalances.remainingPermissionsHours + calPermissionOffset) < 2;
+                return (
+                  <div className="space-y-2">
+                    <Label className="text-muted-foreground font-bold">{t('cal.permission_type')}</Label>
+                    <div className="flex flex-wrap gap-2">
+                      <Button 
+                        variant={customEntryData.type === 'permission_1h' ? 'default' : 'secondary'}
+                        className={`rounded-xl h-10 flex-1 font-bold ${customEntryData.type === 'permission_1h' ? 'bg-purple-600 hover:bg-purple-700 text-white' : ''} ${isCalOneHourOffline ? 'opacity-40 cursor-not-allowed pointer-events-none' : ''}`}
+                        disabled={isCalOneHourOffline}
+                        onClick={() => setCustomEntryData({...customEntryData, type: 'permission_1h'})}
+                      >
+                        {isCalOneHourOffline ? (lang === 'ar' ? 'إذن 1 س (Offline)' : 'Perm 1h (Offline)') : t('t_auto_209')}
+                      </Button>
+                      <Button 
+                        variant={customEntryData.type === 'permission_2h' ? 'default' : 'secondary'}
+                        className={`rounded-xl h-10 flex-1 font-bold ${customEntryData.type === 'permission_2h' ? 'bg-purple-600 hover:bg-purple-700 text-white' : ''} ${isCalTwoHoursOffline ? 'opacity-40 cursor-not-allowed pointer-events-none' : ''}`}
+                        disabled={isCalTwoHoursOffline}
+                        onClick={() => setCustomEntryData({...customEntryData, type: 'permission_2h'})}
+                      >
+                        {isCalTwoHoursOffline ? (lang === 'ar' ? 'إذن 2 س (Offline)' : 'Perm 2h (Offline)') : t('t_auto_210')}
+                      </Button>
+                      <Button 
+                        variant={customEntryData.type === 'half_day_leave' ? 'default' : 'secondary'}
+                        className={`rounded-xl h-10 flex-1 font-bold ${customEntryData.type === 'half_day_leave' ? 'bg-blue-600 hover:bg-blue-700 text-white' : ''}`}
+                        onClick={() => setCustomEntryData({...customEntryData, type: 'half_day_leave'})}
+                      >
+                        {t('cal.half_day_work')}
+                                                     </Button>
+                    </div>
+                  </div>
+                );
+             })()
           )}
 
           {customEntryData.type === 'salary' && settings.system === 'freelance' && (
@@ -606,11 +635,15 @@ export default function CalendarView() {
         {/* Separator / existing sessions */}
         {daySessions.length > 0 && (
            <div className="mt-4 pt-4 border-t border-border/50 space-y-4">
-              <div className="flex justify-between items-center text-sm font-bold text-muted-foreground">
-                 <span>{t('cal.records_today')}</span>
-                 <div className="flex gap-4">
-                   <span>{t('t_auto_213')} <span className="text-emerald-500">{totalHours} {t('t_auto_9')}</span></span>
-                   <span>{t('t_auto_214')} <span className="text-orange-500">{overtimeHours} {t('t_auto_9')}</span></span>
+              <div className="flex flex-col gap-1 text-sm font-bold text-muted-foreground w-full">
+                 <div className="flex justify-between items-center">
+                    <span>{t('cal.records_today')}</span>
+                    <span className="text-primary font-bold">{totalHours} {t('t_auto_9')}</span>
+                 </div>
+                 <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs font-normal text-muted-foreground/80 justify-end">
+                    <span>{lang === 'ar' ? 'الأساسي:' : 'Basic:'} <span className="font-semibold text-foreground/90">{Math.max(0, totalHours - overtimeHours)} {t('t_auto_9')}</span></span>
+                    {overtimeHours > 0 && <span>{t('t_auto_214')} <span className="font-semibold text-emerald-500">{overtimeHours} {t('t_auto_9')}</span></span>}
+                    {dayFractions > 0 && <span className="text-amber-500 font-bold">+{dayFractions} {lang === 'ar' ? 'د كسر' : 'm fraction'}</span>}
                  </div>
               </div>
               

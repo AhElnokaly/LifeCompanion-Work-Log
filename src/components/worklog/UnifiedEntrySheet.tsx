@@ -24,7 +24,7 @@ interface UnifiedEntrySheetProps {
 
 export function UnifiedEntrySheet({ open, onOpenChange, initialDate, allowDateChange = false, sessionToEdit }: UnifiedEntrySheetProps) {
   const { t, lang } = useLanguage();
-  const { sessions, jobs, shifts, shiftAssignments, settings, addSession, deleteSession, updateSession } = useWorkLog();
+  const { sessions, jobs, shifts, shiftAssignments, settings, addSession, deleteSession, updateSession, getBalances, calculateOvertimeAndFraction } = useWorkLog();
 
   const [selectedDateStr, setSelectedDateStr] = useState(format(sessionToEdit ? new Date(sessionToEdit.startTime) : (initialDate || new Date()), 'yyyy-MM-dd'));
   const [selectedDay, setSelectedDay] = useState(sessionToEdit ? new Date(sessionToEdit.startTime) : (initialDate || new Date()));
@@ -158,15 +158,7 @@ export function UnifiedEntrySheet({ open, onOpenChange, initialDate, allowDateCh
        const duration = differenceInMinutes(new Date(endStr), new Date(startStr));
        
        let compType = isRestDay ? entryData.restDayCompensation : undefined;
-       let baseOvertime = 0;
-       if (isRestDay) {
-         if (compType === '1_day_plus_overtime') baseOvertime = duration;
-         else if (compType === '2_days') baseOvertime = 0;
-         else baseOvertime = compType === '1_day' ? 0 : duration; 
-       } else {
-         const expectedMins = settings.dailyHours * 60;
-         baseOvertime = duration > expectedMins ? duration - expectedMins : 0;
-       }
+       const calcResult = calculateOvertimeAndFraction(duration, isRestDay || false, compType);
 
        const sessionPayload = {
          type: entryData.type === 'project' && entryData.jobId !== 'none' ? 'project' as any : 'salary' as any,
@@ -178,7 +170,8 @@ export function UnifiedEntrySheet({ open, onOpenChange, initialDate, allowDateCh
          restDayCompensation: compType as any,
          breaks: 0,
          duration: duration,
-         overtimeMinutes: baseOvertime,
+         overtimeMinutes: calcResult.overtimeMinutes,
+         fractionMinutes: calcResult.fractionMinutes,
          location: 'office' as any,
          notes: isRestDay ? (entryData.notes ? `${t('t_auto_198')} - ${entryData.notes}` : t('t_auto_198')) : entryData.notes
        };
@@ -331,33 +324,54 @@ export function UnifiedEntrySheet({ open, onOpenChange, initialDate, allowDateCh
           )}
 
           {['half_day_leave', 'permission', 'permission_1h', 'permission_2h'].includes(entryData.type) && (
-             <div className="space-y-2">
-               <Label className="text-muted-foreground font-bold">{t('cal.permission_type') || 'نوع الإذن'}</Label>
-               <div className="flex flex-wrap gap-2">
-                 <Button 
-                   variant={entryData.type === 'permission_1h' ? 'default' : 'secondary'}
-                   className={`rounded-xl h-10 flex-1 font-bold ${entryData.type === 'permission_1h' ? 'bg-purple-600 hover:bg-purple-700 text-white' : ''}`}
-                   onClick={() => setEntryData(d => ({...d, type: 'permission_1h'}))}
-                 >
-                   {t('t_auto_209') || 'إذن (1 ساعة)'}
-                 </Button>
-                 <Button 
-                   variant={entryData.type === 'permission_2h' ? 'default' : 'secondary'}
-                   className={`rounded-xl h-10 flex-1 font-bold ${entryData.type === 'permission_2h' ? 'bg-purple-600 hover:bg-purple-700 text-white' : ''}`}
-                   onClick={() => setEntryData(d => ({...d, type: 'permission_2h'}))}
-                 >
-                   {t('t_auto_210') || 'إذن (2 ساعة)'}
-                 </Button>
-                 <Button 
-                   variant={entryData.type === 'half_day_leave' ? 'default' : 'secondary'}
-                   className={`rounded-xl h-10 flex-1 font-bold ${entryData.type === 'half_day_leave' ? 'bg-purple-600 hover:bg-purple-700 text-white' : ''}`}
-                   onClick={() => setEntryData(d => ({...d, type: 'half_day_leave'}))}
-                 >
-                   {t('t_auto_229') || 'نصف يوم'}
-                 </Button>
-               </div>
-             </div>
+             (() => {
+                let currentPermissionOffset = 0;
+                if (sessionToEdit && sessionToEdit.dayStatus === 'permission') {
+                  const editMonth = new Date(sessionToEdit.startTime).getMonth();
+                  const editYear = new Date(sessionToEdit.startTime).getFullYear();
+                  const selMonth = selectedDay.getMonth();
+                  const selYear = selectedDay.getFullYear();
+                  if (editMonth === selMonth && editYear === selYear) {
+                    currentPermissionOffset = sessionToEdit.permissionHours || ((sessionToEdit.duration || 0) / 60);
+                  }
+                }
+                const balances = getBalances(selectedDay);
+                const curPermissionsRemaining = balances.remainingPermissionsHours + currentPermissionOffset;
+                const isOneHourOffline = curPermissionsRemaining < 1;
+                const isTwoHoursOffline = curPermissionsRemaining < 2;
+                return (
+                  <div className="space-y-2">
+                    <Label className="text-muted-foreground font-bold">{t('cal.permission_type') || 'نوع الإذن'}</Label>
+                    <div className="flex flex-wrap gap-2">
+                      <Button 
+                        variant={entryData.type === 'permission_1h' ? 'default' : 'secondary'}
+                        className={`rounded-xl h-10 flex-1 font-bold ${entryData.type === 'permission_1h' ? 'bg-purple-600 hover:bg-purple-700 text-white' : ''} ${isOneHourOffline ? 'opacity-40 cursor-not-allowed pointer-events-none' : ''}`}
+                        disabled={isOneHourOffline}
+                        onClick={() => setEntryData(d => ({...d, type: 'permission_1h'}))}
+                      >
+                        {isOneHourOffline ? (lang === 'ar' ? 'إذن 1 س (Offline)' : 'Perm 1h (Offline)') : (t('t_auto_209') || 'إذن (1 ساعة)')}
+                      </Button>
+                      <Button 
+                        variant={entryData.type === 'permission_2h' ? 'default' : 'secondary'}
+                        className={`rounded-xl h-10 flex-1 font-bold ${entryData.type === 'permission_2h' ? 'bg-purple-600 hover:bg-purple-700 text-white' : ''} ${isTwoHoursOffline ? 'opacity-40 cursor-not-allowed pointer-events-none' : ''}`}
+                        disabled={isTwoHoursOffline}
+                        onClick={() => setEntryData(d => ({...d, type: 'permission_2h'}))}
+                      >
+                        {isTwoHoursOffline ? (lang === 'ar' ? 'إذن 2 س (Offline)' : 'Perm 2h (Offline)') : (t('t_auto_210') || 'إذن (2 ساعة)')}
+                      </Button>
+                      <Button 
+                        variant={entryData.type === 'half_day_leave' ? 'default' : 'secondary'}
+                        className={`rounded-xl h-10 flex-1 font-bold ${entryData.type === 'half_day_leave' ? 'bg-purple-600 hover:bg-purple-700 text-white' : ''}`}
+                        onClick={() => setEntryData(d => ({...d, type: 'half_day_leave'}))}
+                      >
+                        {t('t_auto_229') || 'نصف يوم'}
+                      </Button>
+                    </div>
+                  </div>
+                );
+             })()
           )}
+
 
           {/* Time Picker and Notes Section */}
           {(!['annual_leave', 'sick_leave', 'casual_leave', 'permission_1h', 'permission_2h', 'compensation'].includes(entryData.type)) && (

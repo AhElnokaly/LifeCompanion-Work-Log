@@ -33,6 +33,7 @@ export default function ReportsView() {
   // Calculate Metrics
   const totalHours = currentMonthSessions.reduce((acc, s) => acc + ((s.duration || 0) / 60), 0);
   const totalOvertime = currentMonthSessions.reduce((acc, s) => acc + ((s.overtimeMinutes || 0) / 60), 0);
+  const totalFractions = currentMonthSessions.reduce((acc, s) => acc + (s.fractionMinutes || 0), 0);
   
   const permissionsCount = currentMonthSessions.filter(s => s.dayStatus === 'permission').length;
   const annualLeaveDays = currentMonthSessions.filter(s => s.dayStatus === 'annual_leave').length;
@@ -190,6 +191,39 @@ export default function ReportsView() {
          </div>
       </header>
 
+      {/* Top 3 Cards (Totals) */}
+      <div className="grid grid-cols-3 gap-2">
+         <Card className="rounded-[1.5rem] bg-card/60 backdrop-blur-md border border-white/5 p-3.5 flex items-center justify-between shadow-sm">
+           <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary shrink-0">
+             <TrendingUp className="w-4 h-4" />
+           </div>
+           <div className="flex flex-col items-end gap-0.5">
+             <span className="text-[10px] md:text-xs font-bold text-foreground text-right">{t('rep.total')}</span>
+             <span className="text-xs md:text-sm font-black text-primary leading-tight">{totalHours.toFixed(1)} {t('t_auto_9')}</span>
+           </div>
+         </Card>
+         
+         <Card className="rounded-[1.5rem] bg-card/60 backdrop-blur-md border border-white/5 p-3.5 flex items-center justify-between shadow-sm">
+           <div className="w-8 h-8 rounded-full bg-emerald-500/10 flex items-center justify-center text-emerald-400 shrink-0">
+             <TrendingUp className="w-4 h-4" />
+           </div>
+           <div className="flex flex-col items-end gap-0.5">
+             <span className="text-[10px] md:text-xs font-bold text-emerald-500 text-right">{t('rep.overtime')}</span>
+             <span className="text-xs md:text-sm font-black text-emerald-500 leading-tight">{Number(totalOvertime.toFixed(2))} {t('t_auto_9')}</span>
+           </div>
+         </Card>
+
+         <Card className="rounded-[1.5rem] bg-card/60 backdrop-blur-md border border-white/5 p-3.5 flex items-center justify-between shadow-sm">
+           <div className="w-8 h-8 rounded-full bg-amber-500/10 flex items-center justify-center text-amber-500 shrink-0">
+             <TrendingUp className="w-4 h-4 text-amber-500" />
+           </div>
+           <div className="flex flex-col items-end gap-0.5">
+             <span className="text-[10px] md:text-xs font-bold text-amber-500 text-right">{lang === 'ar' ? 'كسر الساعة' : 'Fraction'}</span>
+             <span className="text-xs md:text-sm font-black text-amber-500 leading-tight">{totalFractions} {lang === 'ar' ? 'دقيقة' : 'min'}</span>
+           </div>
+         </Card>
+      </div>
+
       <Tabs defaultValue="history" className="w-full">
          <TabsList className="grid w-full grid-cols-3 rounded-2xl p-1 bg-secondary/30 h-12 border border-white/5 mb-4">
            <TabsTrigger value="history" className="rounded-xl font-bold h-10">{t('rep.attendance_log')}</TabsTrigger>
@@ -198,29 +232,6 @@ export default function ReportsView() {
          </TabsList>
 
          <TabsContent value="charts" className="flex flex-col gap-4 mt-0 border-none p-0 outline-none">
-            {/* Top 2 Cards (Totals) */}
-            <div className="grid grid-cols-2 gap-3">
-               <Card className="rounded-[1.5rem] bg-card/60 backdrop-blur-md border border-white/5 p-4 flex items-center justify-between shadow-sm">
-                 <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary">
-                   <TrendingUp className="w-4 h-4" />
-                 </div>
-                 <div className="flex items-center gap-2">
-                   <span className="text-sm font-bold text-foreground">{t('rep.total')}</span>
-                   <span className="text-sm font-bold text-primary">{totalHours.toFixed(1)} {t('t_auto_9')}</span>
-                 </div>
-               </Card>
-               
-               <Card className="rounded-[1.5rem] bg-card/60 backdrop-blur-md border border-white/5 p-4 flex items-center justify-between shadow-sm">
-                 <div className="w-8 h-8 rounded-full bg-emerald-500/10 flex items-center justify-center text-emerald-400">
-                   <TrendingUp className="w-4 h-4" />
-                 </div>
-                 <div className="flex items-center gap-2">
-                   <span className="text-sm font-bold text-emerald-500">{t('rep.overtime')}</span>
-                   <span className="text-sm font-bold text-emerald-500">{totalOvertime.toFixed(1)} {t('t_auto_9')}</span>
-                 </div>
-               </Card>
-            </div>
-
             {/* Grid of 4 specific metrics */}
             <div className="grid grid-cols-2 gap-3">
                <Card className="rounded-[1.2rem] bg-card/40 border-white/5 p-3 flex items-center justify-between">
@@ -442,7 +453,13 @@ export default function ReportsView() {
                                  else if (session.dayStatus === 'late') sessionLabel = 'تأخير';
 
                                  const hasNotes = session.notes && session.notes.trim().length > 0;
-                                 const overtimeHours = session.overtimeMinutes ? Math.floor(session.overtimeMinutes / 60) : 0;
+                                 
+                                 const totalHoursDecimal = (session.duration || 0) / 60;
+                                 const isRest = session.dayStatus === 'rest_day_work' || session.isRestDayWork;
+                                 const basicHours = isRest ? 0 : Math.min(settings.dailyHours, Math.floor(totalHoursDecimal));
+                                 const overtimeHoursDecimal = (session.overtimeMinutes || 0) / 60;
+                                 const hourFraction = Math.max(0, totalHoursDecimal - (basicHours + overtimeHoursDecimal));
+                                 const fractionMinutesVal = Math.round(hourFraction * 60);
 
                                  return (
                                     <div key={session.id} className={`flex flex-col gap-2 p-3 bg-secondary/20 rounded-xl ${idx > 0 ? 'border-t border-border/40 mt-1' : ''}`}>
@@ -460,9 +477,25 @@ export default function ReportsView() {
                                           
                                           <div className="flex items-center gap-2">
                                              {session.duration !== undefined && session.duration > 0 && (
-                                                <div className="flex flex-col items-end">
-                                                   <span className="text-xs font-black text-primary leading-tight">{Math.floor(session.duration/60)} {t('t_auto_9')}</span>
-                                                   {overtimeHours > 0 && <span className="text-[9px] font-bold text-emerald-500">+{overtimeHours} {t('t_auto_9')}</span>}
+                                                <div className="flex flex-col items-end gap-0.5 text-right">
+                                                   <span className="text-xs font-black text-primary leading-tight">
+                                                      {Number(totalHoursDecimal.toFixed(2))} {t('t_auto_9')}
+                                                   </span>
+                                                   {basicHours > 0 && (
+                                                      <span className="text-[10px] text-muted-foreground/85">
+                                                         {lang === 'ar' ? `أساسي: ${basicHours}` : `Basic: ${basicHours}`} {t('t_auto_9')}
+                                                      </span>
+                                                   )}
+                                                   {overtimeHoursDecimal > 0 && (
+                                                      <span className="text-[10px] font-bold text-emerald-500">
+                                                         +{overtimeHoursDecimal} {t('t_auto_9')} {lang === 'ar' ? 'إضافي' : 'Overtime'}
+                                                      </span>
+                                                   )}
+                                                   {fractionMinutesVal > 0 && (
+                                                      <span className="text-[10px] font-bold text-amber-500">
+                                                         +{fractionMinutesVal} {lang === 'ar' ? 'د كسر' : 'm fraction'}
+                                                      </span>
+                                                   )}
                                                 </div>
                                              )}
                                              <Button variant="ghost" size="icon" className="h-7 w-7 text-primary hover:bg-primary/10 ml-1" onClick={(e) => { e.stopPropagation(); setEditingSession(session); }}><Edit2 className="w-3.5 h-3.5" /></Button>

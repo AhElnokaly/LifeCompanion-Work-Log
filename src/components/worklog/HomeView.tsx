@@ -19,7 +19,7 @@ import { useLanguage } from '../../contexts/LanguageContext';
 export default function HomeView({ onNavigate }: { onNavigate?: (tab: string) => void }) {
   const { 
     activeSession, sessions, jobs, shifts, shiftAssignments, startSession, addSession, endSession, settings, updateSettings, getBalances, logSpecialSession, updateSession, updateActiveSession, toggleBreak,
-    pomodoroTimeLeft, pomodoroIsActive, pomodoroMode, togglePomodoro, resetPomodoro
+    pomodoroTimeLeft, pomodoroIsActive, pomodoroMode, togglePomodoro, resetPomodoro, calculateOvertimeAndFraction
   } = useWorkLog();
   const { t, lang } = useLanguage();
   const { askAI } = useAICore();
@@ -169,6 +169,14 @@ export default function HomeView({ onNavigate }: { onNavigate?: (tab: string) =>
   // Allow overtime to exceed slightly to show up to 100% full bar
   const isOvertime = totalMinutesToday > targetMins || activeSession?.isRestDayWork;
   const overtimeMinutes = Math.max(0, totalMinutesToday - targetMins);
+
+  const liveCalc = calculateOvertimeAndFraction(
+    totalMinutesToday, 
+    activeSession?.isRestDayWork || false, 
+    activeSession?.restDayCompensation
+  );
+  const liveOvertimeHours = liveCalc.overtimeMinutes / 60;
+  const liveFractionMins = liveCalc.fractionMinutes;
 
   const isFreelance = settings.system === 'freelance';
   const balances = getBalances();
@@ -707,7 +715,12 @@ export default function HomeView({ onNavigate }: { onNavigate?: (tab: string) =>
             </div>
             <div className="flex flex-col gap-1 justify-center px-1">
                <span className="text-[10px] text-muted-foreground font-medium">{t('home.overtime')}</span>
-               <span className="text-lg font-bold font-mono tracking-tight text-emerald-500">{formatMinutesToHHMM(overtimeMinutes)}</span>
+               <div className="flex flex-col items-center justify-center leading-tight">
+                  <span className="text-lg font-bold font-mono tracking-tight text-emerald-500">{liveOvertimeHours}{lang === 'ar' ? 'س' : 'h'}</span>
+                  {liveFractionMins > 0 && (
+                     <span className="text-[9px] font-bold text-amber-500 mt-0.5 whitespace-nowrap">+{liveFractionMins}{lang === 'ar' ? ' د كسر' : 'm frac'}</span>
+                  )}
+               </div>
             </div>
           </div>
           {/* Action Bar inside details (Only shows during active session) */}
@@ -1686,19 +1699,29 @@ export default function HomeView({ onNavigate }: { onNavigate?: (tab: string) =>
              </SheetTitle>
           </SheetHeader>
           <div className="flex flex-col gap-3 mt-4">
-             <button onClick={() => { logSpecialSession('permission', { hours: 1, subtype: 'entry' }); if(activeSession) { handleEndSession(); } setIsPermissionSheetOpen(false); toast.success(t('t_auto_384')); }} className="w-full flex items-center justify-between p-4 rounded-[1.5rem] bg-secondary/30 hover:bg-secondary/50 transition-colors border border-border/40 group">
+             <button 
+               disabled={balances.remainingPermissionsHours < 1}
+               onClick={() => { logSpecialSession('permission', { hours: 1, subtype: 'entry' }); if(activeSession) { handleEndSession(); } setIsPermissionSheetOpen(false); toast.success(t('t_auto_384')); }} 
+               className={`w-full flex items-center justify-between p-4 rounded-[1.5rem] bg-secondary/30 hover:bg-secondary/50 transition-colors border border-border/40 group ${balances.remainingPermissionsHours < 1 ? 'opacity-40 cursor-not-allowed pointer-events-none' : ''}`}
+             >
                 <div className="flex flex-col text-right mr-2">
                    <span className="font-bold text-foreground text-lg">{t('t_auto_385')}</span>
-                   <span className="text-xs text-muted-foreground mt-0.5">{t('t_auto_386')}</span>
+                   <span className="text-xs text-muted-foreground mt-0.5">{balances.remainingPermissionsHours < 1 ? (lang === 'ar' ? 'خارج الخدمة / الرصيد غير كافٍ (Offline)' : 'Offline / Balance Insufficient') : t('t_auto_386')}</span>
                 </div>
                 <div className="w-14 h-14 rounded-[14px] bg-yellow-500/10 flex items-center justify-center text-yellow-500 transition-transform group-hover:scale-110">
                   <Timer className="w-7 h-7" />
                 </div>
              </button>
-             <button onClick={() => { logSpecialSession('permission', { hours: 2, subtype: 'exit' }); if(activeSession) { handleEndSession(); } setIsPermissionSheetOpen(false); toast.success(t('t_auto_387')); }} className="w-full flex items-center justify-between p-4 rounded-[1.5rem] bg-secondary/30 hover:bg-secondary/50 transition-colors border border-border/40 group">
+             <button 
+               disabled={balances.remainingPermissionsHours < 2}
+               onClick={() => { logSpecialSession('permission', { hours: 2, subtype: 'exit' }); if(activeSession) { handleEndSession(); } setIsPermissionSheetOpen(false); toast.success(t('t_auto_387')); }} 
+               className={`w-full flex items-center justify-between p-4 rounded-[1.5rem] bg-secondary/30 hover:bg-secondary/50 transition-colors border border-border/40 group ${balances.remainingPermissionsHours < 2 ? 'opacity-40 cursor-not-allowed pointer-events-none' : ''}`}
+             >
                 <div className="flex flex-col text-right mr-2">
                    <span className="font-bold text-foreground text-lg">{t('t_auto_388')}</span>
-                   <span className="text-xs text-muted-foreground mt-0.5">{t('t_auto_386')}</span>
+                   <span className="text-xs text-muted-foreground mt-0.5">
+                     {balances.remainingPermissionsHours < 2 ? (lang === 'ar' ? 'خارج الخدمة / الرصيد غير كافٍ (Offline)' : 'Offline / Balance Insufficient') : t('t_auto_386')}
+                   </span>
                 </div>
                 <div className="w-14 h-14 rounded-[14px] bg-purple-500/10 flex items-center justify-center text-purple-500 transition-transform group-hover:scale-110">
                   <LogOut className="w-7 h-7" />
