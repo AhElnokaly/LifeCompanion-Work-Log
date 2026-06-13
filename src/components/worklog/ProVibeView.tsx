@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
 import { useWorkLog } from '../../contexts/WorkLogContext';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { CloudRain, Sun, Cloud, Snowflake, BatteryCharging, Coffee, CupSoda, Droplets, MapPin, Navigation, Zap, Activity, Edit3, Home, Headphones, Moon, Wind, Heart, Sunrise, Sunset } from 'lucide-react';
@@ -14,6 +15,44 @@ export default function ProVibeView() {
   const [customSteps, setCustomSteps] = useState('');
   const [localHealth, setLocalHealth] = useState<any>({});
   const [showStepInput, setShowStepInput] = useState(false);
+
+  // States for enhanced Breathing interactive mode
+  const [isBreathingMode, setIsBreathingMode] = useState(false);
+  const [breathStage, setBreathStage] = useState<'inhale' | 'hold' | 'exhale' | 'ready'>('ready');
+  const [breathSeconds, setBreathSeconds] = useState(4);
+
+  // Breathing automated loop control
+  useEffect(() => {
+    let timer: any;
+    if (isBreathingMode) {
+      if (breathStage === 'ready') {
+        setBreathStage('inhale');
+        setBreathSeconds(4);
+      } else {
+        timer = setInterval(() => {
+          setBreathSeconds(prev => {
+            if (prev <= 1) {
+              if (breathStage === 'inhale') {
+                setBreathStage('hold');
+                return 4;
+              } else if (breathStage === 'hold') {
+                setBreathStage('exhale');
+                return 4;
+              } else {
+                setBreathStage('inhale');
+                return 4;
+              }
+            }
+            return prev - 1;
+          });
+        }, 1000);
+      }
+    } else {
+      setBreathStage('ready');
+      setBreathSeconds(4);
+    }
+    return () => clearInterval(timer);
+  }, [isBreathingMode, breathStage]);
 
   // Automatic Steps Logic
   useEffect(() => {
@@ -537,47 +576,179 @@ export default function ProVibeView() {
          </Card>
 
          {/* Deep Breath Micro-interaction */}
-         <Card className="rounded-[2rem] border-transparent shadow-sm bg-gradient-to-br from-emerald-500/10 to-teal-500/10 hover:shadow-md transition-all cursor-pointer" onClick={() => {
-             toast('خذ نفساً عميقاً... 😮‍💨', { duration: 4000, position: 'top-center' });
-             setTimeout(() => toast('احتفظ بالهواء قليلاً...', { duration: 4000, position: 'top-center' }), 4000);
-             setTimeout(() => toast('زفير بهدوء... 😌', { duration: 4000, position: 'top-center' }), 8000);
-         }}>
-            <CardContent className="p-5 flex items-center gap-4">
-               <div className="w-12 h-12 rounded-[1.2rem] bg-gradient-to-tr from-emerald-500 to-teal-500 shadow-lg shadow-teal-500/20 flex items-center justify-center text-white shrink-0">
-                  <Wind className="w-6 h-6 animate-pulse" />
-               </div>
-               <div className="flex flex-col">
-                  <span className="text-xs text-emerald-600 font-bold mb-0.5">تصفية الذهن لمدة دقيقة</span>
-                  <span className="font-black text-foreground text-sm">اضغط هنا للتنفس العميق</span>
-               </div>
+         <Card className="rounded-[2rem] border-transparent shadow-sm bg-gradient-to-br from-emerald-500/10 to-teal-500/10 hover:shadow-md transition-all overflow-hidden">
+            <CardContent className="p-5">
+               {!isBreathingMode ? (
+                  <div className="flex items-center gap-4 cursor-pointer" onClick={() => setIsBreathingMode(true)}>
+                     <div className="w-12 h-12 rounded-[1.2rem] bg-gradient-to-tr from-emerald-500 to-teal-500 shadow-lg shadow-teal-500/20 flex items-center justify-center text-white shrink-0">
+                        <Wind className="w-6 h-6 animate-pulse" />
+                     </div>
+                     <div className="flex flex-col">
+                        <span className="text-xs text-emerald-600 font-bold mb-0.5">{lang === 'ar' ? 'تصفية الذهن لمدة دقيقة 🌬️' : '1-Min Mind Clearance 🌬️'}</span>
+                        <span className="font-black text-foreground text-sm">{lang === 'ar' ? 'ابدأ جلسة تنفس عميق وتخلص من التوتر' : 'Start deep breathing to ease stress'}</span>
+                     </div>
+                  </div>
+               ) : (
+                  <div className="flex flex-col items-center justify-center py-4 text-center">
+                     <div className="relative w-32 h-32 flex items-center justify-center mb-4">
+                        <motion.div
+                           key={breathStage}
+                           animate={{
+                              scale: breathStage === 'inhale' ? [1.0, 1.4] : breathStage === 'hold' ? 1.4 : breathStage === 'exhale' ? [1.4, 1.0] : 1.0,
+                           }}
+                           transition={{
+                              duration: 4,
+                              ease: "easeInOut"
+                           }}
+                           className={`absolute inset-0 rounded-full bg-emerald-500/15 flex items-center justify-center border-2 ${breathStage === 'hold' ? 'border-amber-400 border-dashed' : 'border-emerald-400'}`}
+                        />
+                        
+                        <div className="z-10 flex flex-col items-center justify-center">
+                           <span className="text-2xl font-black text-emerald-600">{breathSeconds}</span>
+                           <span className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest">{lang === 'ar' ? 'ثانية' : 'sec'}</span>
+                        </div>
+                     </div>
+
+                     <span className="font-black text-md text-emerald-600 mb-1 animate-pulse">
+                        {breathStage === 'inhale' ? (lang === 'ar' ? 'شهيق ببطء... 🌬️' : 'Inhale slowly...') : 
+                         breathStage === 'hold' ? (lang === 'ar' ? 'احبس النفس... 😌' : 'Hold your breath...') : 
+                         breathStage === 'exhale' ? (lang === 'ar' ? 'زفير بارتياح... 😮‍💨' : 'Exhale smoothly...') : 
+                         (lang === 'ar' ? 'استعد...' : 'Ready...')}
+                     </span>
+                     <span className="text-[11px] text-muted-foreground mb-4">
+                        {breathStage === 'inhale' ? (lang === 'ar' ? 'املأ رئتيك بالهواء والنشاط' : 'Fill your lungs with fresh air') :
+                         breathStage === 'hold' ? (lang === 'ar' ? 'حافظ على الهدوء والتركيز' : 'Maintain inner peace and calm') :
+                         (lang === 'ar' ? 'دع كل الضغوطات تخرج ببطء' : 'Let all the tension melt away')}
+                     </span>
+
+                     <Button 
+                        size="sm" 
+                        variant="outline" 
+                        className="rounded-full border-emerald-500/20 hover:bg-emerald-500/10 text-emerald-600 text-xs font-bold"
+                        onClick={() => setIsBreathingMode(false)}
+                     >
+                        {lang === 'ar' ? 'إنهاء الجلسة ❌' : 'End session ❌'}
+                     </Button>
+                  </div>
+               )}
             </CardContent>
          </Card>
       </div>
       
       {/* Quick Commute */}
-      <Card className="rounded-[2rem] border-transparent shadow-sm bg-gradient-to-r from-indigo-500/10 to-purple-500/10">
-         <CardContent className="p-4 flex flex-col sm:flex-row items-center justify-between gap-4">
-            <div className="flex items-center gap-3 w-full sm:w-auto">
-               <div className="w-10 h-10 rounded-full bg-white shadow-sm flex items-center justify-center text-indigo-500 shrink-0">
-                  <Navigation className="w-5 h-5" />
+      <Card className="rounded-[2rem] border-transparent shadow-sm bg-gradient-to-r from-indigo-500/10 to-purple-500/10 overflow-hidden">
+         <CardContent className="p-5 space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+               <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-white shadow-sm flex items-center justify-center text-indigo-500 shrink-0">
+                     <Navigation className="w-5 h-5" />
+                  </div>
+                  <div className="flex flex-col">
+                     <span className="font-bold text-sm">{lang === 'ar' ? 'سجل الانتقالات والمواصلات الذكي 🚗' : 'Smart Commute Logger 🚗'}</span>
+                     <span className="text-[10px] text-muted-foreground">
+                        {lang === 'ar' ? 'اختر وسيلة التنقل، سجل خروجك من المنزل، ثم وصولك للمكتب لحساب التوفير البيئي والجهد البدني!' : 'Pick your transport mode, log startup and arrival to calculate stats!'}
+                     </span>
+                  </div>
                </div>
-               <div className="flex flex-col">
-                  <span className="font-bold text-sm">سجل الانتقالات</span>
-                  <span className="text-[10px] text-muted-foreground">يحسب المحرك مسافتك آلياً، لكن تستطيع تحديد البداية والنهاية</span>
+
+               {/* Transport mode selector */}
+               <div className="flex gap-1 bg-white/40 backdrop-blur-sm p-1 rounded-2xl border border-white/20 self-start sm:self-auto">
+                  {[
+                     { mode: 'car', icon: '🚗', label: lang === 'ar' ? 'سيارة' : 'Car' },
+                     { mode: 'transit', icon: '🚇', label: lang === 'ar' ? 'حافلة' : 'Public' },
+                     { mode: 'bike', icon: '🚲', label: lang === 'ar' ? 'دراجة' : 'Bike' },
+                     { mode: 'walk', icon: '🚶‍♂️', label: lang === 'ar' ? 'مشي' : 'Walk' }
+                  ].map(item => {
+                     const isSelected = (health.commuteMode || 'car') === item.mode;
+                     return (
+                        <button
+                           key={item.mode}
+                           onClick={() => handleHealthUpdate('commuteMode', item.mode)}
+                           className={`px-2.5 py-1.5 rounded-xl text-xs font-black transition-all flex items-center gap-1 ${isSelected ? 'bg-indigo-600 text-white shadow-sm' : 'hover:bg-indigo-500/10 text-indigo-950/80'}`}
+                           title={item.label}
+                        >
+                           <span>{item.icon}</span>
+                           <span className="hidden md:inline">{item.label}</span>
+                        </button>
+                     );
+                  })}
                </div>
             </div>
-            <div className="flex items-center gap-2 w-full sm:w-auto">
-               <Button size="sm" variant={health.commuteStartTime ? 'outline' : 'default'} className="rounded-xl flex-1 sm:flex-auto font-bold h-9" onClick={() => {
-                  if(!health.commuteStartTime) handleHealthUpdate('commuteStartTime', new Date().toISOString());
-               }}>
-                  {health.commuteStartTime ? '✓ تم الخروج' : 'تسجيل الخروج'}
-               </Button>
-               <Button size="sm" variant={health.commuteEndTime ? 'outline' : 'default'} className="rounded-xl flex-1 sm:flex-auto font-bold h-9 bg-emerald-500 hover:bg-emerald-600 text-white" onClick={() => {
-                  if(!health.commuteStartTime) return toast.error("سجل الخروج أولاً");
-                  if(!health.commuteEndTime) handleHealthUpdate('commuteEndTime', new Date().toISOString());
-               }}>
-                  {health.commuteEndTime ? '✓ تم الوصول' : 'تسجيل الوصول'}
-               </Button>
+
+            {/* Commute Logging Buttons */}
+            <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4 border-t border-indigo-500/10 pt-3">
+               <div className="flex flex-wrap items-center gap-2">
+                  <Button 
+                     size="sm" 
+                     variant={health.commuteStartTime ? 'outline' : 'default'} 
+                     className="rounded-xl font-bold h-9 bg-indigo-600 hover:bg-indigo-700 text-white" 
+                     onClick={() => {
+                        if (!health.commuteStartTime) handleHealthUpdate('commuteStartTime', new Date().toISOString());
+                     }}
+                  >
+                     {health.commuteStartTime ? `✓ ${lang === 'ar' ? 'خروج:' : 'Departure:'} ${new Date(health.commuteStartTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}` : (lang === 'ar' ? 'تسجيل الخروج 🏠' : 'Log Departure 🏠')}
+                  </Button>
+                  
+                  <Button 
+                     size="sm" 
+                     variant={health.commuteEndTime ? 'outline' : 'default'} 
+                     className="rounded-xl font-bold h-9 bg-emerald-500 hover:bg-emerald-600 text-white" 
+                     onClick={() => {
+                        if (!health.commuteStartTime) return toast.error(lang === 'ar' ? 'يرجى تسجيل خروجك أولاً' : 'Please log departure first');
+                        if (!health.commuteEndTime) handleHealthUpdate('commuteEndTime', new Date().toISOString());
+                     }}
+                  >
+                     {health.commuteEndTime ? `✓ ${lang === 'ar' ? 'وصول:' : 'Arrival:'} ${new Date(health.commuteEndTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}` : (lang === 'ar' ? 'تسجيل الوصول 🏢' : 'Log Arrival 🏢')}
+                  </Button>
+
+                  {(health.commuteStartTime || health.commuteEndTime) && (
+                     <Button 
+                        size="sm" 
+                        variant="ghost" 
+                        className="rounded-xl text-red-500 hover:bg-red-500/10 hover:text-red-600 font-bold h-9" 
+                        onClick={() => {
+                           handleHealthUpdate('commuteStartTime', null);
+                           handleHealthUpdate('commuteEndTime', null);
+                           toast.success(lang === 'ar' ? 'تمت إعادة تعيين الرحلة' : 'Commute reset successfully');
+                        }}
+                     >
+                        {lang === 'ar' ? 'إعادة تعيين 🔄' : 'Reset 🔄'}
+                     </Button>
+                  )}
+               </div>
+
+               {/* Stats display if completed */}
+               {health.commuteStartTime && health.commuteEndTime && (() => {
+                  const duration = Math.max(1, Math.round((new Date(health.commuteEndTime).getTime() - new Date(health.commuteStartTime).getTime()) / 60000));
+                  const mode = health.commuteMode || 'car';
+                  
+                  let calBurned = 0;
+                  let co2Saved = 0;
+                  
+                  if (mode === 'walk') {
+                     calBurned = duration * 5;
+                     co2Saved = duration * 0.18;
+                  } else if (mode === 'bike') {
+                     calBurned = duration * 8;
+                     co2Saved = duration * 0.18;
+                  } else if (mode === 'transit') {
+                     co2Saved = duration * 0.11;
+                  }
+
+                  return (
+                     <div className="bg-white/50 backdrop-blur-md px-4 py-2.5 rounded-2xl border border-white/30 flex items-center gap-3 animate-in fade-in slide-in-from-bottom-2">
+                        <span className="text-xs font-black text-indigo-950 flex flex-col justify-center">
+                           <span>⏱️ {lang === 'ar' ? `زمن الرحلة: ${duration} دقيقة` : `Journey: ${duration} mins`}</span>
+                           <span className="text-[10px] text-muted-foreground/90 font-bold mt-0.5">
+                              {mode === 'walk' && `🔥 +${calBurned} kcal | 🌲 +${co2Saved.toFixed(2)}kg CO₂`}
+                              {mode === 'bike' && `🔥 +${calBurned} kcal | 🌲 +${co2Saved.toFixed(2)}kg CO₂`}
+                              {mode === 'transit' && `🌲 +${co2Saved.toFixed(2)}kg CO₂ Saved!`}
+                              {mode === 'car' && `🚗 ${lang === 'ar' ? 'رحلة مريحة وسريعة!' : 'Comfortable tech trip!'}`}
+                           </span>
+                        </span>
+                     </div>
+                  );
+               })()}
             </div>
          </CardContent>
       </Card>
