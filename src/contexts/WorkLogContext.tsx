@@ -5,6 +5,107 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { sendAppNotification } from '../lib/notifications';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
+import { useAuth } from './AuthContext';
+import { db as firestoreDb } from '../lib/firebase';
+import { doc, setDoc, deleteDoc, getDocs, collection, getDoc } from 'firebase/firestore';
+
+const cleanSettingsToFirestore = (userId: string, s: any) => {
+  return {
+    userId,
+    system: s.system || 'fixed',
+    dailyHours: Number(s.dailyHours) || 8,
+    monthlyPermissions: Number(s.monthlyPermissions) || 2,
+    annualLeaves: Number(s.annualLeaves) || 21,
+    restDays: s.restDays || [5, 6],
+    onboardingCompleted: !!s.onboardingCompleted,
+    weeklyHoursTarget: s.weeklyHoursTarget || null,
+    monthlyHoursTarget: s.monthlyHoursTarget || null,
+    compensationValidityDays: s.compensationValidityDays || null,
+    autoCheckIn: !!s.autoCheckIn,
+    customAIApiKey: s.customAIApiKey || '',
+    expectedStartTime: s.expectedStartTime || '09:00',
+    expectedEndTime: s.expectedEndTime || '17:00',
+    restDaysSchedule: s.restDaysSchedule || [],
+    customHolidays: s.customHolidays || [],
+    notificationsEnabled: !!s.notificationsEnabled,
+    notificationPreferences: s.notificationPreferences || {},
+    advancedRules: s.advancedRules || {},
+    modules: s.modules || {}
+  };
+};
+
+const cleanSessionToFirestore = (userId: string, s: any) => {
+  return {
+    userId,
+    type: s.type || 'salary',
+    jobId: s.jobId || '',
+    projectId: s.projectId || '',
+    startTime: s.startTime || new Date().toISOString(),
+    endTime: s.endTime || '',
+    duration: Number(s.duration) || 0,
+    breaks: Number(s.breaks) || 0,
+    location: s.location || 'office',
+    notes: s.notes || '',
+    dayStatus: s.dayStatus || 'work',
+    isRestDayWork: !!s.isRestDayWork,
+    restDayCompensation: s.restDayCompensation || '1_day',
+    overtimeMinutes: Number(s.overtimeMinutes) || 0,
+    fractionMinutes: Number(s.fractionMinutes) || 0,
+    isArchived: !!s.isArchived,
+    archivedAt: s.archivedAt || ''
+  };
+};
+
+const cleanJobToFirestore = (userId: string, j: any) => {
+  return {
+    userId,
+    name: j.name || 'Job',
+    color: j.color || '#6366f1',
+    type: j.type || 'fixed',
+    hourlyRate: Number(j.hourlyRate) || 0,
+    monthlyTargetHours: Number(j.monthlyTargetHours) || 0
+  };
+};
+
+const cleanProjectToFirestore = (userId: string, p: any) => {
+  return {
+    userId,
+    name: p.name || 'Project',
+    color: p.color || '#10b981',
+    totalHours: Number(p.totalHours) || 0
+  };
+};
+
+const cleanShiftToFirestore = (userId: string, s: any) => {
+  return {
+    userId,
+    name: s.name || '',
+    startTime: s.startTime || '',
+    endTime: s.endTime || '',
+    jobId: s.jobId || ''
+  };
+};
+
+const cleanAlarmToFirestore = (userId: string, a: any) => {
+  return {
+    userId,
+    timing: a.timing || 'before',
+    anchor: a.anchor || 'startTime',
+    minutes: Number(a.minutes) || 0,
+    ringtone: a.ringtone || 'digital',
+    enabled: !!a.enabled
+  };
+};
+
+const cleanPaymentToFirestore = (userId: string, p: any) => {
+  return {
+    userId,
+    jobId: p.jobId || '',
+    amount: Number(p.amount) || 0,
+    expectedDate: p.expectedDate || '',
+    status: p.status || 'pending'
+  };
+};
 
 export const generateEgyptianHolidays = (currentYear: number): {date: string, name: string}[] => {
   const generatedHolidays: {date: string, name: string}[] = [
@@ -156,6 +257,7 @@ const defaultSettings: WorkSettings = {
 const WorkLogContext = createContext<WorkLogContextType | undefined>(undefined);
 
 export const WorkLogProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { user } = useAuth();
   const [sessions, setSessions] = useState<WorkSession[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [jobs, setJobs] = useState<Job[]>([]);
@@ -163,6 +265,112 @@ export const WorkLogProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const [shiftAssignments, setShiftAssignments] = useState<Record<string, string>>({});
   const [activeSession, setActiveSession] = useState<WorkSession | null>(null);
   const [settings, setSettings] = useState<WorkSettings>({ ...defaultSettings, onboardingCompleted: false });
+
+  // Cloud Synchronization Hook
+  useEffect(() => {
+    if (!user) return;
+
+    const syncWithFirestore = async () => {
+      const toastId = toast.loading("جاري مزامنة بياناتك مع السحابة...");
+      try {
+        const userId = user.uid;
+
+        // 1. Sync Settings
+        const settingsRef = doc(firestoreDb, 'users', userId, 'settings', 'main');
+        const settingsSnap = await getDoc(settingsRef);
+        let mergedSettings = { ...settings };
+        if (settingsSnap.exists()) {
+          const cloudSettings = settingsSnap.data() as any;
+          mergedSettings = { ...settings, ...cloudSettings };
+          setSettings(mergedSettings);
+        } else {
+          const dataToUpload = cleanSettingsToFirestore(userId, settings);
+          await setDoc(settingsRef, dataToUpload);
+        }
+
+        // 2. Sync Jobs
+        const jobsRef = collection(firestoreDb, 'users', userId, 'jobs');
+        const jobsSnap = await getDocs(jobsRef);
+        const cloudJobs = jobsSnap.docs.map(d => ({ ...d.data(), id: d.id })) as Job[];
+        
+        let mergedJobs = [...jobs];
+        cloudJobs.forEach(cj => {
+          if (!mergedJobs.some(mj => mj.id === cj.id)) {
+            mergedJobs.push(cj);
+          }
+        });
+        setJobs(mergedJobs);
+        for (const lj of jobs) {
+          if (!cloudJobs.some(cj => cj.id === lj.id)) {
+            await setDoc(doc(firestoreDb, 'users', userId, 'jobs', lj.id), cleanJobToFirestore(userId, lj));
+          }
+        }
+
+        // 3. Sync Projects
+        const projectsRef = collection(firestoreDb, 'users', userId, 'projects');
+        const projectsSnap = await getDocs(projectsRef);
+        const cloudProjects = projectsSnap.docs.map(d => ({ ...d.data(), id: d.id })) as Project[];
+        
+        let mergedProjects = [...projects];
+        cloudProjects.forEach(cp => {
+          if (!mergedProjects.some(mp => mp.id === cp.id)) {
+            mergedProjects.push(cp);
+          }
+        });
+        setProjects(mergedProjects);
+        for (const lp of projects) {
+          if (!cloudProjects.some(cp => cp.id === lp.id)) {
+            await setDoc(doc(firestoreDb, 'users', userId, 'projects', lp.id), cleanProjectToFirestore(userId, lp));
+          }
+        }
+
+        // 4. Sync Sessions
+        const sessionsRef = collection(firestoreDb, 'users', userId, 'sessions');
+        const sessionsSnap = await getDocs(sessionsRef);
+        const cloudSessions = sessionsSnap.docs.map(d => ({ ...d.data(), id: d.id })) as WorkSession[];
+        
+        let mergedSessions = [...sessions];
+        cloudSessions.forEach(cs => {
+          if (!mergedSessions.some(ms => ms.id === cs.id)) {
+            mergedSessions.push(cs);
+          }
+        });
+        setSessions(mergedSessions);
+        for (const ls of sessions) {
+          if (!cloudSessions.some(cs => cs.id === ls.id)) {
+            await setDoc(doc(firestoreDb, 'users', userId, 'sessions', ls.id), cleanSessionToFirestore(userId, ls));
+          }
+        }
+
+        // 5. Sync Shifts
+        const shiftsRef = collection(firestoreDb, 'users', userId, 'shifts');
+        const shiftsSnap = await getDocs(shiftsRef);
+        const cloudShifts = shiftsSnap.docs.map(d => ({ ...d.data(), id: d.id })) as ScheduledShift[];
+        
+        let mergedShifts = [...shifts];
+        cloudShifts.forEach(cs => {
+          if (!mergedShifts.some(ms => ms.id === cs.id)) {
+            mergedShifts.push(cs);
+          }
+        });
+        setShifts(mergedShifts);
+        for (const ls of shifts) {
+          if (!cloudShifts.some(cs => cs.id === ls.id)) {
+            await setDoc(doc(firestoreDb, 'users', userId, 'shifts', ls.id), cleanShiftToFirestore(userId, ls));
+          }
+        }
+
+        toast.dismiss(toastId);
+        toast.success("تمت مزامنة البيانات السحابية بنجاح!");
+      } catch (err) {
+        console.error("Firestore sync error", err);
+        toast.dismiss(toastId);
+        toast.error("فشلت بعض عمليات المزامنة الفورية للسحابة من داخل المعاينة الآمنة.");
+      }
+    };
+
+    syncWithFirestore();
+  }, [user]);
 
   // Pomodoro State
   const [pomodoroTimeLeft, setPomodoroTimeLeft] = useState(25 * 60);
@@ -202,18 +410,32 @@ export const WorkLogProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
   const addAlarm = async (alarm: Omit<AlarmConfig, 'id'>) => {
     const id = crypto.randomUUID();
-    await db.alarms.add({ ...alarm, id });
+    const finalAlarm = { ...alarm, id };
+    await db.alarms.add(finalAlarm);
+    if (user) {
+      setDoc(doc(firestoreDb, 'users', user.uid, 'alarms', id), cleanAlarmToFirestore(user.uid, finalAlarm))
+        .catch(err => console.error("Cloud alarm add error", err));
+    }
   };
 
   const toggleAlarm = async (id: string, enabled?: boolean) => {
     const alarm = await db.alarms.get(id);
     if (alarm) {
-      await db.alarms.update(id, { enabled: enabled !== undefined ? enabled : !alarm.enabled });
+      const nextEnabled = enabled !== undefined ? enabled : !alarm.enabled;
+      await db.alarms.update(id, { enabled: nextEnabled });
+      if (user) {
+        setDoc(doc(firestoreDb, 'users', user.uid, 'alarms', id), cleanAlarmToFirestore(user.uid, { ...alarm, enabled: nextEnabled }))
+          .catch(err => console.error("Cloud alarm toggle error", err));
+      }
     }
   };
 
   const deleteAlarm = async (id: string) => {
     await db.alarms.delete(id);
+    if (user) {
+      deleteDoc(doc(firestoreDb, 'users', user.uid, 'alarms', id))
+        .catch(err => console.error("Cloud alarm delete error", err));
+    }
   };
 
   // Load from local storage on mount
@@ -345,6 +567,10 @@ export const WorkLogProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
   const updateSettings = (newSettings: WorkSettings) => {
     setSettings(newSettings);
+    if (user) {
+      setDoc(doc(firestoreDb, 'users', user.uid, 'settings', 'main'), cleanSettingsToFirestore(user.uid, newSettings))
+        .catch(err => console.error("Firestore settings update error", err));
+    }
   };
 
   const startSession = (type: WorkSession['type'], entityId?: string, overrideData?: Partial<WorkSession>) => {
@@ -512,6 +738,10 @@ export const WorkLogProvider: React.FC<{ children: React.ReactNode }> = ({ child
     
     setSessions([...sessions, completedSession]);
     setActiveSession(null);
+    if (user) {
+      setDoc(doc(firestoreDb, 'users', user.uid, 'sessions', completedSession.id), cleanSessionToFirestore(user.uid, completedSession))
+        .catch(err => console.error("Cloud session save error", err));
+    }
 
     if (settings.notificationsEnabled && settings.notificationPreferences?.endOfDay) {
       const hours = Math.floor(duration / 60);
@@ -596,7 +826,12 @@ export const WorkLogProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const overtimeMinutes = calcResult.overtimeMinutes;
     const fractionMinutes = calcResult.fractionMinutes;
     
-    setSessions([...sessions, { ...session, isRestDayWork: isRestDay, duration, overtimeMinutes, fractionMinutes }]);
+    const finalSession = { ...session, isRestDayWork: isRestDay, duration, overtimeMinutes, fractionMinutes };
+    setSessions([...sessions, finalSession]);
+    if (user) {
+      setDoc(doc(firestoreDb, 'users', user.uid, 'sessions', finalSession.id), cleanSessionToFirestore(user.uid, finalSession))
+        .catch(err => console.error("Cloud session add error", err));
+    }
   };
 
   const updateSession = (id: string, updates: Partial<WorkSession>) => {
@@ -643,6 +878,10 @@ export const WorkLogProvider: React.FC<{ children: React.ReactNode }> = ({ child
            updated.fractionMinutes = calcResult.fractionMinutes;
          }
       }
+      if (user) {
+        setDoc(doc(firestoreDb, 'users', user.uid, 'sessions', id), cleanSessionToFirestore(user.uid, updated))
+          .catch(err => console.error("Cloud session update error", err));
+      }
       return updated;
     }));
   };
@@ -654,17 +893,37 @@ export const WorkLogProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const deleteSession = (id: string, hardDelete = false) => {
     if (hardDelete) {
       setSessions(current => current.filter(sess => sess.id !== id));
+      if (user) {
+        deleteDoc(doc(firestoreDb, 'users', user.uid, 'sessions', id))
+          .catch(err => console.error("Cloud session delete error", err));
+      }
     } else {
-      setSessions(current => current.map(sess => 
-        sess.id === id ? { ...sess, isArchived: true, archivedAt: new Date().toISOString() } : sess
-      ));
+      setSessions(current => current.map(sess => {
+        if (sess.id === id) {
+          const updated = { ...sess, isArchived: true, archivedAt: new Date().toISOString() };
+          if (user) {
+            setDoc(doc(firestoreDb, 'users', user.uid, 'sessions', id), cleanSessionToFirestore(user.uid, updated))
+              .catch(err => console.error("Cloud session archive error", err));
+          }
+          return updated;
+        }
+        return sess;
+      }));
     }
   };
 
   const restoreSession = (id: string) => {
-    setSessions(current => current.map(sess => 
-      sess.id === id ? { ...sess, isArchived: false, archivedAt: undefined } : sess
-    ));
+    setSessions(current => current.map(sess => {
+      if (sess.id === id) {
+        const updated = { ...sess, isArchived: false, archivedAt: undefined };
+        if (user) {
+          setDoc(doc(firestoreDb, 'users', user.uid, 'sessions', id), cleanSessionToFirestore(user.uid, updated))
+            .catch(err => console.error("Cloud session restore error", err));
+        }
+        return updated;
+      }
+      return sess;
+    }));
   };
 
   const addProject = (projectData: Omit<Project, 'id' | 'totalHours'>) => {
@@ -674,30 +933,72 @@ export const WorkLogProvider: React.FC<{ children: React.ReactNode }> = ({ child
       totalHours: 0,
     };
     setProjects([...projects, newProject]);
+    if (user) {
+      setDoc(doc(firestoreDb, 'users', user.uid, 'projects', newProject.id), cleanProjectToFirestore(user.uid, newProject))
+        .catch(err => console.error("Cloud project add error", err));
+    }
   };
 
   const addJob = (jobData: Omit<Job, 'id'>) => {
-    setJobs([...jobs, { ...jobData, id: Date.now().toString() }]);
+    const newJob = { ...jobData, id: Date.now().toString() };
+    setJobs([...jobs, newJob]);
+    if (user) {
+      setDoc(doc(firestoreDb, 'users', user.uid, 'jobs', newJob.id), cleanJobToFirestore(user.uid, newJob))
+        .catch(err => console.error("Cloud job add error", err));
+    }
   };
 
   const updateJob = (id: string, updates: Partial<Job>) => {
-    setJobs(current => current.map(job => job.id === id ? { ...job, ...updates } : job));
+    setJobs(current => current.map(job => {
+      if (job.id === id) {
+        const updated = { ...job, ...updates };
+        if (user) {
+          setDoc(doc(firestoreDb, 'users', user.uid, 'jobs', id), cleanJobToFirestore(user.uid, updated))
+            .catch(err => console.error("Cloud job update error", err));
+        }
+        return updated;
+      }
+      return job;
+    }));
   };
 
   const addShift = (shiftData: Omit<ScheduledShift, 'id'>) => {
-    setShifts([...shifts, { ...shiftData, id: Date.now().toString() }]);
+    const newShift = { ...shiftData, id: Date.now().toString() };
+    setShifts([...shifts, newShift]);
+    if (user) {
+      setDoc(doc(firestoreDb, 'users', user.uid, 'shifts', newShift.id), cleanShiftToFirestore(user.uid, newShift))
+        .catch(err => console.error("Cloud shift add error", err));
+    }
   };
 
   const updateShift = (id: string, updates: Partial<ScheduledShift>) => {
-    setShifts(current => current.map(shift => shift.id === id ? { ...shift, ...updates } : shift));
+    setShifts(current => current.map(shift => {
+      if (shift.id === id) {
+        const updated = { ...shift, ...updates };
+        if (user) {
+          setDoc(doc(firestoreDb, 'users', user.uid, 'shifts', id), cleanShiftToFirestore(user.uid, updated))
+            .catch(err => console.error("Cloud shift update error", err));
+        }
+        return updated;
+      }
+      return shift;
+    }));
   };
 
   const removeJob = (id: string) => {
     setJobs(jobs.filter(j => j.id !== id));
+    if (user) {
+      deleteDoc(doc(firestoreDb, 'users', user.uid, 'jobs', id))
+        .catch(err => console.error("Cloud job delete error", err));
+    }
   };
 
   const removeShift = (id: string) => {
     setShifts(shifts.filter(s => s.id !== id));
+    if (user) {
+      deleteDoc(doc(firestoreDb, 'users', user.uid, 'shifts', id))
+        .catch(err => console.error("Cloud shift delete error", err));
+    }
   };
 
   const toggleShiftAssignment = (dateStr: string, shiftId: string) => {
@@ -813,6 +1114,10 @@ export const WorkLogProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
 
     setSessions([...sessions, newSession]);
+    if (user) {
+      setDoc(doc(firestoreDb, 'users', user.uid, 'sessions', newSession.id), cleanSessionToFirestore(user.uid, newSession))
+        .catch(err => console.error("Cloud special session add error", err));
+    }
   };
 
   const deleteAllData = async () => {

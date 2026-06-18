@@ -922,8 +922,97 @@ export default function SettingsView() {
         >
           <Save className="w-6 h-6" />
           {t('settings.auto.136')}
-                          </Button>
+        </Button>
       </div>
+
+      {restDayChangeDialog && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-in fade-in duration-200" dir="rtl">
+          <div className="bg-card border border-border/80 max-w-md w-full rounded-[2rem] p-6 shadow-2xl flex flex-col gap-6 animate-in zoom-in-95 duration-200">
+            <div className="space-y-2 text-right">
+              <h3 className="text-xl font-bold text-primary flex items-center gap-2">
+                <Calendar className="w-5 h-5 text-indigo-500" />
+                تعديل أيام الراحة الأسبوعية
+              </h3>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                لقد قمت بتعديل أيام الراحة الأسبوعية المعتادة. هل ترغب في تطبيق هذا التغيير بأثر رجعي لجميع الجلسات السابقة (دائماً)، أم ترغب في تطبيقه بدءاً من تاريخ محدد فقط للحفاظ على سجلاتك القديمة؟
+              </p>
+            </div>
+
+            <div className="space-y-4">
+              <div className="bg-secondary/10 p-4 rounded-2xl border border-white/5 space-y-3">
+                 <Label className="text-xs text-muted-foreground font-medium block">خيارات التطبيق:</Label>
+                 <div className="flex flex-col gap-2">
+                   <Button 
+                     variant="default" 
+                     className="w-full text-right justify-start rounded-xl py-3 h-auto leading-normal bg-indigo-500 hover:bg-indigo-600 font-bold"
+                     onClick={() => applyRestDayChange('always')}
+                   >
+                     <div className="text-right">
+                       <span className="block text-sm text-white">تطبيق دائماً (أثر رجعي كامل)</span>
+                       <span className="block text-[10px] text-indigo-200 font-normal mt-0.5">سيتم تحديث كافة السجلات والجلسات السابقة بناءً على أيام الراحة الجديدة.</span>
+                     </div>
+                   </Button>
+
+                   <Button 
+                     variant="outline" 
+                     className="w-full text-right justify-start rounded-xl py-3 h-auto leading-normal border-indigo-500/20 hover:bg-indigo-500/10 font-bold"
+                     onClick={() => {
+                       const today = new Date().toISOString().split('T')[0];
+                       setRestDayChangeDate(today);
+                     }}
+                   >
+                     <div className="text-right">
+                       <span className="block text-sm">تطبيق من تاريخ محدد</span>
+                       <span className="block text-[10px] text-muted-foreground font-normal mt-0.5">سيتم الحفاظ على التوزيع القديم لأيام الراحة قبل التاريخ المحدد.</span>
+                     </div>
+                   </Button>
+                 </div>
+              </div>
+
+              {restDayChangeDate !== '' && (
+                <div className="space-y-2 animate-in slide-in-from-top-2 duration-200">
+                  <Label className="text-xs text-muted-foreground block">تاريخ بدء تطبيق أيام الراحة الجديدة:</Label>
+                  <Input 
+                    type="date" 
+                    value={restDayChangeDate}
+                    onChange={(e) => setRestDayChangeDate(e.target.value)}
+                    className="h-10 rounded-xl bg-background border-border"
+                  />
+                  <div className="flex gap-2 justify-end mt-4">
+                    <Button 
+                      variant="ghost" 
+                      className="rounded-xl"
+                      onClick={() => setRestDayChangeDate('')}
+                    >
+                      تراجع
+                    </Button>
+                    <Button 
+                      variant="default"
+                      className="rounded-xl bg-indigo-500 hover:bg-indigo-600 text-white font-bold"
+                      onClick={() => applyRestDayChange('from_date')}
+                    >
+                      تأكيد وحفظ بالتاريخ
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="flex justify-end border-t border-border/10 pt-4 gap-2">
+              <Button 
+                variant="ghost" 
+                className="rounded-xl border border-border" 
+                onClick={() => {
+                  setLocalSettings({ ...localSettings, restDays: settings.restDays });
+                  setRestDayChangeDialog(false);
+                }}
+              >
+                إلغاء التعديل
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );
