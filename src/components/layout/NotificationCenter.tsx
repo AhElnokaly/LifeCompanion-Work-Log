@@ -6,7 +6,11 @@ import { Button, buttonVariants } from '../ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
 import { format } from 'date-fns';
 
-export default function NotificationCenter() {
+interface NotificationCenterProps {
+  setActiveTab?: (tab: string) => void;
+}
+
+export default function NotificationCenter({ setActiveTab }: NotificationCenterProps) {
   const { t, lang } = useLanguage();
   const { sessions, settings } = useWorkLog();
   const [open, setOpen] = useState(false);
@@ -83,7 +87,33 @@ export default function NotificationCenter() {
          }
      }
 
-     // 3. System Welcome message if empty
+     // 3. Backup prompt if no backup exists or is overdue, and there is data to protect
+     const lastBackupStr = localStorage.getItem('last_backup_timestamp');
+     if (sessions.length > 0) {
+        if (!lastBackupStr) {
+           notifs.push({
+              id: 'backup_prompt',
+              title: t('notif.backup_prompt_title'),
+              desc: t('notif.backup_prompt_desc'),
+              icon: <Bell className="w-4 h-4 text-amber-500 animate-bounce" style={{ animationDuration: '2s' }} />,
+              color: 'bg-amber-500/10'
+           });
+        } else {
+           const lastBackup = new Date(lastBackupStr);
+           const daysSinceBackup = (now.getTime() - lastBackup.getTime()) / (1000 * 60 * 60 * 24);
+           if (daysSinceBackup >= 7) {
+              notifs.push({
+                 id: 'backup_prompt',
+                 title: t('notif.backup_prompt_title'),
+                 desc: t('notif.backup_overdue_desc'),
+                 icon: <Bell className="w-4 h-4 text-amber-500 animate-bounce" style={{ animationDuration: '2s' }} />,
+                 color: 'bg-amber-500/10'
+              });
+           }
+        }
+     }
+
+     // 4. System Welcome message if empty
      if (notifs.length === 0) {
          notifs.push({
             id: 'welcome',
@@ -114,7 +144,16 @@ export default function NotificationCenter() {
         </div>
         <div className="max-h-[300px] overflow-y-auto no-scrollbar p-2 flex flex-col gap-2">
            {notifications.map(n => (
-              <div key={n.id} className="flex gap-3 p-3 rounded-xl hover:bg-secondary/30 transition-colors cursor-pointer border border-transparent hover:border-border/30">
+              <div 
+                 key={n.id} 
+                 onClick={() => {
+                    if (n.id === 'backup_prompt' && setActiveTab) {
+                       setActiveTab('backup');
+                       setOpen(false);
+                    }
+                 }}
+                 className="flex gap-3 p-3 rounded-xl hover:bg-secondary/30 transition-colors cursor-pointer border border-transparent hover:border-border/30"
+              >
                  <div className={`w-9 h-9 rounded-full flex shrink-0 items-center justify-center ${n.color}`}>
                     {n.icon}
                  </div>

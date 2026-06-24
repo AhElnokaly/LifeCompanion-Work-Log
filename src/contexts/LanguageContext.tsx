@@ -11,6 +11,7 @@ const ar: Translations = {
   'nav.calendar': 'التقويم',
   'nav.reports': 'السجل',
   'nav.settings': 'الإعدادات',
+  'nav.backup': 'النسخ الاحتياطي',
   'nav.workspace': 'مساحة العمل',
   
   'home.attendance': 'تسجيل الحضور',
@@ -384,6 +385,9 @@ const ar: Translations = {
   'notif.welcome_title': 'مرحباً بك في سجل العمل',
   'notif.welcome_desc': 'تابع ساعات عملك و الإجازات بكل سهولة',
   'notif.center': 'الإشعارات',
+  'notif.backup_prompt_title': 'حماية البيانات والنسخ الاحتياطي',
+  'notif.backup_prompt_desc': 'لم تقم بعمل نسخة احتياطية لبياناتك بعد. هل تود عمل نسخة احتياطية لعدم فقدانها؟',
+  'notif.backup_overdue_desc': 'لقد مر أكثر من أسبوع على آخر نسخة احتياطية لك. يرجى تحديثها لحفظ بياناتك الجديدة.',
 
   'dash.more_options': 'خيارات إضافية',
   'dash.my_page': 'صفحتي الحصرية',
@@ -1101,6 +1105,7 @@ const en: Translations = {
   'nav.calendar': 'Calendar',
   'nav.reports': 'History',
   'nav.settings': 'Settings',
+  'nav.backup': 'Backup & Restore',
   'nav.workspace': 'Workspace',
 
   'home.attendance': 'Log Attendance',
@@ -1474,6 +1479,9 @@ const en: Translations = {
   'notif.welcome_title': 'Welcome to Work Log',
   'notif.welcome_desc': 'Track your working hours and leaves effortlessly',
   'notif.center': 'Notifications',
+  'notif.backup_prompt_title': 'Data Protection & Backup',
+  'notif.backup_prompt_desc': 'You haven\'t backed up your data yet. Would you like to create a backup to prevent data loss?',
+  'notif.backup_overdue_desc': 'It has been more than a week since your last backup. Please update it to safeguard your new data.',
 
   'dash.more_options': 'More Options',
   'dash.my_page': 'My Exclusive Page',

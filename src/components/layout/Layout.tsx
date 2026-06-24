@@ -3,7 +3,7 @@ import { useTheme } from '../../contexts/ThemeContext';
 import AppLogo from '../ui/AppLogo';
 import { useWorkLog } from '../../contexts/WorkLogContext';
 import { useLanguage } from '../../contexts/LanguageContext';
-import { Moon, Sun, Palette, Brain, Briefcase, Settings, Menu, Home, Calendar, BarChart2, LayoutGrid, MoreHorizontal, History, HelpCircle, MessageCircleQuestion, Wallet, Target, Users, CalendarDays, Download, Bell, Zap, BarChart, ChevronLeft, Share2, Link as LinkIcon, FileDown, Globe } from 'lucide-react';
+import { Moon, Sun, Palette, Brain, Briefcase, Settings, Menu, Home, Calendar, BarChart2, LayoutGrid, MoreHorizontal, History, HelpCircle, MessageCircleQuestion, Wallet, Target, Users, CalendarDays, Download, Bell, Zap, BarChart, ChevronLeft, Share2, Link as LinkIcon, FileDown, Globe, DownloadCloud } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Sheet, SheetContent, SheetTrigger, SheetHeader, SheetTitle } from '../ui/sheet';
 import PageHelpOverlay from './PageHelpOverlay';
@@ -123,7 +123,7 @@ export default function Layout({ children, activeTab, setActiveTab }: LayoutProp
           </h1>
         </div>
         <div className="flex gap-1 items-center">
-          <NotificationCenter />
+          <NotificationCenter setActiveTab={setActiveTab} />
           <Button variant="ghost" size="icon" onClick={() => setLang(lang === 'ar' ? 'en' : 'ar')}>
              <Globe className="h-5 w-5 text-muted-foreground mr-1" />
              <span className="text-xs font-bold leading-none">{lang === 'ar' ? 'EN' : t('t_auto_72')}</span>
@@ -165,14 +165,17 @@ export default function Layout({ children, activeTab, setActiveTab }: LayoutProp
 
       {/* Desktop Sidebar */}
       <aside className="hidden md:flex flex-col w-64 border-r p-4 gap-8 bg-card relative z-10">
-        <div className="flex items-center gap-2 px-2 relative">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-primary/20 to-emerald-500/20 shadow-sm relative overflow-hidden flex-shrink-0 flex items-center justify-center p-1 border border-primary/20 cursor-pointer hover:scale-105 transition-transform" onClick={() => toast('🌟 Work Companion يعزز من إنتاجيتك وصحتك، استمر!', { icon: '🚀', duration: 4000 })}>
-             <AppLogo className="w-full h-full text-primary" />
+        <div className="flex items-center justify-between px-2 relative">
+          <div className="flex items-center gap-2">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-primary/20 to-emerald-500/20 shadow-sm relative overflow-hidden flex-shrink-0 flex items-center justify-center p-1 border border-primary/20 cursor-pointer hover:scale-105 transition-transform" onClick={() => toast('🌟 Work Companion يعزز من إنتاجيتك وصحتك، استمر!', { icon: '🚀', duration: 4000 })}>
+               <AppLogo className="w-full h-full text-primary" />
+            </div>
+            <h1 className="text-xl font-extrabold bg-gradient-to-r from-primary to-emerald-500 bg-clip-text text-transparent leading-tight">
+              Work Companion
+              <span className="block text-[10px] font-medium text-muted-foreground uppercase tracking-widest mt-0.5">Work Log</span>
+            </h1>
           </div>
-          <h1 className="text-xl font-extrabold bg-gradient-to-r from-primary to-emerald-500 bg-clip-text text-transparent leading-tight">
-            Work Companion
-            <span className="block text-[10px] font-medium text-muted-foreground uppercase tracking-widest mt-0.5">Work Log</span>
-          </h1>
+          <NotificationCenter setActiveTab={setActiveTab} />
         </div>
         <div className="flex justify-between px-2">
           <Button variant="outline" size="sm" onClick={() => setHelpOpen(true)} className="flex-1 ml-2 text-emerald-500">
@@ -374,7 +377,7 @@ function DesktopNavLinks({ activeTab, setActiveTab }: { activeTab: string, setAc
         { id: 'home', label: t('nav.home'), icon: Home },
         { id: 'week', label: t('nav.calendar'), icon: Calendar },
         { id: 'alarms', label: t('layout.alarms_focus'), icon: Bell },
-        { id: 'smartpage', label: smartLabel, icon: smartIcon },
+        ...(settings.system !== 'shifts' ? [{ id: 'smartpage', label: smartLabel, icon: smartIcon }] : []),
         ...(isFreelance || isAdvanced ? [{ id: 'projects', label: t('layout.projects_tasks'), icon: LayoutGrid }] : []),
       ]
     },
@@ -391,7 +394,8 @@ function DesktopNavLinks({ activeTab, setActiveTab }: { activeTab: string, setAc
       title: t('layout.management'),
       links: [
         ...(isAdvanced ? [{ id: 'aicore', label: t('layout.ai_core'), icon: Brain }] : []),
-        { id: 'settings', label: t('nav.settings'), icon: Settings }
+        { id: 'settings', label: t('nav.settings'), icon: Settings },
+        { id: 'backup', label: t('nav.backup'), icon: DownloadCloud }
       ]
     }
   ];

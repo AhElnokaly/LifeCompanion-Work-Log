@@ -13,6 +13,7 @@ import AlarmsView from './worklog/AlarmsView';
 import ChartMakerView from './worklog/ChartMakerView';
 import AICore from './aicore/AICore';
 import ThemesModes from './themes/ThemesModes';
+import BackupView from './worklog/BackupView';
 
 import ProVibeView from './worklog/ProVibeView';
 
@@ -28,6 +29,7 @@ export default function Dashboard({ activeTab, setActiveTab }: { activeTab: stri
       {activeTab === 'reports' && <ReportsView />}
       {activeTab === 'wallet' && <WalletView />}
       {activeTab === 'settings' && <SettingsView />}
+      {activeTab === 'backup' && <BackupView />}
       {activeTab === 'support' && <SupportQAView />}
       {activeTab === 'archive' && <ArchiveView />}
       {activeTab === 'alarms' && <AlarmsView />}
