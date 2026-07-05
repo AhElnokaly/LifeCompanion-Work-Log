@@ -5,7 +5,7 @@ import { Button } from '../ui/button';
 import { Activity, Clock, ChevronRight, ChevronLeft } from 'lucide-react';
 import { format, subDays, addDays, startOfWeek, subWeeks, endOfWeek, isSameWeek } from 'date-fns';
 import { ar } from 'date-fns/locale';
-import { useWorkLog } from '../../contexts/WorkLogContext';
+import { useWorkLog, getRestDaysForDate } from '../../contexts/WorkLogContext';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Cell, ReferenceLine, CartesianGrid, Legend } from 'recharts';
 
@@ -29,7 +29,7 @@ export default function WeekView() {
       day: dayName, 
       date: dayStr,
       hours: 0, 
-      isWeekend: settings.restDays.includes(day.getDay())
+      isWeekend: getRestDaysForDate(day, settings).includes(day.getDay())
     });
   });
 
@@ -46,7 +46,8 @@ export default function WeekView() {
 
   const dailyData = Array.from(dailyDataMap.values());
   const actualTotalHours = dailyData.reduce((acc, d) => acc + d.hours, 0);
-  const goalHours = settings.dailyHours * (7 - settings.restDays.length);
+  const restDaysInThisWeek = getRestDaysForDate(weekStart, settings);
+  const goalHours = settings.dailyHours * (7 - restDaysInThisWeek.length);
   const totalOvertime = thisWeekSessions.reduce((acc, s) => acc + (s.overtimeMinutes || 0), 0);
 
   // Compare to last week roughly (for UI demo purposes we mock the percentage, or we can calculate securely)

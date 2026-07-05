@@ -6,7 +6,7 @@ import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Clock, Calendar as CalendarIcon, Briefcase, Trash2 } from 'lucide-react';
 import { useLanguage } from '../../contexts/LanguageContext';
-import { useWorkLog, isPublicHoliday } from '../../contexts/WorkLogContext';
+import { useWorkLog, isPublicHoliday, isRestDayForDate } from '../../contexts/WorkLogContext';
 import { SmartTimePicker } from '../ui/smart-time-picker';
 import { detectPermissionType } from '../../lib/smartAttendance';
 import { toast } from 'sonner';
@@ -91,7 +91,7 @@ export function UnifiedEntrySheet({ open, onOpenChange, initialDate, allowDateCh
     }
   }, [open, settings, sessionToEdit]);
 
-  const isRestDay = (settings.restDays || []).includes(selectedDay.getDay()) || isPublicHoliday(selectedDay, settings.customHolidays);
+  const isRestDay = isRestDayForDate(selectedDay, settings);
 
   const getAvailableCompensations = () => {
     return sessions.filter(s => (s.isRestDayWork || s.dayStatus === 'rest_day_work') && !s.isArchived).map(s => {

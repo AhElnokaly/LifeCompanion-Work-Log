@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Button } from '../ui/button';
 import { Play, Square, Clock, Calendar, Coffee, FileText, Check, Bell, Zap, Timer, Shuffle, Brain, Loader2, Send, Activity, Settings, Moon, Sun, Sunrise, Sunset, Plus, Minus, LogIn, LogOut, Palmtree, Briefcase, Trophy } from 'lucide-react';
-import { useWorkLog, isPublicHoliday } from '../../contexts/WorkLogContext';
+import { useWorkLog, isPublicHoliday, isRestDayForDate } from '../../contexts/WorkLogContext';
 import { useAICore } from '../../contexts/AICoreContext';
 import { format, differenceInMinutes, addMinutes } from 'date-fns';
 import { ar } from 'date-fns/locale';
@@ -25,7 +25,7 @@ export default function HomeView({ onNavigate }: { onNavigate?: (tab: string) =>
   const { askAI } = useAICore();
   const [now, setNow] = useState(new Date());
 
-  const isTodayRestDay = (settings.restDays || []).includes(now.getDay()) || isPublicHoliday(now, settings.customHolidays);
+  const isTodayRestDay = isRestDayForDate(now, settings);
 
   // Modals state
   const [actionDialog, setActionDialog] = useState<'permission' | 'note' | 'pomodoro' | null>(null);
@@ -75,10 +75,10 @@ export default function HomeView({ onNavigate }: { onNavigate?: (tab: string) =>
   useEffect(() => {
      if (retroDialogOpen && retroDate) {
         const d = new Date(retroDate);
-        const isRest = (settings.restDays || []).includes(d.getDay()) || isPublicHoliday(d, settings.customHolidays);
+        const isRest = isRestDayForDate(d, settings);
         setRetroIsRest(isRest);
      }
-  }, [retroDate, retroDialogOpen, settings.restDays, settings.customHolidays]);
+  }, [retroDate, retroDialogOpen, settings]);
 
   const activeInsight = useMemo(() => {
      const insights = generateSmartInsights(sessions, settings, jobs, shifts, shiftAssignments);

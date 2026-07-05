@@ -8,6 +8,8 @@ import { toast } from 'sonner';
 import { useAuth } from './AuthContext';
 import { db as firestoreDb } from '../lib/firebase';
 import { doc, setDoc, deleteDoc, getDocs, collection, getDoc } from 'firebase/firestore';
+import { getRestDaysForDate, isPublicHoliday, isRestDayForDate } from '../lib/utils';
+
 
 const cleanSettingsToFirestore = (userId: string, s: any) => {
   return {
@@ -156,34 +158,7 @@ export const generateEgyptianHolidays = (currentYear: number): {date: string, na
   return generatedHolidays.sort((a,b) => a.date.localeCompare(b.date));
 };
 
-export const getRestDaysForDate = (day: Date, settings: any): number[] => {
-  if (!settings.restDaysSchedule || settings.restDaysSchedule.length === 0) return settings.restDays || [];
-  const targetDate = day.getTime();
-  
-  // Sort schedule so newest applied first
-  const sortedSchedule = [...settings.restDaysSchedule].sort((a,b) => new Date(b.fromDate).getTime() - new Date(a.fromDate).getTime());
-  
-  for (const sch of sortedSchedule) {
-    if (targetDate >= new Date(sch.fromDate).getTime()) {
-      return sch.restDays;
-    }
-  }
-  
-  // If targetDate is older than the oldest schedule record, return the originalRestDays of the oldest record
-  // (We'll store originalRestDays when we create a schedule)
-  const oldestSch = sortedSchedule[sortedSchedule.length - 1];
-  return oldestSch.originalRestDays !== undefined ? oldestSch.originalRestDays : (settings.restDays || []);
-};
-
-export const isRestDayForDate = (day: Date, settings: any): boolean => {
-  return getRestDaysForDate(day, settings).includes(day.getDay()) || isPublicHoliday(day, settings.customHolidays);
-};
-
-export const isPublicHoliday = (day: Date, customHolidays?: {date: string, name: string}[]): boolean => {
-  const fullDateKey = format(day, 'yyyy-MM-dd');
-  if (customHolidays?.some(h => h.date === fullDateKey)) return true;
-  return false;
-};
+export { getRestDaysForDate, isPublicHoliday, isRestDayForDate };
 
 interface WorkLogContextType {
   sessions: WorkSession[];
@@ -580,8 +555,7 @@ export const WorkLogProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const startTime = new Date(startTimeStr);
 
     // Check if rest day or public holiday
-    const dayOfWeek = startTime.getDay(); // 0 = Sun, 1 = Mon ... 6 = Sat
-    const isRestDayWork = overrideData?.isRestDayWork !== undefined ? overrideData.isRestDayWork : (settings.restDays.includes(dayOfWeek) || isPublicHoliday(startTime, settings.customHolidays));
+    const isRestDayWork = overrideData?.isRestDayWork !== undefined ? overrideData.isRestDayWork : isRestDayForDate(startTime, settings);
 
     const newSession: WorkSession = {
       id: Date.now().toString(),
@@ -800,8 +774,7 @@ export const WorkLogProvider: React.FC<{ children: React.ReactNode }> = ({ child
     // Smart verification for manual entries
     if (session.startTime) {
        const sDate = new Date(session.startTime);
-       const dayOfWeek = sDate.getDay();
-       const isActuallyHoliday = settings.restDays.includes(dayOfWeek) || isPublicHoliday(sDate, settings.customHolidays);
+       const isActuallyHoliday = isRestDayForDate(sDate, settings);
 
        if (session.dayStatus === 'work' && isActuallyHoliday && !isRestDay) {
           if (window.confirm('🚨 تنبيه ذكي: أنت تسجل يوم عمل في تاريخ يُعتبر عطلة رسمية أو يعتب يوم راحة! هل تود اعتباره "عمل في يوم عطلة" (Overtime / Compensation)؟')) {
@@ -1023,7 +996,7 @@ export const WorkLogProvider: React.FC<{ children: React.ReactNode }> = ({ child
       .filter(s => (s.dayStatus === "annual_leave" || s.dayStatus === "half_day_leave") && new Date(s.startTime).getFullYear() === currentYear && !s.isArchived)
       .filter(s => {
         const d = new Date(s.startTime);
-        const isRest = (settings.restDays || []).includes(d.getDay()) || isPublicHoliday(d, settings.customHolidays);
+        const isRest = isRestDayForDate(d, settings);
         return !isRest;
       })
       .reduce((acc, s) => acc + (s.dayStatus === "half_day_leave" ? 0.5 : 1), 0);
@@ -1103,8 +1076,7 @@ export const WorkLogProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
 
     const sDate = new Date(newSession.startTime);
-    const dayOfWeek = sDate.getDay();
-    const isActuallyHoliday = settings.restDays.includes(dayOfWeek) || isPublicHoliday(sDate, settings.customHolidays);
+    const isActuallyHoliday = isRestDayForDate(sDate, settings);
 
     if (isActuallyHoliday && ['annual_leave', 'half_day_leave', 'casual_leave'].includes(type) && (!data || !data.force)) {
       if (window.confirm('🚨 تنبيه ذكي: هذا اليوم الذي تحاول تسجيله يُعتبر بالفعل عطلة رسمية أو يوم راحة في نظامك! هل تود تسجيله كـ "عطلة رسمية/يوم راحة" (لا يخصم من رصيدك) بدلاً من إجازة عادية؟')) {

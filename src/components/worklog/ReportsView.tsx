@@ -5,7 +5,7 @@ import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Download, TrendingUp, Clock, Palmtree, History, Filter, Edit2, Trash2, ChevronDown, ChevronUp, Briefcase, Calendar, Activity } from 'lucide-react';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts';
-import { useWorkLog } from '../../contexts/WorkLogContext';
+import { useWorkLog, getRestDaysForDate } from '../../contexts/WorkLogContext';
 import { format, addMonths, subMonths, isSameMonth, startOfMonth, endOfMonth, eachDayOfInterval, endOfWeek, eachWeekOfInterval, startOfYear, endOfYear, eachMonthOfInterval } from 'date-fns';
 
 import { useLanguage } from '../../contexts/LanguageContext';
@@ -545,7 +545,7 @@ export default function ReportsView() {
                  const dString = format(d, 'yyyy-MM-dd');
                  if (!allLoggedDays.has(dString)) {
                    const isPublic = settings.customHolidays?.find(h => h.date === dString);
-                   const isRest = (settings.restDays || []).includes(d.getDay());
+                   const isRest = getRestDaysForDate(d, settings).includes(d.getDay());
                    if (isPublic || isRest) {
                      virtualSessions.push({
                        id: `virtual-${dString}`,

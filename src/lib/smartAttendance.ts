@@ -1,5 +1,6 @@
 import { format } from 'date-fns';
 import { ScheduledShift, WorkSettings, WorkSession } from '../types';
+import { isRestDayForDate } from './utils';
 
 export const detectPermissionType = (date: Date, settings: WorkSettings, shifts: ScheduledShift[], shiftAssignments: Record<string, string>): 'entry' | 'exit' => {
    const currentHm = format(date, 'HH:mm');
@@ -78,7 +79,7 @@ export const generateSmartInsights = (
       const d = new Date(s.startTime);
       const fullDateKey = format(d, 'yyyy-MM-dd');
       const isPublic = settings.customHolidays?.some(h => h.date === fullDateKey);
-      const isRest = (settings.restDays || []).includes(d.getDay()) || isPublic;
+      const isRest = isRestDayForDate(d, settings);
       return isRest;
    });
 
@@ -283,7 +284,7 @@ export const generateSmartInsights = (
           const d = new Date(s.startTime);
           const fullDateKey = format(d, 'yyyy-MM-dd');
           const isPublic = settings.customHolidays?.some(h => h.date === fullDateKey);
-          const isRest = (settings.restDays || []).includes(d.getDay()) || isPublic;
+          const isRest = isRestDayForDate(d, settings);
           return !isRest;
       })
       .reduce((acc, s) => acc + (s.dayStatus === "half_day_leave" ? 0.5 : 1), 0);

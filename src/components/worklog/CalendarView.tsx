@@ -3,7 +3,7 @@ import React, { useState, useMemo } from 'react';
 import { Card } from '../ui/card';
 import { Button } from '../ui/button';
 import { ChevronRight, ChevronLeft, Calendar as CalendarIcon, List, LayoutGrid, Activity, Clock, Briefcase, Plus, Palette, Trash2, Edit, RefreshCw } from 'lucide-react';
-import { useWorkLog, isPublicHoliday, generateEgyptianHolidays } from '../../contexts/WorkLogContext';
+import { useWorkLog, isPublicHoliday, generateEgyptianHolidays, getRestDaysForDate, isRestDayForDate } from '../../contexts/WorkLogContext';
 import { format, differenceInMinutes, addMonths, subMonths, startOfMonth, endOfMonth, eachDayOfInterval, startOfWeek, endOfWeek, isSameMonth, isSameDay, addWeeks, subWeeks, subDays, addDays } from 'date-fns';
 
 import { useLanguage } from '../../contexts/LanguageContext';
@@ -102,7 +102,7 @@ export default function CalendarView() {
        });
     } else {
        const duration = differenceInMinutes(new Date(endStr), new Date(startStr));
-       const isRestDay = (settings.restDays || []).includes(selectedDay.getDay()) || isPublicHoliday(selectedDay, settings.customHolidays);
+       const isRestDay = isRestDayForDate(selectedDay, settings);
        
        let compType = isRestDay ? customEntryData.restDayCompensation : undefined;
        let baseOvertime = 0;
@@ -221,7 +221,7 @@ export default function CalendarView() {
               const hasPermission = daySessions.some(s => s.dayStatus === 'permission');
               
               const isHol = isPublicHoliday(day, settings.customHolidays);
-              const isRestD = (settings.restDays || []).includes(day.getDay());
+              const isRestD = getRestDaysForDate(day, settings).includes(day.getDay());
 
               let primaryThemeClass = 'bg-[#2A5949]';
               let isHolidayWork = false;
@@ -302,7 +302,7 @@ export default function CalendarView() {
         day: dayName, 
         date: dayStr,
         hours: 0, 
-        isWeekend: settings.restDays.includes(day.getDay())
+        isWeekend: getRestDaysForDate(day, settings).includes(day.getDay())
       });
     });
 
@@ -326,7 +326,8 @@ export default function CalendarView() {
 
     const dailyData = Array.from(dailyDataMap.values());
     const actualTotalHours = dailyData.reduce((acc, d) => acc + d.hours, 0);
-    const goalHours = settings.dailyHours * (7 - settings.restDays.length);
+    const restDaysInThisWeek = getRestDaysForDate(weekStart, settings);
+    const goalHours = settings.dailyHours * (7 - restDaysInThisWeek.length);
     const totalOvertime = thisWeekSessions.reduce((acc, s) => acc + ((s.overtimeMinutes || 0) / 60), 0);
     const totalWeeklyFraction = thisWeekSessions.reduce((acc, s) => acc + (s.fractionMinutes || 0), 0);
 
@@ -604,7 +605,7 @@ export default function CalendarView() {
                 />
               </div>
 
-               {((settings.restDays || []).includes(selectedDay.getDay()) || isPublicHoliday(selectedDay, settings.customHolidays)) && (
+               {isRestDayForDate(selectedDay, settings) && (
                     <div className="space-y-2">
                        <Label className="text-muted-foreground font-bold">طبيعة البدل (راحة/عطلة)</Label>
                        <div className="relative">

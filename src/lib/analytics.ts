@@ -1,4 +1,5 @@
 import { WorkSession, Job, WorkSettings } from '../types';
+import { getRestDaysForDate } from './utils';
 import { differenceInDays, isSameMonth, subDays, startOfMonth } from 'date-fns';
 
 export interface AnalyticsStats {
@@ -35,7 +36,7 @@ export function getStats(sessions: WorkSession[], settings: WorkSettings): Analy
     });
     
     // Ignore rest days for streak calculation if user didn't work
-    const isRestDay = settings.restDays.includes(cursor.getDay());
+    const isRestDay = getRestDaysForDate(cursor, settings).includes(cursor.getDay());
     
     if (hasLog) {
       streak++;
